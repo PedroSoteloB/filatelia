@@ -1,0 +1,100 @@
+<div class="wrap">
+  <div class="top-bar">
+    <button class="btn light" (click)="goBack()">← Volver</button>
+    <div class="title">Colección #{{ collectionId() }}</div>
+    <div class="spacer"></div>
+  </div>
+
+  <!-- PANEL DE SUB-BÚSQUEDA -->
+  <section class="subsearch">
+    <div class="row">
+      <input class="inp" placeholder="Buscar (q)" [(ngModel)]="form.q" />
+      <input class="inp" placeholder="País (country)" [(ngModel)]="form.country" />
+      <input class="inp" type="number" placeholder="Año desde" [(ngModel)]="form.yearFrom" />
+      <input class="inp" type="number" placeholder="Año hasta" [(ngModel)]="form.yearTo" />
+    </div>
+    <div class="row">
+      <input class="inp" placeholder="Tags (coma-separados)" [(ngModel)]="tagsComma" />
+      <select class="inp" [(ngModel)]="form.tagsMode">
+        <option value="OR">Tags: OR</option>
+        <option value="AND">Tags: AND</option>
+      </select>
+      <button class="btn" (click)="runSubSearch()">Sub-buscar (reduce 50→25)</button>
+      <button class="btn light" (click)="resetSubSearch()">Limpiar filtros</button>
+      <button class="btn ghost" (click)="reloadBase()">Ver todo (colección)</button>
+    </div>
+    <div class="row">
+      <textarea class="inp full" rows="3"
+        placeholder='Attrs JSON (opcional) p.ej. [{"name":"color","op":"like","value":"azul"}]'
+        [(ngModel)]="attrsJson"></textarea>
+    </div>
+  </section>
+
+  <!-- STATUS -->
+  <div *ngIf="error()" class="status error">{{ error() }}</div>
+  <div *ngIf="busy()" class="status busy">Cargando…</div>
+
+  <!-- BARRA DE SELECCIÓN -->
+  <!-- <section class="select-bar" *ngIf="items().length">
+    <div>Resultados: <b>{{ items().length }}</b></div>
+    <div>Seleccionados: <b>{{ selectedIds.size }}</b> (recom.: 10–15)</div>
+    <div class="spacer"></div>
+    <button class="btn" [disabled]="selectedIds.size===0" (click)="createSnapshot()">
+      Crear presentacion Snapshot (con seleccionados)
+    </button>
+    <button class="btn" (click)="createSmart()">
+      Crear colección Smart (con estos filtros)
+    </button>
+  </section> -->
+  <section class="select-bar" *ngIf="items().length">
+    <div>Resultados: <b>{{ items().length }}</b></div>
+    <div>Seleccionados: <b>{{ selectedIds.size }}</b> (recom.: 10–15)</div>
+    <div class="spacer"></div>
+  
+    <!-- <button class="btn"
+            [disabled]="selectedIds.size===0 || busy()"
+            (click)="createSnapshot(true)">
+      Crear Snapshot + PPT
+    </button> -->
+    <button class="btn" [disabled]="selectedIds.size===0 || busy()" (click)="createSnapshot(true)">
+      Crear Snapshot
+    </button>
+ 
+  </section>
+  
+
+  <!-- VACÍO -->
+  <section *ngIf="!items().length && !busy()" class="empty">
+    <div class="title-empty">Colección vacía</div>
+    <div class="muted">No hay piezas que coincidan con la búsqueda actual.</div>
+  </section>
+
+  <!-- GRID -->
+  <section class="grid" *ngIf="items().length">
+    <article class="card" *ngFor="let it of items()">
+      <label class="sel">
+        <input
+          type="checkbox"
+          [checked]="selectedIds.has(it.id)"
+          (change)="toggleSelect(it.id, ($any($event.target)).checked)" />
+      </label>
+
+      <div class="thumb" [class.placeholder]="!it.cover" (click)="goItemDetail(it.id)">
+        <img *ngIf="it.cover" [src]="it.cover" alt="" />
+        <span *ngIf="!it.cover">Sin imagen</span>
+      </div>
+
+      <div class="body" (click)="goItemDetail(it.id)">
+        <div class="stamp-title" [title]="it.title">{{ it.title }}</div>
+        <div class="meta">{{ buildMeta(it) }}</div>
+      </div>
+
+      <button
+        class="btn tiny"
+        (click)="setCover(it.id); $event.stopPropagation()"
+        [class.primary]="coverCandidateId===it.id">
+        Usar como portada
+      </button>
+    </article>
+  </section>
+</div>

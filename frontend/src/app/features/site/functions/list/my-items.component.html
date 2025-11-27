@@ -1,0 +1,100 @@
+<!-- src/app/features/site/landing/landing.component.html -->
+<header class="topbar">
+  <div class="brand" (click)="goInicio()" style="cursor:pointer">
+    <svg class="stamp" viewBox="0 0 120 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#b08968" />
+          <stop offset="100%" stop-color="#7f5539" />
+        </linearGradient>
+      </defs>
+      <rect x="8" y="8" width="104" height="104" rx="8" fill="url(#g1)" opacity="0.2"></rect>
+      <circle cx="60" cy="52" r="24" fill="#85586F"></circle>
+      <path d="M30 82h60" stroke="#85586F" stroke-width="6" stroke-linecap="round" />
+    </svg>
+    <div class="title">
+      <h1>Filatelia</h1>
+      <p>Catálogo personal de sellos</p>
+    </div>
+  </div>
+
+  <nav class="actions">
+    <a class="link" (click)="goInicio()">Inicio</a>
+
+    <!-- Versión autenticada -->
+    <ng-container *ngIf="isAuth; else anon">
+      <button class="btn" (click)="goUpload()">Nueva pieza</button>
+      <button class="btn" (click)="goMyItems()">Mis items</button>
+      <button class="btn" (click)="goSearch()">Búsqueda</button>
+      <button class="btn" (click)="goCollections()">Mis colecciones</button>
+      <button class="btn" (click)="goPresentation()">Mis Presentaciones</button>
+      <button class="btn light" (click)="logout()">Cerrar sesión</button>
+    </ng-container>
+
+    <!-- Versión anónima -->
+    <ng-template #anon>
+      <a class="link" (click)="goLogin()">Iniciar sesión</a>
+    </ng-template>
+  </nav>
+</header>
+
+<div class="wrap">
+  <h2 class="page-title">Mis piezas</h2>
+
+  <div class="toolbar">
+    <div class="left">
+      <span class="muted" *ngIf="!busy()">{{ total() }} resultado(s)</span>
+    </div>
+    <div class="right">
+      <label class="order">
+        <span>Orden</span>
+        <select
+          [value]="order()"
+          (change)="onOrderChange($any($event.target).value)"
+          aria-label="Ordenar"
+        >
+          <option value="created_at_desc">Más recientes</option>
+          <option value="created_at_asc">Más antiguos</option>
+        </select>
+      </label>
+      <button class="btn light" (click)="reload()" [disabled]="busy()">Refrescar</button>
+    </div>
+  </div>
+
+  <p *ngIf="error()" class="status error" role="alert">{{ error() }}</p>
+
+  <div *ngIf="!busy() && !items().length && !error()" class="empty">
+    <p>No tienes piezas aún.</p>
+    <a routerLink="/upload" class="btn primary">Cargar primera pieza</a>
+  </div>
+
+  <div class="grid" *ngIf="items().length">
+    <article class="card" *ngFor="let it of items()">
+      <div class="thumb" *ngIf="it.cover; else noimg">
+        <img [src]="coverUrl(it)" [alt]="it.title" loading="lazy">
+      </div>
+      <ng-template #noimg>
+        <div class="thumb placeholder">Sin imagen</div>
+      </ng-template>
+
+      <div class="body">
+        <h3 class="title" [title]="it.title">{{ it.title }}</h3>
+        <div class="meta">
+          <span *ngIf="it.country">{{ it.country }}</span>
+          <span *ngIf="it.issueYear">• {{ it.issueYear }}</span>
+        </div>
+      </div>
+
+      <!-- ✅ Enlace activado correctamente -->
+      <a class="overlay" [routerLink]="['/items/mine', it.id]" aria-label="Ver detalle"></a>
+    </article>
+  </div>
+
+  <div class="list-actions" *ngIf="items().length">
+    <button class="btn" (click)="loadMore()" [disabled]="busy() || !hasMore()">
+      <span *ngIf="!busy() && hasMore()">Cargar más</span>
+      <span *ngIf="busy()">Cargando…</span>
+      <span *ngIf="!hasMore() && !busy()">No hay más</span>
+    </button>
+  </div>
+</div>

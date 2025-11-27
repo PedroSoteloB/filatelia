@@ -1,0 +1,112 @@
+<div class="item-details-page">
+    <a routerLink="/items/mine" class="inline-flex items-center gap-2 mb-4">
+      ← Volver al listado
+    </a>
+  
+    <ng-container *ngIf="busy(); else contentTpl">
+      <div class="loading">Cargando detalles…</div>
+    </ng-container>
+  
+    <ng-template #contentTpl>
+      <ng-container *ngIf="!error(); else errorTpl">
+        <ng-container *ngIf="item() as it">
+  
+          <!-- Grid principal: imagen + info -->
+          <div class="grid">
+  
+            <!-- Imagen -->
+            <div class="image-box">
+              <img *ngIf="it.cover; else noCover" [src]="it.cover!" alt="Cover" />
+              <ng-template #noCover>
+                <div class="no-cover">Sin imagen</div>
+              </ng-template>
+            </div>
+  
+            <!-- Info -->
+            <div class="info">
+  
+              <h1>{{ it.title }}</h1>
+  
+              <!-- Metadatos -->
+              <dl>
+                <div>
+                  <dt>País</dt>
+                  <dd>{{ it.country ?? '—' }}</dd>
+                </div>
+                <div>
+                  <dt>Año de emisión</dt>
+                  <dd>{{ it.issueYear ?? '—' }}</dd>
+                </div>
+                <div>
+                  <dt>Condición</dt>
+                  <dd>{{ it.conditionCode ?? '—' }}</dd>
+                </div>
+                <div>
+                  <dt>Catálogo</dt>
+                  <dd>{{ it.catalogCode ?? '—' }}</dd>
+                </div>
+                <div>
+                  <dt>Valor facial</dt>
+                  <dd>
+                    <ng-container *ngIf="it.faceValue !== null; else dash">
+                      {{ it.faceValue }} <span *ngIf="it.currency">({{ it.currency }})</span>
+                    </ng-container>
+                    <ng-template #dash>—</ng-template>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Fecha de adquisición</dt>
+                  <dd>{{ it.acquisitionDate ?? '—' }}</dd>
+                </div>
+                <div>
+                  <dt>Visibilidad</dt>
+                  <dd class="capitalize">{{ it.visibility ?? '—' }}</dd>
+                </div>
+                <div *ngIf="it.createdAt || it.updatedAt">
+                  <dt>Trazabilidad</dt>
+                  <dd>
+                    <div>Creado: {{ it.createdAt || '—' }}</div>
+                    <div>Actualizado: {{ it.updatedAt || '—' }}</div>
+                  </dd>
+                </div>
+              </dl>
+  
+              <!-- Descripción -->
+              <div *ngIf="it.description" class="prose">
+                <h2>Descripción</h2>
+                <p>{{ it.description }}</p>
+              </div>
+  
+              <!-- Tags -->
+              <div *ngIf="it.tags?.length">
+                <h3 class="tags-title">Tags</h3>
+                <div class="tags-list">
+                  <span *ngFor="let t of it.tags">#{{ t.name }}</span>
+                </div>
+              </div>
+  
+              <!-- Atributos -->
+              <div *ngIf="it.attributes?.length">
+                <h3 class="attrs-title">Atributos adicionales</h3>
+                <div class="attrs-grid">
+                  <div class="attr-box" *ngFor="let a of it.attributes">
+                    <div class="attr-type">{{ a.attrType }}</div>
+                    <div class="attr-name">{{ a.name }}</div>
+                    <div class="attr-value">{{ a.value ?? '—' }}</div>
+                  </div>
+                </div>
+              </div>
+  
+            </div>
+          </div>
+          <!-- /grid -->
+  
+        </ng-container>
+      </ng-container>
+  
+      <ng-template #errorTpl>
+        <div class="error-box">{{ error() }}</div>
+      </ng-template>
+    </ng-template>
+  </div>
+  

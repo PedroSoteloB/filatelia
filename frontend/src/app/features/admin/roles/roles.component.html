@@ -1,0 +1,147 @@
+<div class="wrap">
+    <header class="head">
+      <h2>Gestión de roles</h2>
+      <div class="status" [class.ok]="msg.includes('✅')" [class.error]="msg && !msg.includes('✅')">
+        {{ msg }}
+      </div>
+    </header>
+  
+    <div class="grid">
+      <!-- PANEL: ROLES (CRUD) -->
+      <section class="card">
+        <h3>Roles</h3>
+  
+        <div class="toolbar">
+          <input type="search" [(ngModel)]="q" placeholder="Buscar por nombre o descripción…" />
+        </div>
+  
+        <ul class="list">
+          <li *ngFor="let r of filteredRoles">
+            <ng-container *ngIf="editingId !== r.id; else editForm">
+              <div class="info">
+                <strong>{{ r.name }}</strong>
+                <small class="muted">{{ r.description || '—' }}</small>
+              </div>
+              <div class="actions">
+                <button class="link" (click)="startEdit(r)">Editar</button>
+                <button class="link danger" (click)="deleteRole(r)">Eliminar</button>
+              </div>
+            </ng-container>
+  
+            <ng-template #editForm>
+              <div class="edit">
+                <input [(ngModel)]="editName" placeholder="Nombre" />
+                <input [(ngModel)]="editDesc" placeholder="Descripción (opcional)" />
+              </div>
+              <div class="actions">
+                <button class="btn" (click)="saveEdit(r.id)">Guardar</button>
+                <button class="btn light" (click)="cancelEdit()">Cancelar</button>
+              </div>
+            </ng-template>
+          </li>
+        </ul>
+  
+        <form class="new" (ngSubmit)="createRole()" novalidate>
+          <input [(ngModel)]="newName" name="newName" placeholder="Nuevo rol (p. ej. curator_pro)" required />
+          <input [(ngModel)]="newDesc" name="newDesc" placeholder="Descripción (opcional)" />
+          <button class="btn primary" type="submit">Crear</button>
+        </form>
+      </section>
+  
+      <!-- PANEL: ASIGNACIÓN -->
+      <section class="card">
+        <h3>Asignación de roles a usuarios</h3>
+  
+        <div class="row">
+          <label>Usuario</label>
+          <select [(ngModel)]="selectedUserId" name="selectedUserId" (change)="onSelectUser()">
+            <option [ngValue]="null">— Selecciona usuario —</option>
+            <option *ngFor="let u of users" [ngValue]="u.id">
+              {{ u.display_name }} · {{ u.email }}
+            </option>
+          </select>
+        </div>
+  
+        <div class="row">
+          <label>Rol</label>
+          <select [(ngModel)]="selectedRoleId" name="selectedRoleId">
+            <option [ngValue]="null">— Selecciona rol —</option>
+            <option *ngFor="let r of roles" [ngValue]="r.id">{{ r.name }}</option>
+          </select>
+        </div>
+  
+        <div class="row">
+          <button class="btn" [disabled]="!selectedUserId || !selectedRoleId" (click)="assignRole()">
+            Asignar rol
+          </button>
+        </div>
+  
+        <div class="divider"></div>
+  
+        <div *ngIf="selectedUserId">
+          <h4>Roles del usuario</h4>
+          <ul class="chips">
+            <li *ngFor="let r of userRoles">
+              <span>{{ r.name }}</span>
+              <button class="chip-x" (click)="unassignRole(r.id)" title="Quitar">×</button>
+            </li>
+            <li *ngIf="userRoles.length===0" class="muted">Sin roles asignados</li>
+          </ul>
+        </div>
+      </section>
+    </div>
+  <!-- ===== Usuarios y roles (solo lectura) ===== -->
+  <section class="card users-card" style="margin-top:1rem;">
+    <div class="users-head">
+      <h3>Usuarios y roles</h3>
+      <span class="count">{{ users.length }} usuarios</span>
+    </div>
+  
+    <table class="table users">
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>Email</th>
+          <th style="width:40%">Roles</th>
+        </tr>
+      </thead>
+  
+      <tbody>
+        <tr *ngFor="let u of usersSorted; trackBy: trackUser">
+          <td class="user-cell">
+            <div class="avatar" aria-hidden="true">
+              {{ (u.display_name || u.email) | slice:0:1 | uppercase }}
+            </div>
+            <div class="meta">
+              <div class="name">{{ u.display_name || '—' }}</div>
+              <div class="sub muted">ID {{ u.id }}</div>
+            </div>
+          </td>
+  
+          <td class="email">
+            <a [href]="'mailto:'+u.email">{{ u.email }}</a>
+          </td>
+  
+          <td class="roles">
+            <ng-container *ngIf="rolesOf(u.id).length; else noRoles">
+              <span
+                class="badge role"
+                *ngFor="let r of rolesOf(u.id)"
+                [attr.data-role]="r.name.toLowerCase()"
+              >
+                {{ r.name }}
+              </span>
+            </ng-container>
+            <ng-template #noRoles>
+              <span class="muted">Sin roles asignados</span>
+            </ng-template>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+  
+    <div class="footer" *ngIf="loading">Cargando…</div>
+  </div>
+  
+  

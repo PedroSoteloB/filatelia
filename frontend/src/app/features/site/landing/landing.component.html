@@ -1,0 +1,230 @@
+<!-- src/app/features/site/landing/landing.component.html -->
+<header class="topbar">
+  <div class="brand" (click)="goInicio()" style="cursor:pointer">
+    <svg class="stamp" viewBox="0 0 120 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#b08968" />
+          <stop offset="100%" stop-color="#7f5539" />
+        </linearGradient>
+      </defs>
+      <rect x="8" y="8" width="104" height="104" rx="8" fill="url(#g1)" opacity="0.2"></rect>
+      <circle cx="60" cy="52" r="24" fill="#85586F"></circle>
+      <path d="M30 82h60" stroke="#85586F" stroke-width="6" stroke-linecap="round" />
+    </svg>
+    <div class="title">
+      <h1>Filatelia</h1>
+      <p>Catálogo personal de sellos</p>
+    </div>
+  </div>
+
+  <nav class="actions">
+    <a class="link" (click)="goInicio()">Inicio</a>
+
+    <!-- Versión autenticada -->
+    <ng-container *ngIf="isAuth; else anon">
+      <button class="btn" (click)="goUpload()">Nueva pieza</button>
+      <button class="btn" (click)="goMyItems()">Mis items</button>
+      <button class="btn" (click)="goSearch()">Búsqueda</button>
+      <button class="btn" (click)="goCollections()">Mis colecciones</button>
+      <button class="btn" (click)="goPresentation()">Mis Presentaciones</button>
+      <button class="btn light" (click)="logout()">Cerrar sesión</button>
+    </ng-container>
+
+    <!-- Versión anónima -->
+    <ng-template #anon>
+      <a class="link" (click)="goLogin()">Iniciar sesión</a>
+    </ng-template>
+  </nav>
+</header>
+
+<main class="hero">
+  <section class="panel">
+    <h2>Bienvenido al mundo de la filatelia</h2>
+    <p>
+      La <strong>filatelia</strong> es el estudio y coleccionismo de sellos postales y piezas
+      relacionadas: matasellos, sobres de primer día, enteros postales, viñetas, tarjetas máximas
+      y más. Aquí puedes catalogar tus piezas, registrar metadatos (país, año, condición, código
+      de catálogo…), añadir imágenes y decidir si cada una es <em>pública</em> o <em>privada</em>.
+    </p>
+
+    <p class="muted">
+      Sube imágenes de tus sellos y organiza tu colección. Filtra por país, año o condición y
+      encuentra rápidamente lo que buscas. Comparte con la comunidad lo que quieras con visibilidad
+      <em>pública</em>.
+    </p>
+
+    <div class="cta">
+      <button class="btn" (click)="scrollToCatalog()">Ver catálogo público</button>
+    </div>
+  </section>
+</main>
+
+<!-- ===================================================== -->
+<!-- Sección: Beneficios / features -->
+<!-- ===================================================== -->
+<section class="features">
+  <div class="container">
+    <h3>¿Por qué usar Filatelia?</h3>
+    <div class="feat-grid">
+      <article class="feat">
+        <div class="feat-ico">📚</div>
+        <h4>Tu catálogo, ordenado</h4>
+        <p>Clasifica sellos por país, año, condición y código de catálogo. Encuentra todo en segundos.</p>
+      </article>
+      <article class="feat">
+        <div class="feat-ico">🖼️</div>
+        <h4>Imágenes cuidadas</h4>
+        <p>Sube múltiples fotos por pieza. Elige una portada y guarda el detalle que la hace única.</p>
+      </article>
+      <article class="feat">
+        <div class="feat-ico">🌐</div>
+        <h4>Comparte con la comunidad</h4>
+        <p>Marca como <em>público</em> lo que desees mostrar. Inspira y aprende de otros coleccionistas.</p>
+      </article>
+      <article class="feat">
+        <div class="feat-ico">🔒</div>
+        <h4>Privacidad cuando quieras</h4>
+        <p>Controla la visibilidad pieza por pieza. Lo privado es solo tuyo.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================== -->
+<!-- Sección: ¿Cómo funciona? -->
+<!-- ===================================================== -->
+<section class="how">
+  <div class="container">
+    <h3>¿Cómo funciona?</h3>
+  <ol class="steps">
+      <li>
+        <div class="step-num">1</div>
+        <h4>Sube tus imágenes</h4>
+        <p>Arrastra o selecciona varias fotos de cada sello, sobre FDC u otro material filatélico.</p>
+      </li>
+      <li>
+        <div class="step-num">2</div>
+        <h4>Completa metadatos</h4>
+        <p>País, año, condición, código de catálogo, valor facial… ¡todo queda guardado!</p>
+      </li>
+      <li>
+        <div class="step-num">3</div>
+        <h4>Elige visibilidad</h4>
+        <p>Privado para tu inventario, o público para compartir y recibir feedback.</p>
+      </li>
+    </ol>
+    <div class="how-cta">
+      <button class="btn primary" *ngIf="!isAuth" (click)="goLogin()">Crear cuenta</button>
+      <button class="btn primary" *ngIf="isAuth" (click)="goUpload()">Subir mi primera pieza</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================== -->
+<!-- Sección: Métricas (dummy informativo) -->
+<!-- ===================================================== -->
+<section class="stats">
+  <div class="container stats-grid">
+    <div class="stat">
+      <div class="stat-num">+2k</div>
+      <div class="stat-label">piezas catalogadas</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">+60</div>
+      <div class="stat-label">países representados</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">+120</div>
+      <div class="stat-label">años de emisión</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">24/7</div>
+      <div class="stat-label">acceso desde cualquier dispositivo</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================== -->
+<!-- Sección: Testimonios -->
+<!-- ===================================================== -->
+<section class="testimonials">
+  <div class="container">
+    <h3>Lo que dicen los coleccionistas</h3>
+    <div class="t-grid">
+      <figure class="t-card">
+        <blockquote>
+          “Por fin tengo mi inventario al día y puedo compartir lo mejor de mi colección.”
+        </blockquote>
+        <figcaption>— Marta R., Lima</figcaption>
+      </figure>
+      <figure class="t-card">
+        <blockquote>
+          “Busco por país y año en segundos. Antes era un caos de fotos sueltas.”
+        </blockquote>
+        <figcaption>— Diego P., Madrid</figcaption>
+      </figure>
+      <figure class="t-card">
+        <blockquote>
+          “Me encantó decidir qué piezas hago públicas. Perfecto para exhibir.”
+        </blockquote>
+        <figcaption>— Ana K., Buenos Aires</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================== -->
+<!-- Sección: Preguntas frecuentes -->
+<!-- ===================================================== -->
+<section class="faq">
+  <div class="container">
+    <h3>Preguntas frecuentes</h3>
+    <div class="faq-list">
+      <details>
+        <summary>¿Tengo que iniciar sesión para ver el catálogo?</summary>
+        <p>No. El catálogo público se puede explorar sin iniciar sesión. Para ver tu inventario privado o subir piezas sí necesitas cuenta.</p>
+      </details>
+      <details>
+        <summary>¿Puedo cambiar la visibilidad después?</summary>
+        <p>Sí. Puedes alternar entre <em>pública</em> y <em>privada</em> cuando quieras.</p>
+      </details>
+      <details>
+        <summary>¿Cuántas imágenes puedo subir por pieza?</summary>
+        <p>Hasta 12 imágenes por pieza (JPG, PNG, WEBP y GIF).</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================== -->
+<!-- Footer -->
+<!-- ===================================================== -->
+<footer class="site-footer">
+  <div class="container f-grid">
+    <div class="f-brand">
+      <div class="logo-mini">✉️</div>
+      <div>
+        <strong>Filatelia</strong>
+        <p class="muted">Catálogo personal de sellos</p>
+      </div>
+    </div>
+
+    <nav class="f-nav">
+      <a (click)="goInicio()">Inicio</a>
+      <a *ngIf="isAuth" (click)="goMyItems()">Mis items</a>
+      <a *ngIf="isAuth" (click)="goCollections()">Mis colecciones</a>
+      <a *ngIf="isAuth" (click)="goPresentation()">Mis Presentaciones</a>
+      <a *ngIf="!isAuth" (click)="goLogin()">Iniciar sesión</a>
+    </nav>
+
+    <div class="f-social">
+      <a href="#" aria-label="Twitter" title="Twitter">🐦</a>
+      <a href="#" aria-label="Instagram" title="Instagram">📷</a>
+      <a href="#" aria-label="YouTube" title="YouTube">▶️</a>
+    </div>
+  </div>
+  <div class="f-copy">
+    © {{ currentYear }} Filatelia — Hecho con cariño para coleccionistas.
+  </div>
+</footer>

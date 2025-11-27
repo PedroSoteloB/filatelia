@@ -1,0 +1,281 @@
+<!-- src/app/features/site/landing/landing.component.html -->
+<header class="topbar">
+  <div class="brand" (click)="goInicio()" style="cursor:pointer">
+    <svg class="stamp" viewBox="0 0 120 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#b08968" />
+          <stop offset="100%" stop-color="#7f5539" />
+        </linearGradient>
+      </defs>
+      <rect x="8" y="8" width="104" height="104" rx="8" fill="url(#g1)" opacity="0.2"></rect>
+      <circle cx="60" cy="52" r="24" fill="#85586F"></circle>
+      <path d="M30 82h60" stroke="#85586F" stroke-width="6" stroke-linecap="round" />
+    </svg>
+    <div class="title">
+      <h1>Filatelia</h1>
+      <p>Catálogo personal de sellos</p>
+    </div>
+  </div>
+
+  <nav class="actions">
+    <a class="link" (click)="goInicio()">Inicio</a>
+
+    <!-- Versión autenticada -->
+    <ng-container *ngIf="isAuth; else anon">
+      <button class="btn" (click)="goUpload()">Nueva pieza</button>
+      <button class="btn" (click)="goMyItems()">Mis items</button>
+      <button class="btn" (click)="goSearch()">Búsqueda</button>
+      <button class="btn" (click)="goCollections()">Mis colecciones</button>
+      <button class="btn" (click)="goPresentation()">Mis Presentaciones</button>
+      <button class="btn light" (click)="logout()">Cerrar sesión</button>
+    </ng-container>
+
+    <!-- Versión anónima -->
+    <ng-template #anon>
+      <a class="link" (click)="goLogin()">Iniciar sesión</a>
+    </ng-template>
+  </nav>
+</header>
+
+<div class="wrap">
+    <h1 class="page-title">Búsqueda temática</h1>
+  
+    <!-- Estado -->
+    <div *ngIf="error()" class="status error">{{ error() }}</div>
+  
+    <!-- Panel de filtros primarios -->
+    <section class="panel">
+      <h2 class="panel-title">Filtros básicos</h2>
+      <div class="row">
+        <div class="field">
+          <label>Texto libre</label>
+          <input
+            type="text"
+            placeholder="Título, descripción o código de catálogo"
+            [value]="q()"
+            (input)="onQChange($event)"
+            (keydown.enter)="search()" />
+        </div>
+  
+        <div class="field">
+          <label>País</label>
+          <input
+            type="text"
+            placeholder="Peru, Chile…"
+            [value]="country()"
+            (input)="onCountryChange($event)"
+            (keydown.enter)="search()" />
+        </div>
+  
+        <div class="field">
+          <label>Condición</label>
+          <input
+            type="text"
+            placeholder="MINT, USED, VF…"
+            list="conditionList"
+            [value]="condition()"
+            (input)="onConditionChange($event)"
+            (keydown.enter)="search()" />
+          <!-- Sugeridor de condiciones válidas -->
+          <datalist id="conditionList">
+            <option value="MINT"></option>
+            <option value="USED"></option>
+            <option value="VF"></option>
+            <option value="F"></option>
+            <option value="G"></option>
+          </datalist>
+          <div class="muted small">Usa una condición válida. Si no aplica, déjalo vacío.</div>
+        </div>
+  
+        <div class="field">
+          <label>Año desde</label>
+          <input
+            type="number"
+            placeholder="1800"
+            [value]="yearFrom() ?? ''"
+            (input)="onYearFromChange($event)"
+            (keydown.enter)="search()" />
+        </div>
+  
+        <div class="field">
+          <label>Año hasta</label>
+          <input
+            type="number"
+            placeholder="2024"
+            [value]="yearTo() ?? ''"
+            (input)="onYearToChange($event)"
+            (keydown.enter)="search()" />
+        </div>
+      </div>
+    </section>
+  
+    <!-- Panel de tags -->
+    <section class="panel">
+      <div class="panel-title-row">
+        <h2 class="panel-title">Tags</h2>
+        <div class="segmented">
+          <button class="seg" [class.active]="tagsMode() === 'OR'" (click)="setTagsMode('OR')">OR</button>
+          <button class="seg" [class.active]="tagsMode() === 'AND'" (click)="setTagsMode('AND')">AND</button>
+        </div>
+      </div>
+  
+      <div class="chips">
+        <button
+          *ngFor="let t of allTags()"
+          class="chip"
+          [class.selected]="selectedTagIds().includes(t.id)"
+          (click)="toggleTag(t.id)">
+          {{ t.name }}
+        </button>
+      </div>
+  
+      <div class="muted small">Tip: usa AND para “cumplir todos los tags” (presentaciones temáticas estrictas).</div>
+    </section>
+  
+    <!-- Panel de atributos dinámicos -->
+    <section class="panel">
+      <h2 class="panel-title">Atributos dinámicos</h2>
+  
+      <!-- Constructor rápido de filtros -->
+      <div class="attr-builder">
+        <div class="row compact">
+          <div class="field grow">
+            <label>Atributo</label>
+            <select #attrSel>
+              <option [value]="''" selected>— seleccionar —</option>
+              <option *ngFor="let a of allAttrDefs()" [value]="a.id">{{ a.name }} ({{ a.attrType }})</option>
+            </select>
+          </div>
+  
+          <div class="field">
+            <label>Operador</label>
+            <select #opSel>
+              <option value="=">=</option>
+              <option value="like">like</option>
+              <option value="between">between</option>
+            </select>
+          </div>
+  
+          <!-- NOTA: siempre existen, se ocultan/inhabilitan según operador -->
+          <div class="field" [class.hidden]="opSel.value === 'between'">
+            <label>Valor</label>
+            <input #val1 type="text" placeholder="valor…" [disabled]="opSel.value === 'between'" />
+          </div>
+  
+          <div class="field" [class.hidden]="opSel.value !== 'between'">
+            <label>Desde</label>
+            <input #valFrom type="text" placeholder="número o YYYY-MM-DD" [disabled]="opSel.value !== 'between'" />
+          </div>
+          <div class="field" [class.hidden]="opSel.value !== 'between'">
+            <label>Hasta</label>
+            <input #valTo type="text" placeholder="número o YYYY-MM-DD" [disabled]="opSel.value !== 'between'" />
+          </div>
+  
+          <div class="actions">
+            <button class="btn" (click)="onAddAttrClick(attrSel, opSel.value, val1, valFrom, valTo)">
+              Añadir
+            </button>
+          </div>
+        </div>
+  
+        <!-- Lista de filtros activos -->
+        <div class="active-attrs" *ngIf="attrFilters().length">
+          <div class="attr-pill" *ngFor="let f of attrFilters(); index as i">
+            <code>
+              {{ f['name'] ? f['name'] : ('#' + f['id']) }}
+              &nbsp;{{ f['op'] || '=' }}
+              &nbsp;
+              <ng-container [ngSwitch]="f['op']">
+                <span *ngSwitchCase="'between'">{{ $any(f).from }} ~ {{ $any(f).to }}</span>
+                <span *ngSwitchDefault>{{ $any(f).value }}</span>
+              </ng-container>
+            </code>
+            <button class="x" (click)="removeAttrFilter(i)" aria-label="Quitar filtro">×</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  
+    <!-- Acciones de búsqueda y materialización -->
+    <section class="panel actions-panel">
+      <div class="left">
+        <button class="btn light" (click)="clearAllFilters()" [disabled]="busy()">Limpiar</button>
+        <button class="btn" (click)="search()" [disabled]="busy()">Buscar</button>
+        <span *ngIf="busy()" class="muted">Buscando…</span>
+      </div>
+  
+      <div class="right">
+        <!-- Guardar búsqueda -->
+        <div class="inline-form">
+          <input #saveName type="text" placeholder="Nombre de búsqueda…" />
+          <button class="btn" (click)="saveSearch(saveName.value)" [disabled]="busy()">Guardar búsqueda</button>
+        </div>
+  
+        <!-- Smart collection -->
+        <div class="inline-form">
+          <input #smartName type="text" placeholder="Nombre colección (smart)…" />
+          <select #sortKey>
+            <option value="issue_year">issue_year</option>
+            <option value="title">title</option>
+            <option value="country">country</option>
+            <option value="created_at">created_at</option>
+          </select>
+          <select #sortDir>
+            <option value="asc">asc</option>
+            <option value="desc">desc</option>
+          </select>
+          <button
+            class="btn"
+            (click)="onCreateSmartClick(smartName.value, sortKey.value, sortDir.value)"
+            [disabled]="busy()">
+            Crear SMART
+          </button>
+        </div>
+  
+        <!-- Snapshot estática -->
+        <div class="inline-form">
+          <input #snapName type="text" placeholder="Nombre snapshot…" />
+          <input #snapN type="number" min="1" [value]="snapshotLimit()" class="w-80" />
+          <button
+            class="btn"
+            (click)="onSnapshotClick(snapName.value, snapN.value)"
+            [disabled]="busy()">
+            Crear SNAPSHOT
+          </button>
+        </div>
+      </div>
+    </section>
+  
+    <!-- Resultados -->
+    <section class="results">
+      <h2 class="panel-title">Resultados ({{ results().length }})</h2>
+  
+      <div *ngIf="!results().length && !busy()" class="empty">
+        <div>
+          <div class="title">Sin resultados</div>
+          <div class="muted">Ajusta los filtros: prueba cambiar años, país, condición, tags o atributos.</div>
+        </div>
+        <button class="btn" (click)="search()">Reintentar</button>
+      </div>
+  
+      <div class="grid" *ngIf="results().length">
+        <article class="card" *ngFor="let it of results()">
+          <a class="overlay" [routerLink]="['/items', it.id]"></a>
+          <div class="thumb" [class.placeholder]="!it.cover">
+            <img *ngIf="it.cover" [src]="it.cover" alt="" />
+            <span *ngIf="!it.cover">Sin imagen</span>
+          </div>
+          <div class="body">
+            <h3 class="title" [title]="it.title">{{ it.title }}</h3>
+            <div class="meta">
+              <span *ngIf="it.country">{{ it.country }}</span>
+              <span *ngIf="it.issueYear"> · {{ it.issueYear }}</span>
+              <span class="muted"> · #{{ it.id }}</span>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+  </div>
+  

@@ -1,0 +1,47 @@
+<!-- NAVBAR (SVG + título + saludo) -->
+<header class="topbar">
+  <div class="brand" routerLink="/" style="cursor:pointer">
+    <svg class="stamp" viewBox="0 0 120 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#b08968" />
+          <stop offset="100%" stop-color="#7f5539" />
+        </linearGradient>
+      </defs>
+      <rect x="8" y="8" width="104" height="104" rx="8" fill="url(#g1)" opacity="0.2"></rect>
+      <circle cx="60" cy="52" r="24" fill="#85586F"></circle>
+      <path d="M30 82h60" stroke="#85586F" stroke-width="6" stroke-linecap="round" />
+    </svg>
+
+    <div class="title">
+      <h1>Filatelia — Administración</h1>
+      <p>Hola, {{ displayName }}</p>
+    </div>
+  </div>
+
+  <!-- Acciones de administrador -->
+  <nav class="actions">
+    <!-- <a class="link" routerLink="/">Inicio</a> -->
+    <a class="link" routerLink="/admin">Panel</a>
+    <a class="link" routerLink="/admin/roles">Roles</a>
+    <a class="link" routerLink="/admin/items">Piezas</a>
+    <a class="link" routerLink="/admin/upload">Cargar</a>
+    <a class="link" routerLink="/admin/search">Buscar</a>
+    <button class="btn light" (click)="logout()">Cerrar sesión</button>
+  </nav>
+</header>
+
+<!-- HERO / CONTENIDO -->
+<main class="hero">
+  <section class="panel">
+    <h2>Bienvenido, {{ displayName }}</h2>
+    <p>Desde aquí podrás administrar usuarios, roles y el catálogo completo.</p>
+
+    <div class="cta">
+      <a class="btn primary" routerLink="/admin/roles">Gestionar roles</a>
+      <a class="btn" routerLink="/admin/items">Ver piezas</a>
+      <a class="btn" routerLink="/admin/upload">Cargar material</a>
+      <a class="btn" routerLink="/admin/search">Búsqueda avanzada</a>
+    </div>
+  </section>
+</main>

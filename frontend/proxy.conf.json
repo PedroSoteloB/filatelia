@@ -1,0 +1,21 @@
+
+{
+  "/auth":            { "target": "http://localhost:3000", "secure": false, "changeOrigin": true },
+  "/roles":           { "target": "http://localhost:3000", "secure": false, "changeOrigin": true },
+  "/users":           { "target": "http://localhost:3000", "secure": false, "changeOrigin": true },
+  "/items":           { "target": "http://localhost:3000", "secure": false, "changeOrigin": true },
+  "/me":              { "target": "http://localhost:3000", "secure": false, "changeOrigin": true },
+  "/public":          { "target": "http://localhost:3000", "secure": false, "changeOrigin": true },
+  "/attributes":      { "target": "http://localhost:3000", "secure": false, "changeOrigin": true },
+  "/tags":            { "target": "http://localhost:3000", "secure": false, "changeOrigin": true },
+  "/saved-searches":  { "target": "http://localhost:3000", "secure": false, "changeOrigin": true },
+  "/collections":     { "target": "http://localhost:3000", "secure": false, "changeOrigin": true },
+
+  "/presentations":   { "target": "http://localhost:3000", "secure": false, "changeOrigin": true },
+
+
+  "/files":           { "target": "http://localhost:3000", "secure": false, "changeOrigin": true },
+  "/uploads":        { "target": "http://localhost:3000", "secure": false, "changeOrigin": true }
+}
+
+

@@ -1,0 +1,172 @@
+/* Fondo con textura sutil tipo “papel” */
+.auth-wrap {
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    background:
+      radial-gradient(1200px 600px at 70% 0%, #f5ebe0 0%, #efe5d9 40%, #eaded3 70%, #e9dccb 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .paper-bg {
+    position: absolute;
+    inset: -20% -10%;
+    background:
+      radial-gradient(ellipse at top left, rgba(255,255,255,0.6), transparent 60%),
+      radial-gradient(ellipse at bottom right, rgba(255,255,255,0.5), transparent 65%),
+      repeating-linear-gradient(0deg, rgba(0,0,0,0.015) 0 2px, transparent 2px 6px);
+    filter: blur(0.4px);
+    pointer-events: none;
+  }
+  
+  /* Tarjeta con borde “perforado” como un sello */
+  .card {
+    position: relative;
+    width: min(92vw, 440px);
+    padding: 28px 26px;
+    border-radius: 18px;
+    background: #fffdfa;
+    box-shadow:
+      0 30px 60px rgba(83, 63, 42, 0.15),
+      0 4px 16px rgba(83, 63, 42, 0.10);
+    border: 1px solid rgba(125, 103, 78, 0.15);
+  }
+  
+  .stamp-edge {
+    --dot: #d6c4b1;
+    position: relative;
+    isolation: isolate;
+  }
+  .stamp-edge::before,
+  .stamp-edge::after {
+    content: "";
+    position: absolute;
+    inset: -10px;
+    background:
+      radial-gradient(circle at 0 0, transparent 6px, var(--dot) 6.8px, transparent 7px) top left,
+      radial-gradient(circle at 100% 0, transparent 6px, var(--dot) 6.8px, transparent 7px) top right,
+      radial-gradient(circle at 0 100%, transparent 6px, var(--dot) 6.8px, transparent 7px) bottom left,
+      radial-gradient(circle at 100% 100%, transparent 6px, var(--dot) 6.8px, transparent 7px) bottom right;
+    background-repeat: repeat-x, repeat-x, repeat-x, repeat-x;
+    background-size: 18px 18px, 18px 18px, 18px 18px, 18px 18px;
+    z-index: -1;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    padding: 10px;
+    border-radius: 22px;
+  }
+  
+  /* Marca / encabezado */
+  .brand {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 6px;
+  }
+  .stamp { width: 56px; height: 56px; flex-shrink: 0; }
+  .title h1 {
+    margin: 0;
+    font-size: 22px;
+    letter-spacing: 0.3px;
+    color: #5c4b3a;
+    font-weight: 700;
+  }
+  .title p {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: #8b735c;
+  }
+  
+  /* Formulario */
+  form { display: grid; gap: 12px; margin-top: 10px; }
+  h2 { margin: 2px 0 8px; font-size: 18px; color: #6b4e36; }
+  
+  .field { display: grid; gap: 6px; }
+  .field > span {
+    font-size: 12px; color: #7a5e46; letter-spacing: .2px;
+  }
+  input {
+    width: 100%;
+    border: 1px solid #d9cfc4;
+    background: #fffefe;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 14px;
+    color: #40352b;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s, transform .05s;
+  }
+  input::placeholder { color: #b8a79a; }
+  input:focus {
+    border-color: #b08968;
+    box-shadow: 0 0 0 4px rgba(176,137,104,.15);
+  }
+  
+  .password { position: relative; }
+  .password .toggle {
+    position: absolute; right: 6px; top: 6px;
+    border: 0; border-radius: 8px; padding: 8px 10px;
+    background: #f4ece4; color: #6d5744; cursor: pointer;
+    font-size: 12px;
+  }
+  .password .toggle:hover { background: #efe6dc; }
+  
+  /* Acciones */
+  .actions {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 4px;
+  }
+  .remember { display: inline-flex; align-items: center; gap: 8px; color: #6d5744; font-size: 13px; }
+  .link {
+    font-size: 13px; color: #8b5e34; text-decoration: underline; text-underline-offset: 3px;
+  }
+  .link:hover { color: #6f4518; }
+  
+  /* Botón principal */
+  .submit {
+    margin-top: 6px;
+    width: 100%;
+    border: 0;
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-weight: 700;
+    letter-spacing: .2px;
+    background: linear-gradient(90deg, #b08968, #7f5539);
+    color: #fffdfa;
+    cursor: pointer;
+    transition: transform .04s ease, filter .2s ease, box-shadow .2s ease;
+    box-shadow: 0 10px 24px rgba(127,85,57,.25);
+  }
+  .submit:hover { filter: brightness(1.03); }
+  .submit:active { transform: translateY(1px); }
+  .submit:disabled {
+    opacity: .6; cursor: not-allowed; filter: saturate(.5); box-shadow: none;
+  }
+  
+  /* Mensajes */
+  .message {
+    min-height: 18px;
+    font-size: 13px;
+    margin-top: 6px;
+    color: #6d5744;
+  }
+  .message.ok { color: #2f7d32; }
+  .message.error { color: #a13d2d; }
+  
+  /* Pie */
+  .footnote {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px dashed rgba(125,103,78,.25);
+    display: flex; gap: 8px; justify-content: center; color: #8b735c;
+    font-size: 12px;
+  }
+  
+  /* Responsivo */
+  @media (max-width: 420px) {
+    .card { padding: 22px 18px; }
+    .stamp { width: 48px; height: 48px; }
+  }
+  

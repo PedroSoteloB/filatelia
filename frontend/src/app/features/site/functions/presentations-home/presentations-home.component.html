@@ -1,0 +1,126 @@
+<header class="topbar">
+  <div class="brand" (click)="goInicio()" style="cursor:pointer">
+    <svg class="stamp" viewBox="0 0 120 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#b08968" />
+          <stop offset="100%" stop-color="#7f5539" />
+        </linearGradient>
+      </defs>
+      <rect x="8" y="8" width="104" height="104" rx="8" fill="url(#g1)" opacity="0.2"></rect>
+      <circle cx="60" cy="52" r="24" fill="#85586F"></circle>
+      <path d="M30 82h60" stroke="#85586F" stroke-width="6" stroke-linecap="round" />
+    </svg>
+    <div class="title">
+      <h1>Filatelia</h1>
+      <p>Catálogo personal de sellos</p>
+    </div>
+  </div>
+
+  <nav class="actions">
+    <a class="link" (click)="goInicio()">Inicio</a>
+
+    <!-- Versión autenticada -->
+    <ng-container *ngIf="isAuth; else anon">
+      <button class="btn" (click)="goUpload()">Nueva pieza</button>
+      <button class="btn" (click)="goMyItems()">Mis items</button>
+      <button class="btn" (click)="goSearch()">Búsqueda</button>
+      <button class="btn" (click)="goCollections()">Mis colecciones</button>
+      <button class="btn" (click)="goPresentation()">Mis Presentaciones</button>
+      <button class="btn light" (click)="logout()">Cerrar sesión</button>
+    </ng-container>
+
+    <!-- Versión anónima -->
+    <ng-template #anon>
+      <a class="link" (click)="goLogin()">Iniciar sesión</a>
+    </ng-template>
+  </nav>
+</header>
+
+<div class="wrap">
+    <div class="top-bar">
+      <h1>Presentaciones</h1>
+      <div class="spacer"></div>
+      <button class="btn" (click)="toggleCreate()">
+        {{ showCreate() ? 'Cancelar' : 'Nueva presentación' }}
+      </button>
+    </div>
+  
+    <!-- estado -->
+    <div *ngIf="error()" class="status error">{{ error() }}</div>
+    <div *ngIf="loading()" class="status busy">Cargando…</div>
+  
+    <!-- Formulario de creación -->
+    <section class="card form" *ngIf="showCreate()">
+      <h2>Crear presentación</h2>
+  
+      <form [formGroup]="createForm" (ngSubmit)="submitCreate()">
+        <div class="row">
+          <label>Collection ID</label>
+          <input class="inp" type="number" formControlName="collection_id" placeholder="ID de colección" />
+          <div class="hint" *ngIf="createForm.controls.collection_id.touched && createForm.controls.collection_id.invalid">
+            Requerido
+          </div>
+        </div>
+  
+        <div class="row">
+          <label>Título</label>
+          <input class="inp" type="text" formControlName="title" placeholder="Ej. Perú 1900–1950 (Selección)" />
+          <div class="hint" *ngIf="createForm.controls.title.touched && createForm.controls.title.invalid">
+            Requerido (máx. 180)
+          </div>
+        </div>
+  
+        <div class="row">
+          <label>Descripción (opcional)</label>
+          <textarea class="inp" rows="3" formControlName="description" placeholder="Texto breve…"></textarea>
+        </div>
+  
+        <div class="row">
+          <label>Portada (opcional)</label>
+          <input class="inp" type="file" accept="image/*" (change)="onCoverChange($event)" />
+        </div>
+  
+        <div class="actions">
+          <button class="btn primary" type="submit" [disabled]="loading()">Crear</button>
+          <button class="btn light" type="button" (click)="toggleCreate()">Cancelar</button>
+        </div>
+      </form>
+    </section>
+  
+    <!-- lista -->
+    <section *ngIf="items().length" class="grid">
+      <article class="card" *ngFor="let p of items(); trackBy: trackById">
+        <a [routerLink]="['/presentations', p.id]" class="thumb" [class.placeholder]="!p.cover">
+          <img *ngIf="p.cover" [src]="p.cover" alt="cover" />
+          <span *ngIf="!p.cover">Sin portada</span>
+        </a>
+        <div class="body">
+          <a class="title" [routerLink]="['/presentations', p.id]">{{ p.title }}</a>
+          <div class="meta">
+            <span>#{{ p.id }}</span>
+            <span>• Col: {{ p.collection_id }}</span>
+            <span>• {{ p.updated_at | date:'short' }}</span>
+          </div>
+          <p class="desc" *ngIf="p.description">{{ p.description }}</p>
+          <div class="actions">
+            <a class="btn tiny" [routerLink]="['/presentations', p.id]">Ver</a>
+          </div>
+        </div>
+      </article>
+    </section>
+  
+    <!-- vacío -->
+    <section *ngIf="!loading() && !items().length" class="empty">
+      <div class="title-empty">Aún no tienes presentaciones</div>
+      <div class="muted">Crea una nueva para empezar.</div>
+    </section>
+  
+    <!-- paginación -->
+    <div class="pager" *ngIf="items().length || offset>0">
+      <button class="btn" (click)="load('prev')" [disabled]="offset===0">← Anterior</button>
+      <span class="muted">offset {{ offset }}</span>
+      <button class="btn" (click)="load('next')" [disabled]="!hasMore()">Siguiente →</button>
+    </div>
+  </div>
+  

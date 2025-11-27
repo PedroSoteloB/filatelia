@@ -1,0 +1,58 @@
+Catálogo público
+<section class="catalog" id="catalogo">
+  <h3>Catálogo público</h3>
+
+  <div class="toolbar">
+    <input
+      type="search"
+      [(ngModel)]="q"
+      name="q"
+      placeholder="Buscar por título / catálogo…"
+      (keyup.enter)="search()"
+      aria-label="Buscar"
+    />
+    <select [(ngModel)]="sortBy" (change)="sortItems()" aria-label="Ordenar por">
+      <option value="server">Orden: Novedades</option>
+      <option value="title_asc">Título A–Z</option>
+      <option value="title_desc">Título Z–A</option>
+      <option value="year_desc">Año ↓</option>
+      <option value="year_asc">Año ↑</option>
+    </select>
+    <button class="btn" (click)="search()">Buscar</button>
+  </div>
+
+  <div class="result-row" *ngIf="items.length">
+    <span>{{ items.length }} resultado{{ items.length>1 ? 's' : '' }}</span>
+  </div>
+
+  <p class="status" *ngIf="!loading && items.length===0">Sin resultados por ahora.</p>
+
+<!-- src/app/features/site/landing/landing.component.html -->
+<div class="grid">
+  <article
+  class="card"
+  *ngFor="let it of items"
+  (click)="goPublicDetail(it.id)"
+  (keyup.enter)="goPublicDetail(it.id)"
+  (keydown.space)="goPublicDetail(it.id); $event.preventDefault()"
+  role="button"
+  tabindex="0"
+  [attr.aria-label]="'Ver detalle de ' + it.title"
+>
+  <div class="thumb">
+    <div class="ph-img">📦</div>
+  </div>
+  <div class="meta">
+    <h4>{{ it.title }}</h4>
+    <p class="muted">{{ it.country || '—' }} · {{ it.issueYear || '—' }}</p>
+  </div>
+</article>
+
+</div>
+
+
+  <div class="footer" *ngIf="loading">Cargando…</div>
+  <div class="footer" *ngIf="!loading && canLoadMore && items.length">
+    <button class="btn" (click)="loadMore()">Cargar más</button>
+  </div>
+</section>

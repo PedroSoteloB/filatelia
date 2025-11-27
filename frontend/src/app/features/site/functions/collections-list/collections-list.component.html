@@ -1,0 +1,144 @@
+<!-- src/app/features/site/landing/landing.component.html -->
+<header class="topbar">
+  <div class="brand" (click)="goInicio()" style="cursor:pointer">
+    <svg class="stamp" viewBox="0 0 120 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#b08968" />
+          <stop offset="100%" stop-color="#7f5539" />
+        </linearGradient>
+      </defs>
+      <rect x="8" y="8" width="104" height="104" rx="8" fill="url(#g1)" opacity="0.2"></rect>
+      <circle cx="60" cy="52" r="24" fill="#85586F"></circle>
+      <path d="M30 82h60" stroke="#85586F" stroke-width="6" stroke-linecap="round" />
+    </svg>
+    <div class="title">
+      <h1>Filatelia</h1>
+      <p>Catálogo personal de sellos</p>
+    </div>
+  </div>
+
+  <nav class="actions">
+    <a class="link" (click)="goInicio()">Inicio</a>
+
+    <!-- Versión autenticada -->
+    <ng-container *ngIf="isAuth; else anon">
+      <button class="btn" (click)="goUpload()">Nueva pieza</button>
+      <button class="btn" (click)="goMyItems()">Mis items</button>
+      <button class="btn" (click)="goSearch()">Búsqueda</button>
+      <button class="btn" (click)="goCollections()">Mis colecciones</button>
+      <button class="btn" (click)="goPresentation()">Mis Presentaciones</button>
+      <button class="btn light" (click)="logout()">Cerrar sesión</button>
+    </ng-container>
+
+    <!-- Versión anónima -->
+    <ng-template #anon>
+      <a class="link" (click)="goLogin()">Iniciar sesión</a>
+    </ng-template>
+  </nav>
+</header>
+<div class="wrap">
+    <h1 class="page-title">Mis colecciones</h1>
+  
+    <!-- Estado de error -->
+    <div *ngIf="error()" class="status error">{{ error() }}</div>
+  
+    <!-- Estado de carga -->
+    <div *ngIf="busy()" class="status busy">Cargando…</div>
+  
+    <!-- Resumen general -->
+    <section class="summary-panel">
+      <div class="stat">
+        <div class="num">{{ collections().length }}</div>
+        <div class="label">Total</div>
+      </div>
+      <div class="stat">
+        <div class="num">{{ smartCount() }}</div>
+        <div class="label">Smart</div>
+      </div>
+      <div class="stat">
+        <div class="num">{{ staticCount() }}</div>
+        <div class="label">Snapshot estática</div>
+      </div>
+    </section>
+  
+    <!-- Vacío -->
+    <section *ngIf="!collections().length && !busy()" class="empty">
+      <div class="title">No tienes colecciones aún</div>
+      <div class="muted">Crea una SMART o SNAPSHOT desde la búsqueda temática.</div>
+    </section>
+  
+    <!-- Lista -->
+    <section class="grid" *ngIf="collections().length">
+      <article class="card" *ngFor="let c of collections()">
+        <div class="card-head">
+          <div class="left">
+            <div class="name" [title]="c.name">{{ c.name }}</div>
+  
+            <div
+              class="type-badge"
+              [class.smart]="c.type === 'smart'"
+              [class.static]="c.type === 'static'">
+              <ng-container *ngIf="c.type === 'smart'">SMART</ng-container>
+              <ng-container *ngIf="c.type === 'static'">SNAPSHOT</ng-container>
+            </div>
+          </div>
+  
+          <div class="right actions">
+            <a class="btn light" [routerLink]="buildDetailLink(c)">Ver</a>
+            <button
+              class="btn danger light"
+              (click)="deleteCollection(c)"
+              [disabled]="busy()">
+              Eliminar
+            </button>
+          </div>
+        </div>
+  
+        <div class="card-body">
+          <div class="row main-row">
+            <div class="col">
+              <div class="label small muted">Descripción</div>
+              <div class="value desc">
+                {{ c.description || '—' }}
+              </div>
+            </div>
+  
+            <div class="col" *ngIf="c.type === 'smart'">
+              <div class="label small muted">Filtro</div>
+              <div class="value filter">
+                {{ previewFilter(c) || '—' }}
+              </div>
+            </div>
+  
+            <div class="col" *ngIf="c.type === 'static'">
+              <div class="label small muted">Contenido</div>
+              <div class="value filter">
+                Lista fija de ítems ↔ ver detalle
+              </div>
+            </div>
+          </div>
+  
+          <div class="row meta-row">
+            <div class="meta">
+              <span class="muted small">Orden:</span>
+              <span class="code small">
+                {{ c.sort_key || 'issue_year' }} / {{ c.sort_dir || 'asc' }}
+              </span>
+            </div>
+  
+            <div class="meta">
+              <span class="muted small">Creado:</span>
+              <span class="small">{{ fmtDate(c.created_at) }}</span>
+            </div>
+  
+            <div class="meta">
+              <span class="muted small">Actualizado:</span>
+              <span class="small">{{ fmtDate(c.updated_at) }}</span>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+  </div>
+  

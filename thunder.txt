@@ -1,0 +1,276 @@
+
+CUS01 – Iniciar sesión
+POST Login
+POST http://localhost:3000/auth/login
+Content-Type: application/json
+
+{
+"email": "admin@local.test",
+"password": "nuevo-pass"
+}
+user2@local.test
+---------------------------------------
+
+CUS02 – Cerrar sesión
+POST Logout
+POST http://localhost:3000/auth/logout
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "refreshToken": "PEGAR_AQUÍ_EL_REFRESH_TOKEN_DEL_LOGIN"
+}
+
+---------------------------------------
+
+
+CUS03 – Recuperar contraseña
+POST Solicitar reset
+POST http://localhost:3000/auth/forgot-password
+Content-Type: application/json
+
+{ "email": "admin@local.test" }
+
+POST Resetear
+POST http://localhost:3000/auth/reset-password
+Content-Type: application/json
+
+{
+"token": "TOKEN_DEL_CORREO/O_RESPUESTA",
+"newPassword": "nuevo-pass"
+}
+
+
+---------------------------------------
+
+CUS04 – Administrar usuarios
+  GET Listar usuarios
+GET http://localhost:3000/users
+Authorization: Bearer {{accessToken}}
+
+GET Roles de un usuario
+GET http://localhost:3000/roles/of/3
+Authorization: Bearer {{accessToken}}
+
+---------------------------------------
+
+
+CUS05 – Administrar roles
+POST Crear rol
+POST http://localhost:3000/roles
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{ "name": "curator", "description": "Puede editar metadatos" }
+
+GET Listar roles
+GET http://localhost:3000/roles
+Authorization: Bearer {{accessToken}}
+
+PUT Actualizar rol
+PUT http://localhost:3000/roles/2
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{ "name": "curator-pro", "description": "Metadatos avanzados" }
+
+DELETE Eliminar rol
+DELETE http://localhost:3000/roles/2
+Authorization: Bearer {{accessToken}}
+
+
+---------------------------------------
+
+CUS06 – Administrar permisos por rol
+
+GET /roles/:id/permissions  
+POST /roles/:id/permissions  
+DELETE /roles/:id/permissions/:permId  
+
+  POST Asignar rol a usuario
+POST http://localhost:3000/roles/assign
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{ "userId": 3, "roleId": 2 }
+
+POST Quitar rol a usuario
+POST http://localhost:3000/roles/unassign
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{ "userId": 3, "roleId": 2 }
+
+
+---------------------------------------
+
+CUS07 – Cargar material filatélico
+POST Crear ítem (rápido sin imágenes)
+POST http://localhost:3000/items?allowNoImages=true
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+"title": "Rosa Peruana 1955",
+"country": "Peru",
+"issueYear": 1955,
+"allowNoImages": true
+}
+
+
+---------------------------------------
+
+CUS08 – Catalogar pieza con metadatos dinámicos
+POST Definir atributo
+POST http://localhost:3000/attributes
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{ "name": "Dentado", "attr_type": "number" }
+
+POST Asignar atributos a un ítem
+POST http://localhost:3000/items/32/attributes
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+"attributes": [
+{ "attributeName": "Dentado", "attrType": "number", "valueNumber": 12.5 },
+{ "attributeName": "Serie", "attrType": "text", "valueText": "Flora" }
+]
+}
+
+GET Ver atributos del ítem
+GET http://localhost:3000/items/32/attributes
+Authorization: Bearer {{accessToken}}
+
+
+---------------------------------------
+
+CUS09 – Gestionar etiquetas
+POST Crear etiqueta
+POST http://localhost:3000/tags
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{ "name": "Perú" }
+
+GET Listar etiquetas
+GET http://localhost:3000/tags
+Authorization: Bearer {{accessToken}}
+
+POST Asignar etiquetas a ítem
+POST http://localhost:3000/items/32/tags
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{ "tagNames": ["Peru_1"] }
+
+DELETE Quitar etiqueta del ítem
+DELETE http://localhost:3000/items/32/tags/ID_TAG
+Authorization: Bearer {{accessToken}}
+
+DELETE Eliminar etiqueta
+DELETE http://localhost:3000/tags/ID_TAG
+Authorization: Bearer {{accessToken}}
+
+
+---------------------------------------
+
+CUS10 – Registrar y actualizar stock
+
+Atributo dinámico “Stock”:  
+POST http://localhost:3000/attributes
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{ "name": "Stock", "attr_type": "number" }
+
+POST http://localhost:3000/items/32/attributes
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{ "attributes": [ { "attributeName": "Stock", "attrType": "number", "valueNumber": 5 } ] }
+
+  
+
+---------------------------------------
+
+CUS11 – Actualizar información de pieza
+PUT Actualizar ítem
+PUT http://localhost:3000/items/32
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+"title": "Rosa Peruana 1955 (edición)",
+"description": "Actualizado",
+"country": "Peru",
+"issueYear": 1955
+}
+
+
+
+---------------------------------------
+CUS12 – Eliminar pieza
+DELETE Ítem
+DELETE http://localhost:3000/items/32
+Authorization: Bearer {{accessToken}}
+
+
+---------------------------------------
+
+CUS13 – Consultar colección personal
+GET Mis ítems
+GET http://localhost:3000/me/items?limit=20
+Authorization: Bearer {{accessToken}}
+
+GET Detalle de ítem
+GET http://localhost:3000/items/33
+Authorization: Bearer {{accessToken}}
+
+
+---------------------------------------
+
+CUS14 – Buscar y filtrar piezas
+GET Búsqueda avanzada  (ejemplo: país=Peru, 1950–1959, texto “Rosa”; con atributos en JSON URL-encoded)
+GET http://localhost:3000/items/search?q=Rosa&country=Peru&yearFrom=1950&yearTo=1959&tagsMode=OR&limit=20
+Authorization: Bearer {{accessToken}}
+
+
+---------------------------------------
+
+
+CUS16 – Generar catálogo digital interno
+POST Crear colección SMART
+POST http://localhost:3000/collections
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+"name": "Peru 1950s (smart)",
+"description": "País Peru + década 50",
+"type": "smart",
+"filter_json": { "country": "Peru", "yearFrom": 1950, "yearTo": 1959, "tagsMode": "OR" },
+"sort_key": "issue_year",
+"sort_dir": "asc"
+}
+
+GET Items de la colección
+GET http://localhost:3000/collections/3/items
+Authorization: Bearer {{accessToken}}
+
+* RECORDATORIO: devuelve todas las piezas que pertenecen a la colección  del usuario autenticado.
+
+(Opcional) Guardar búsqueda
+POST http://localhost:3000/saved-searches
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "name": "Peru 1950s",
+  "filter_json": { "country": "Peru", "yearFrom": 1950, "yearTo": 1959 }
+}
+
+
+ 
