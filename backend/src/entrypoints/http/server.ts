@@ -3071,5 +3071,20 @@ app.get('/presentations/:id/ppt', { preHandler: authGuard }, async (req:any, rep
   }
 });
 
-app.listen({ port: 3000, host: '0.0.0.0' }); 
+// app.listen({ port: 3000, host: '0.0.0.0' });  en local
+
+//en azure
+const PORT = Number(process.env.PORT || 3000);
+const HOST = '0.0.0.0';
+
+app
+  .listen({ port: PORT, host: HOST })
+  .then(() => {
+    app.log.info(`Server listening on http://${HOST}:${PORT}`);
+  })
+  .catch((err: any) => {
+    app.log.error(err, 'Error starting server');
+    process.exit(1);
+  });
+
 
