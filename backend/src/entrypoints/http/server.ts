@@ -8,7 +8,7 @@ import { createPresentationFromJson } from "./middlewares/core/presentonClient";
 import { buildSlidesHTML } from './middlewares/core/openaiHtmlSlides';
 
 const Fastify = require('fastify');
-const fastifyCors = require('@fastify/cors');
+
 // ⚠️ AJUSTA ESTA RUTA A TU NUEVO POOL DE SQL SERVER
 const { db } = require('../../infrastructure/db/sql/pool');
 
@@ -19,48 +19,13 @@ const PptxGenJS = require('pptxgenjs'); // para generar PPT localmente
 
 const app = Fastify({ logger: true });
 
-// 👇 REGISTRA CORS ANTES DE LAS RUTAS
-app.register(fastifyCors, {
-  origin: [
-    'http://localhost:4200',              // front local
-    'https://filatelia-orpin.vercel.app' // front en Vercel
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-});
-
-const uploadsRoot = process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
-
-
-// sirve /uploads/*
-app.register(require('@fastify/static'), {
-  root: uploadsRoot,
-  prefix: '/uploads/',           // => http://.../uploads/filename.jpg
-  decorateReply: false,
-});
-
-function toPublicUrl(p?: string | null): string | null {
-  if (!p) return null;
-  const s = String(p);
-
-  if (/^https?:\/\//i.test(s)) return s;
-  if (s.startsWith('/uploads/')) return s;
-  if (s.startsWith('uploads/')) return `/${s}`;
-
-  const root = path.resolve(uploadsRoot);
-  const abs  = path.resolve(s);
-  if (abs.startsWith(root)) {
-    const rel = abs.slice(root.length).replace(/^[\\/]+/, '');
-    return `/uploads/${rel.replace(/\\/g, '/')}`;
-  }
-  return null;
-}
 
 // 👇 1) Orígenes permitidos
 const allowedOrigins: string[] = [
   'http://localhost:4200',
   'https://filatelia-orpin.vercel.app',
 ];
+
 
 // 👇 2) Hook global para CORS
 app.addHook(
@@ -91,6 +56,35 @@ app.addHook(
     done();
   },
 );
+
+const uploadsRoot = process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
+
+
+// sirve /uploads/*
+app.register(require('@fastify/static'), {
+  root: uploadsRoot,
+  prefix: '/uploads/',           // => http://.../uploads/filename.jpg
+  decorateReply: false,
+});
+
+function toPublicUrl(p?: string | null): string | null {
+  if (!p) return null;
+  const s = String(p);
+
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith('/uploads/')) return s;
+  if (s.startsWith('uploads/')) return `/${s}`;
+
+  const root = path.resolve(uploadsRoot);
+  const abs  = path.resolve(s);
+  if (abs.startsWith(root)) {
+    const rel = abs.slice(root.length).replace(/^[\\/]+/, '');
+    return `/uploads/${rel.replace(/\\/g, '/')}`;
+  }
+  return null;
+}
+
+
 
 
 // Multipart para subir imágenes
