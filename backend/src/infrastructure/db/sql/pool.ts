@@ -30,6 +30,8 @@ const config: sql.config = {
   server: process.env.DB_HOST || 'databasefilatelia.database.windows.net',
   database: process.env.DB_NAME || 'philately',
   port: Number(process.env.DB_PORT || '1433'),
+  connectionTimeout: 60000,   // ⬅️ espera hasta 60 s para conectar
+  requestTimeout: 60000,      // ⬅️ (opcional, mismo criterio)
   options: {
     encrypt: true,
     trustServerCertificate: false,
