@@ -1,19 +1,14 @@
 import type { FastifyRequest, FastifyReply, HookHandlerDoneFunction } from 'fastify';
 import fs from 'fs';
 import path from 'path';
-import fsX from 'fs-extra';
-import OpenAI from 'openai';
-import fastifyStatic from '@fastify/static';
 
 import { createPresentationFromJson } from "./middlewares/core/presentonClient";
 
 // helpers
 import { buildSlidesHTML } from './middlewares/core/openaiHtmlSlides';
-import { htmlToPng } from './middlewares/core/screenshot';
-import { imagesToPptx } from './middlewares/core/pptxBuilder';
 
 const Fastify = require('fastify');
-
+const fastifyCors = require('@fastify/cors');
 // ⚠️ AJUSTA ESTA RUTA A TU NUEVO POOL DE SQL SERVER
 const { db } = require('../../infrastructure/db/sql/pool');
 
@@ -23,6 +18,16 @@ const crypto = require('crypto');
 const PptxGenJS = require('pptxgenjs'); // para generar PPT localmente
 
 const app = Fastify({ logger: true });
+
+// 👇 REGISTRA CORS ANTES DE LAS RUTAS
+app.register(fastifyCors, {
+  origin: [
+    'http://localhost:4200',              // front local
+    'https://filatelia-orpin.vercel.app' // front en Vercel
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+});
 
 const uploadsRoot = process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
 
