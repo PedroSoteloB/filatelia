@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { ApiService } from './api.service';
 import { tap } from 'rxjs/operators';
-import { environment } from '../../../environments/environment'; // 👈 importante
+import { environment } from '../environments/environment.prod'; // 👈 importante
 
 export interface LoginResponse {
   user: { id: number; email: string; displayName: string };

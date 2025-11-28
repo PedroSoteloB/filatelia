@@ -1,0 +1,12 @@
+Nombre para mostrar
+:
+filatelia-github-deploy
+Id. de aplicación (cliente)
+:
+4416cd04-5d9f-488f-b021-134501e76a16
+Identificador de objeto
+:
+9829a8d1-d1c0-46ae-b028-1c4b4054247e
+Id. de directorio (inquilino)
+:
+6944bb45-6736-487e-ae42-f6f374b2b5d7
