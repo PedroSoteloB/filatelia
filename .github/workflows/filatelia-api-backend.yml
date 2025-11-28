@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy Node.js app to Azure Web App - filatelia-api
+name: Build and deploy backend to Azure Web App - filatelia-api
 
 on:
   push:
@@ -13,23 +13,25 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read # This is required for actions/checkout
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js version
-        uses: actions/setup-node@v3
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
         with:
           node-version: '22.x'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
 
-      - name: npm install and build (backend)
+      - name: Install and build backend
         working-directory: backend
         run: |
-          npm install
+          npm ci || npm install
           npm run build --if-present
 
-      - name: Upload artifact for deployment job
+      - name: Upload backend artifact
         uses: actions/upload-artifact@v4
         with:
           name: backend-app
@@ -39,16 +41,17 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     permissions:
-      id-token: write # This is required for requesting the JWT
-      contents: read  # This is required for actions/checkout
+      id-token: write      # para OIDC
+      contents: read
 
     steps:
-      - name: Download artifact from build job
+      - name: Download backend artifact
         uses: actions/download-artifact@v4
         with:
           name: backend-app
+          path: .
 
-      - name: Login to Azure
+      - name: Azure login using OIDC
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -56,9 +59,8 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy to Azure Web App
-        id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'filatelia-api'
-          slot-name: 'Production'
-          package: backend
+          app-name: filatelia-api           # nombre EXACTO de la App Service
+          resource-group-name: azureSQL     # grupo de recursos donde está la app
+          package: ./backend                # carpeta del backend que se va a publicar
