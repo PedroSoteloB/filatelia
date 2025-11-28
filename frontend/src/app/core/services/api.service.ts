@@ -1,13 +1,38 @@
+// import { Injectable } from '@angular/core';
+// import { HttpClient, HttpHeaders } from '@angular/common/http';
+
+// @Injectable({ providedIn: 'root' })
+// export class ApiService {
+//   constructor(private http: HttpClient) {}
+//   post<T>(url: string, body: any, headers?: HttpHeaders) {
+//     return this.http.post<T>(url, body, { headers });
+//   }
+//   get<T>(url: string) {
+//     return this.http.get<T>(url);
+//   }
+// }
+
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { environment } from '../environments/environment'; // AJUSTA la ruta si estás en otra carpeta
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
+  private baseUrl = environment.apiBaseUrl;
+
   constructor(private http: HttpClient) {}
+
   post<T>(url: string, body: any, headers?: HttpHeaders) {
-    return this.http.post<T>(url, body, { headers });
+    const fullUrl = url.startsWith('http')
+      ? url
+      : `${this.baseUrl}${url}`;
+    return this.http.post<T>(fullUrl, body, { headers });
   }
+
   get<T>(url: string) {
-    return this.http.get<T>(url);
+    const fullUrl = url.startsWith('http')
+      ? url
+      : `${this.baseUrl}${url}`;
+    return this.http.get<T>(fullUrl);
   }
 }
