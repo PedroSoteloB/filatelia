@@ -247,7 +247,7 @@ import { firstValueFrom } from 'rxjs';
 // ⭐ Usa el ApiService centralizado (para POST)
 import { ApiService } from '../../../../core/services/api.service';
 // ⭐ Traemos environment SOLO para armar la URL del GET
-import { environment } from '../../../../core/environments/environment';
+import { environment } from '../../../../core/environments/environment.prod';
 
 const API_BASE = environment.apiBaseUrl;
 

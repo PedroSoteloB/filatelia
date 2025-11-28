@@ -275,7 +275,7 @@ import { PLATFORM_ID } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 // 👇 IMPORTA environment
-import { environment } from '../../../../core/environments/environment';
+import { environment } from '../../../../core/environments/environment.prod';
 // 👇 ApiService para POST
 import { ApiService } from '../../../../core/services/api.service';
 
