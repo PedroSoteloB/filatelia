@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy backend to Azure Web App - filatelia-api
+name: Build and deploy backend app to Azure Web App - filatelia-api
 
 on:
   push:
@@ -16,19 +16,19 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: '22.x'
-          cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
+          # ⬆️ SIN cache ni cache-dependency-path
 
       - name: Install and build backend
         working-directory: backend
         run: |
-          npm ci || npm install
+          npm install
           npm run build --if-present
 
       - name: Upload backend artifact
@@ -49,9 +49,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: backend-app
-          path: .
+          path: backend
 
-      - name: Azure login using OIDC
+      - name: Login to Azure
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -61,6 +61,6 @@ jobs:
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: filatelia-api           # nombre EXACTO de la App Service
-          resource-group-name: azureSQL     # grupo de recursos donde está la app
-          package: ./backend                # carpeta del backend que se va a publicar
+          app-name: 'filatelia-api'
+          slot-name: 'Production'
+          package: backend
