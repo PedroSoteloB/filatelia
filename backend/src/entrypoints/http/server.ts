@@ -31,6 +31,7 @@ app.register(fastifyCors, {
 
 const uploadsRoot = process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
 
+
 // sirve /uploads/*
 app.register(require('@fastify/static'), {
   root: uploadsRoot,
@@ -54,6 +55,43 @@ function toPublicUrl(p?: string | null): string | null {
   }
   return null;
 }
+
+// 👇 1) Orígenes permitidos
+const allowedOrigins: string[] = [
+  'http://localhost:4200',
+  'https://filatelia-orpin.vercel.app',
+];
+
+// 👇 2) Hook global para CORS
+app.addHook(
+  'onRequest',
+  (
+    req: FastifyRequest,
+    reply: FastifyReply,
+    done: HookHandlerDoneFunction,
+  ) => {
+    const origin = req.headers.origin as string | undefined;
+
+    if (origin && allowedOrigins.includes(origin)) {
+      reply.header('Access-Control-Allow-Origin', origin);
+    }
+
+    reply.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    reply.header(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Authorization',
+    );
+
+    // Manejar preflight CORS
+    if (req.method === 'OPTIONS') {
+      reply.code(204).send();
+      return;
+    }
+
+    done();
+  },
+);
+
 
 // Multipart para subir imágenes
 const fastifyMultipart = require('@fastify/multipart');
