@@ -1,9 +1,10 @@
-// import { Component, signal, computed, inject, ViewEncapsulation, OnInit } from '@angular/core';
-// import { CommonModule } from '@angular/common';
+// import { Component, signal, computed, inject, ViewEncapsulation, OnInit, Inject } from '@angular/core';
+// import { CommonModule, isPlatformBrowser } from '@angular/common';
 // import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 // import { HttpClient, HttpHeaders, HttpClientModule } from '@angular/common/http';
 // import { Router } from '@angular/router';
 // import { firstValueFrom } from 'rxjs';
+// import { PLATFORM_ID } from '@angular/core';
 
 // const ENDPOINT_ITEMS = '/items';
 
@@ -21,6 +22,23 @@
 //   | { name: string; attrType: 'date'; value: string }   // YYYY-MM-DD
 //   | { name: string; attrType: 'text' | 'list'; value: string };
 
+// // ==== Helpers JWT (roles y expiración) ====
+// function getRoleFromToken(token: string): any {
+//   if (!token) return undefined;
+//   try {
+//     const payload = JSON.parse(
+//       atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))
+//     );
+//     return payload.role ?? payload.roles ?? payload.permissions;
+//   } catch { return undefined; }
+// }
+// function isExpired(token: string): boolean {
+//   try {
+//     const { exp } = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+//     return typeof exp === 'number' && Date.now() / 1000 >= exp;
+//   } catch { return true; }
+// }
+
 // @Component({
 //   selector: 'app-upload-item',
 //   standalone: true,
@@ -34,6 +52,8 @@
 //   private fb = inject(FormBuilder);
 //   private http = inject(HttpClient);
 //   private router = inject(Router);
+
+//   constructor(@Inject(PLATFORM_ID) private platformId: Object) {}
 
 //   isAuth = false;
 //   isAdmin = false;
@@ -74,7 +94,32 @@
 
 //   ngOnInit(): void {
 //     this.form.get('visibility')?.disable({ emitEvent: false, onlySelf: true });
+
+//     // === NUEVO: detectar navegador y evaluar auth/roles ===
+//     this.isBrowser = isPlatformBrowser(this.platformId);
+//     if (this.isBrowser) {
+//       const token =
+//         localStorage.getItem('accessToken') ??
+//         sessionStorage.getItem('accessToken') ??
+//         '';
+
+//       // Si no hay token o está vencido, limpiar y forzar login con returnUrl
+//       if (!token || isExpired(token)) {
+//         localStorage.clear();
+//         sessionStorage.clear();
+//         this.isAuth = false;
+//         this.isAdmin = false;
+//         // Redirige conservando destino (/items/upload)
+//         this.goLogin(this.router.url);
+//         return;
+//       }
+
+//       this.isAuth = true;
+//       const role = getRoleFromToken(token);
+//       this.isAdmin = Array.isArray(role) ? role.includes('admin') : role === 'admin';
+//     }
 //   }
+
 //   goInicio() { this.router.navigateByUrl('/'); }
 
 //   // ✔️ Login con returnUrl (por defecto, vuelve a la URL actual)
@@ -291,7 +336,7 @@
 //     fd.append('metadata', JSON.stringify(metadata));
 //     this.files().forEach((file, idx) => fd.append(`image${idx + 1}`, file, file.name));
 
-//     const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
+//     const token = (this.isBrowser && (localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken'))) || '';
 //     const headers = new HttpHeaders(token ? { Authorization: `Bearer ${token}` } : {});
 
 //     this.busy.set(true);
@@ -322,14 +367,25 @@
 //     }
 //   }
 // }
-
-import { Component, signal, computed, inject, ViewEncapsulation, OnInit, Inject } from '@angular/core';
+import {
+  Component,
+  signal,
+  computed,
+  inject,
+  ViewEncapsulation,
+  OnInit,
+  Inject
+} from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { HttpClient, HttpHeaders, HttpClientModule } from '@angular/common/http';
+import { HttpHeaders, HttpClientModule } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { PLATFORM_ID } from '@angular/core';
+import { ApiService } from '../../../../core/services/api.service';
+
+// 👇 IMPORTA TU ApiService (AJUSTA LA RUTA)
+
 
 const ENDPOINT_ITEMS = '/items';
 
@@ -352,16 +408,23 @@ function getRoleFromToken(token: string): any {
   if (!token) return undefined;
   try {
     const payload = JSON.parse(
-      atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))
+      atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))
     );
     return payload.role ?? payload.roles ?? payload.permissions;
-  } catch { return undefined; }
+  } catch {
+    return undefined;
+  }
 }
+
 function isExpired(token: string): boolean {
   try {
-    const { exp } = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+    const { exp } = JSON.parse(
+      atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))
+    );
     return typeof exp === 'number' && Date.now() / 1000 >= exp;
-  } catch { return true; }
+  } catch {
+    return true;
+  }
 }
 
 @Component({
@@ -375,10 +438,13 @@ function isExpired(token: string): boolean {
 })
 export class UploadItemComponent implements OnInit {
   private fb = inject(FormBuilder);
-  private http = inject(HttpClient);
   private router = inject(Router);
 
-  constructor(@Inject(PLATFORM_ID) private platformId: Object) {}
+constructor(
+  @Inject(PLATFORM_ID) private platformId: Object,
+  private api: ApiService
+) {}
+
 
   isAuth = false;
   isAdmin = false;
@@ -420,7 +486,7 @@ export class UploadItemComponent implements OnInit {
   ngOnInit(): void {
     this.form.get('visibility')?.disable({ emitEvent: false, onlySelf: true });
 
-    // === NUEVO: detectar navegador y evaluar auth/roles ===
+    // === detectar navegador y evaluar auth/roles ===
     this.isBrowser = isPlatformBrowser(this.platformId);
     if (this.isBrowser) {
       const token =
@@ -428,65 +494,56 @@ export class UploadItemComponent implements OnInit {
         sessionStorage.getItem('accessToken') ??
         '';
 
-      // Si no hay token o está vencido, limpiar y forzar login con returnUrl
       if (!token || isExpired(token)) {
         localStorage.clear();
         sessionStorage.clear();
         this.isAuth = false;
         this.isAdmin = false;
-        // Redirige conservando destino (/items/upload)
         this.goLogin(this.router.url);
         return;
       }
 
       this.isAuth = true;
       const role = getRoleFromToken(token);
-      this.isAdmin = Array.isArray(role) ? role.includes('admin') : role === 'admin';
+      this.isAdmin = Array.isArray(role)
+        ? role.includes('admin')
+        : role === 'admin';
     }
   }
 
   goInicio() { this.router.navigateByUrl('/'); }
 
-  // ✔️ Login con returnUrl (por defecto, vuelve a la URL actual)
   goLogin(returnUrl: string = this.router.url) {
     this.router.navigate(['/login'], { queryParams: { returnUrl } });
   }
 
-  // Helper: si no hay sesión, manda a login preservando destino
   private navigateOrLogin(targetUrl: string) {
     if (!this.isAuth) { this.goLogin(targetUrl); return; }
     this.router.navigateByUrl(targetUrl);
   }
 
-  // NUEVA PIEZA
   goUpload() { this.navigateOrLogin('/items/upload'); }
-
-  // MIS ITEMS (lista privada)
   goMyItems() { this.navigateOrLogin('/items/mine'); }
-
-  // BÚSQUEDA (pública)
   goSearch() { this.router.navigateByUrl('/items/search'); }
-
-  // MIS COLECCIONES
   goCollections() { this.navigateOrLogin('/collections'); }
-
   goPresentation() { this.navigateOrLogin('/presentations'); }
-
-  // Mantengo por compatibilidad: redirige al listado privado
   goMyCatalog() { this.goMyItems(); }
 
-  logout() {
+  // 🔁 LOGOUT usando ApiService (no más fetch al frontend)
+  async logout() {
     if (!this.isBrowser) return;
 
     const refresh =
       localStorage.getItem('refreshToken') ??
       sessionStorage.getItem('refreshToken');
 
-    fetch('/auth/logout', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify({ refreshToken: refresh })
-    }).catch(() => {});
+    try {
+      await firstValueFrom(
+        this.api.post('/auth/logout', { refreshToken: refresh })
+      );
+    } catch {
+      // si falla igual limpiamos sesión
+    }
 
     localStorage.clear();
     sessionStorage.clear();
@@ -497,6 +554,7 @@ export class UploadItemComponent implements OnInit {
 
   // ===== Helpers =====
   private normalizeTag(s: string) { return s.trim().replace(/\s+/g, ' '); }
+
   private pushTags(raws: string[]) {
     const base = new Set(this.tags());
     for (const r of raws) {
@@ -506,7 +564,6 @@ export class UploadItemComponent implements OnInit {
     this.tags.set([...base].slice(0, 50));
   }
 
-  // Convierte los attrs de UI a `categories` que consume /items
   private buildCategories(): CategoryPayload[] {
     const out: (CategoryPayload | null)[] = this.attrs().map(a => {
       const name = a.name?.trim();
@@ -520,11 +577,10 @@ export class UploadItemComponent implements OnInit {
 
       if (a.type === 'date') {
         const v = String(a.value || '').trim();
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null; // YYYY-MM-DD
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
         return { name, attrType: 'date', value: v } as const;
       }
 
-      // text / list
       const v = String(a.value || '').trim();
       if (!v) return null;
       return { name, attrType: a.type, value: v } as const;
@@ -544,8 +600,12 @@ export class UploadItemComponent implements OnInit {
     const errors: string[] = [];
 
     for (const f of picked) {
-      if (!this.allowedTypes.has(f.type)) { errors.push(`Formato no soportado: ${f.name}`); continue; }
-      if (f.size > this.maxFileMB * 1024 * 1024) { errors.push(`Archivo > ${this.maxFileMB}MB: ${f.name}`); continue; }
+      if (!this.allowedTypes.has(f.type)) {
+        errors.push(`Formato no soportado: ${f.name}`); continue;
+      }
+      if (f.size > this.maxFileMB * 1024 * 1024) {
+        errors.push(`Archivo > ${this.maxFileMB}MB: ${f.name}`); continue;
+      }
       if (current.length + next.length >= this.maxImages) break;
       next.push(f);
     }
@@ -568,16 +628,19 @@ export class UploadItemComponent implements OnInit {
     this.pushTags(raw.split(','));
     this.tagDraft.set('');
   }
+
   onTagKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
       this.addTagFromDraft();
     }
   }
+
   onTagInput(ev: Event) {
     const val = (ev.target as HTMLInputElement | null)?.value ?? '';
     this.tagDraft.set(val);
   }
+
   removeTag(i: number) {
     const arr = [...this.tags()];
     arr.splice(i, 1);
@@ -589,14 +652,17 @@ export class UploadItemComponent implements OnInit {
     const v = (ev.target as HTMLInputElement).value ?? '';
     this.attrNameDraft.set(v);
   }
+
   onAttrTypeChange(ev: Event) {
     const v = (ev.target as HTMLSelectElement).value as AttrType;
     this.attrTypeDraft.set(v);
   }
+
   onAttrValueInput(ev: Event) {
     const v = (ev.target as HTMLInputElement).value ?? '';
     this.attrValueDraft.set(v);
   }
+
   addAttr() {
     const name = this.attrNameDraft().trim();
     if (!name) return;
@@ -606,11 +672,11 @@ export class UploadItemComponent implements OnInit {
       value: this.attrValueDraft().trim(),
     };
     this.attrs.set([...this.attrs(), entry]);
-    // limpiar drafts
     this.attrNameDraft.set('');
     this.attrValueDraft.set('');
     this.attrTypeDraft.set('text');
   }
+
   removeAttr(index: number) {
     const arr = [...this.attrs()];
     arr.splice(index, 1);
@@ -632,14 +698,11 @@ export class UploadItemComponent implements OnInit {
       return;
     }
 
-    // parsear tags extra (CSV)
     const csv = (this.form.get('tagsCsv')?.value || '') as string;
     if (csv.trim()) this.pushTags(csv.split(','));
 
-    const v = this.form.getRawValue(); // incluye visibility aunque esté disabled
+    const v = this.form.getRawValue();
     const tags = this.tags();
-
-    // construir categories para el backend
     const categories = this.buildCategories();
 
     const metadata: any = {
@@ -652,41 +715,49 @@ export class UploadItemComponent implements OnInit {
       faceValue: v.faceValue ?? null,
       currency: v.currency || null,
       acquisitionDate: v.acquisitionDate || null,
-      visibility: 'public',   // forzado por backend
+      visibility: 'public',
       tags,
       categories
     };
 
     const fd = new FormData();
     fd.append('metadata', JSON.stringify(metadata));
-    this.files().forEach((file, idx) => fd.append(`image${idx + 1}`, file, file.name));
+    this.files().forEach((file, idx) =>
+      fd.append(`image${idx + 1}`, file, file.name)
+    );
 
-    const token = (this.isBrowser && (localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken'))) || '';
-    const headers = new HttpHeaders(token ? { Authorization: `Bearer ${token}` } : {});
+    const token =
+      (this.isBrowser &&
+        (localStorage.getItem('accessToken') ||
+          sessionStorage.getItem('accessToken'))) ||
+      '';
+
+    const headers = new HttpHeaders(
+      token ? { Authorization: `Bearer ${token}` } : {}
+    );
 
     this.busy.set(true);
     try {
+      // 👇 AHORA usamos ApiService, que aplica environment.apiBaseUrl
       const res = await firstValueFrom(
-        this.http.post<{ id: number }>(ENDPOINT_ITEMS, fd, { headers })
+        this.api.post<{ id: number }>(ENDPOINT_ITEMS, fd, headers)
       );
       this.successId.set(res?.id ?? null);
 
-      // limpiar estado
       this.files.set([]);
       this.tags.set([]);
-      this.tagDraft.set('');     // 👈 FIX: string, no array
+      this.tagDraft.set('');
       this.attrs.set([]);
       this.attrNameDraft.set('');
       this.attrValueDraft.set('');
       this.attrTypeDraft.set('text');
 
-      // Reset conservando 'public'
       this.form.reset({ visibility: 'public', tagsCsv: '' });
       this.form.get('visibility')?.disable({ emitEvent: false, onlySelf: true });
-
-      // if (res?.id) this.router.navigate(['/items', res.id]);
     } catch (e: any) {
-      this.error.set(e?.error?.message || e?.message || 'Error subiendo la pieza');
+      this.error.set(
+        e?.error?.message || e?.message || 'Error subiendo la pieza'
+      );
     } finally {
       this.busy.set(false);
     }
