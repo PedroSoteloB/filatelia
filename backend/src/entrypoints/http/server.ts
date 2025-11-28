@@ -679,9 +679,19 @@ app.get('/me/items', { preHandler: authGuard }, async (req: any, reply: any) => 
       ORDER BY ${orderSql}
       OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
 
+    // const [rows]: any = await db.execute(sql, [ownerId]);
+    // const out = rows.map((r: any) => ({ ...r, cover: toPublicUrl(r.cover) }));
+    // reply.send(out);
     const [rows]: any = await db.execute(sql, [ownerId]);
-    const out = rows.map((r: any) => ({ ...r, cover: toPublicUrl(r.cover) }));
-    reply.send(out);
+
+const out = rows.map((r: any) => {
+  const webPath  = toPublicUrl(r.cover);          // "/uploads/9-....png"
+  const fullUrl  = toAbsoluteUrl(webPath);        // "https://TU-API.../uploads/9-....png"
+  return { ...r, cover: fullUrl };
+});
+
+reply.send(out);
+
   } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
 });
 
