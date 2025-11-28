@@ -25,14 +25,20 @@ export class ApiService {
   post<T>(url: string, body: any, headers?: HttpHeaders) {
     const fullUrl = url.startsWith('http')
       ? url
-      : `${this.baseUrl}${url}`;
+      : this.baseUrl + url;
+
+    console.log('[ApiService] POST ->', fullUrl);  // 🔴 línea clave
+
     return this.http.post<T>(fullUrl, body, { headers });
   }
 
   get<T>(url: string) {
     const fullUrl = url.startsWith('http')
       ? url
-      : `${this.baseUrl}${url}`;
+      : this.baseUrl + url;
+
+    console.log('[ApiService] GET ->', fullUrl);
+
     return this.http.get<T>(fullUrl);
   }
 }
