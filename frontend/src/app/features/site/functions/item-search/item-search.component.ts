@@ -470,7 +470,6 @@
 //     return f;
 //   }
 // }
-
 import { Component, inject, signal, OnInit, Inject } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
@@ -479,7 +478,9 @@ import { firstValueFrom } from 'rxjs';
 import { PLATFORM_ID } from '@angular/core';
 
 // 👇 IMPORTA environment (ajusta la ruta IGUAL que en los otros componentes)
-import { environment } from '../../../../core/environments/environment';
+import { environment } from '../../../../core/environments/environment.prod';
+// 👇 IMPORTA ApiService para los POST protegidos
+import { ApiService } from '../../../../core/services/api.service';
 
 // base del backend (Azure)
 const API_BASE = environment.apiBaseUrl;
@@ -539,8 +540,9 @@ function isExpired(token: string): boolean {
   styleUrls: ['./item-search.component.scss']
 })
 export class ItemSearchComponent implements OnInit {
-  private http = inject(HttpClient);
+  private http   = inject(HttpClient);
   private router = inject(Router);
+  private api    = inject(ApiService);
 
   constructor(@Inject(PLATFORM_ID) private platformId: Object) {}
 
@@ -620,19 +622,21 @@ export class ItemSearchComponent implements OnInit {
   goCollections() { this.navigateOrLogin('/collections'); }
   goPresentation() { this.navigateOrLogin('/presentations'); }
 
-  logout() {
+  // 🔁 LOGOUT usando ApiService
+  async logout() {
     if (!this.isBrowser) return;
 
     const refresh =
       localStorage.getItem('refreshToken') ??
       sessionStorage.getItem('refreshToken');
 
-    // 🔹 Ahora logout va al backend (no a la SPA)
-    fetch(`${API_BASE}/auth/logout`, {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify({ refreshToken: refresh })
-    }).catch(() => {});
+    try {
+      await firstValueFrom(
+        this.api.post('/auth/logout', { refreshToken: refresh })
+      );
+    } catch {
+      // si falla igual limpiamos sesión
+    }
 
     localStorage.clear();
     sessionStorage.clear();
@@ -850,7 +854,11 @@ export class ItemSearchComponent implements OnInit {
       this.error.set(null);
       const payload = { name: nm, filter_json: this.currentFilterJson() };
       await firstValueFrom(
-        this.http.post(`${API_BASE}/saved-searches`, payload, { headers: this.authHeaders() })
+        this.api.post(
+          '/saved-searches',
+          payload,
+          this.authHeaders()
+        )
       );
     } catch (e: any) {
       this.error.set(e?.message || 'No se pudo guardar la búsqueda');
@@ -881,7 +889,11 @@ export class ItemSearchComponent implements OnInit {
         sort_dir
       };
       await firstValueFrom(
-        this.http.post(`${API_BASE}/collections`, payload, { headers: this.authHeaders() })
+        this.api.post(
+          '/collections',
+          payload,
+          this.authHeaders()
+        )
       );
     } catch (e: any) {
       this.error.set(e?.message || 'No se pudo crear la colección SMART');
@@ -916,9 +928,13 @@ export class ItemSearchComponent implements OnInit {
         sort_dir: 'asc'
       };
 
-      // 1) Crear colección
+      // 1) Crear colección (via ApiService)
       const created: any = await firstValueFrom(
-        this.http.post(`${API_BASE}/collections`, payload, { headers: this.authHeaders() })
+        this.api.post(
+          '/collections',
+          payload,
+          this.authHeaders()
+        )
       );
       const collectionId = created?.id;
       if (!collectionId) throw new Error('No se obtuvo id de la colección');
@@ -930,10 +946,10 @@ export class ItemSearchComponent implements OnInit {
       const items = this.results().slice(0, howMany);
       for (const it of items) {
         await firstValueFrom(
-          this.http.post(
-            `${API_BASE}/collections/${collectionId}/items`,
+          this.api.post(
+            `/collections/${collectionId}/items`,
             { itemId: it.id },
-            { headers: this.authHeaders() }
+            this.authHeaders()
           )
         );
       }

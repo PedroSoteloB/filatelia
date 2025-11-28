@@ -399,7 +399,9 @@ import { firstValueFrom } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 
 // 👇 IMPORTA environment (ajusta la ruta si hace falta con Ctrl+. en VSCode)
-import { environment } from '../../../../core/environments/environment';
+import { environment } from '../../../../core/environments/environment.prod';
+// 👇 IMPORTA ApiService para los POST
+import { ApiService } from '../../../../core/services/api.service';
 
 // Base del backend (Azure)
 const API_BASE = environment.apiBaseUrl;
@@ -431,9 +433,10 @@ type SubFilter = {
   host: { class: 'collection-detail-page' }
 })
 export class CollectionDetailComponent implements OnInit {
-  private route = inject(ActivatedRoute);
-  private http  = inject(HttpClient);
+  private route  = inject(ActivatedRoute);
+  private http   = inject(HttpClient);   // GET con headers
   private router = inject(Router);
+  private api    = inject(ApiService);   // POST centralizados
 
   busy = signal<boolean>(false);
   error = signal<string | null>(null);
@@ -479,7 +482,9 @@ export class CollectionDetailComponent implements OnInit {
       localStorage.getItem('accessToken') ||
       sessionStorage.getItem('accessToken') ||
       '';
-    return token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : new HttpHeaders();
+    return token
+      ? new HttpHeaders({ Authorization: `Bearer ${token}` })
+      : new HttpHeaders();
   }
 
   // --------- Carga base (sin filtros extra) ----------
@@ -498,7 +503,11 @@ export class CollectionDetailComponent implements OnInit {
       this.selectedIds.clear();
       this.coverCandidateId = null;
     } catch (e: any) {
-      this.error.set(e?.error?.message || e?.message || 'No se pudieron cargar los ítems de la colección');
+      this.error.set(
+        e?.error?.message ||
+          e?.message ||
+          'No se pudieron cargar los ítems de la colección'
+      );
     } finally {
       this.busy.set(false);
     }
@@ -523,14 +532,18 @@ export class CollectionDetailComponent implements OnInit {
         country: this.form.country?.trim() || undefined,
         yearFrom: this.form.yearFrom ? Number(this.form.yearFrom) : undefined,
         yearTo: this.form.yearTo ? Number(this.form.yearTo) : undefined,
-        tagNames: this.tagsComma.split(',').map(s => s.trim()).filter(Boolean),
+        tagNames: this.tagsComma
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
         tagsMode: (this.form.tagsMode || 'OR') as 'OR' | 'AND',
       };
 
       // attrs desde JSON (opcional)
       if (this.attrsJson?.trim()) {
-        try { f.attrs = JSON.parse(this.attrsJson); }
-        catch {
+        try {
+          f.attrs = JSON.parse(this.attrsJson);
+        } catch {
           this.error.set('Attrs JSON inválido');
           return;
         }
@@ -543,24 +556,31 @@ export class CollectionDetailComponent implements OnInit {
       if (f.yearFrom != null) qs.set('yearFrom', String(f.yearFrom));
       if (f.yearTo != null) qs.set('yearTo', String(f.yearTo));
       if (f.tagNames && f.tagNames.length) {
-        f.tagNames.forEach(t => qs.append('tagNames', t));
+        f.tagNames.forEach((t) => qs.append('tagNames', t));
       }
       if (f.tagsMode) qs.set('tagsMode', f.tagsMode);
       if (f.attrs && f.attrs.length) qs.set('attrs', JSON.stringify(f.attrs));
       qs.set('limit', '25');
       qs.set('offset', '0');
 
-      const url = `${API_BASE}/collections/${id}/items/search-sub?` + qs.toString();
+      const url =
+        `${API_BASE}/collections/${id}/items/search-sub?` + qs.toString();
 
       const rows = await firstValueFrom(
-        this.http.get<CollectionItemRow[]>(url, { headers: this.authHeaders() })
+        this.http.get<CollectionItemRow[]>(url, {
+          headers: this.authHeaders(),
+        })
       );
       this.items.set(rows || []);
       this.viewingSub = true;
       this.selectedIds.clear();
       this.coverCandidateId = null;
-    } catch (e:any) {
-      this.error.set(e?.error?.message || e?.message || 'No se pudo ejecutar la sub-búsqueda');
+    } catch (e: any) {
+      this.error.set(
+        e?.error?.message ||
+          e?.message ||
+          'No se pudo ejecutar la sub-búsqueda'
+      );
     } finally {
       this.busy.set(false);
     }
@@ -574,7 +594,7 @@ export class CollectionDetailComponent implements OnInit {
       yearTo: undefined,
       tagNames: [],
       tagsMode: 'OR',
-      attrs: []
+      attrs: [],
     };
     this.tagsComma = '';
     this.attrsJson = '';
@@ -593,7 +613,10 @@ export class CollectionDetailComponent implements OnInit {
   }
 
   // ======== Helpers: presentación & PPT ========
-  private async findOrCreatePresentation(collectionId: number, titleFallback: string): Promise<number> {
+  private async findOrCreatePresentation(
+    collectionId: number,
+    titleFallback: string
+  ): Promise<number> {
     // Buscar si ya existe una presentación para esa colección
     const presList = await firstValueFrom(
       this.http.get<any[]>(
@@ -601,64 +624,69 @@ export class CollectionDetailComponent implements OnInit {
         { headers: this.authHeaders() }
       )
     );
-    const found = (presList || []).find(p => Number(p.collection_id) === Number(collectionId));
+    const found = (presList || []).find(
+      (p) => Number(p.collection_id) === Number(collectionId)
+    );
     if (found?.id) return Number(found.id);
 
-    // Crear si no existe
+    // Crear si no existe (🔁 ahora usando ApiService.post)
     const created = await firstValueFrom(
-      this.http.post<any>(
-        `${API_BASE}/presentations`,
+      this.api.post<any>(
+        '/presentations',
         {
           collection_id: collectionId,
           title: titleFallback || `Presentación de colección #${collectionId}`,
-          description: 'Generada desde UI'
+          description: 'Generada desde UI',
         },
-        { headers: this.authHeaders() }
+        this.authHeaders()
       )
     );
     return Number(created.id);
   }
 
-  private async generatePptForPresentation(presId: number, opts?: { maxSlides?: number }) {
-    // 1) Genera/actualiza el PPT en el backend
+  private async generatePptForPresentation(
+    presId: number,
+    opts?: { maxSlides?: number }
+  ) {
+    // 1) Genera/actualiza el PPT en el backend (ApiService.post)
     const qs = new URLSearchParams();
     if (opts?.maxSlides != null) qs.set('maxSlides', String(opts.maxSlides));
+
     await firstValueFrom(
-      this.http.post(
-        `${API_BASE}/presentations/${presId}/generate-ppt?${qs.toString()}`,
+      this.api.post(
+        `/presentations/${presId}/generate-ppt?${qs.toString()}`,
         {},
-        { headers: this.authHeaders() }
+        this.authHeaders()
       )
     );
-  
+
     // 2) Descarga con HttpClient (con Authorization) y dispara la descarga
     await this.downloadPpt(presId);
   }
-  
+
   private async downloadPpt(presId: number) {
     const resp = await firstValueFrom(
       this.http.get<{
         presentonUrl: string | null;
         downloadUrl: string | null;
         filePath: string | null;
-      }>(
-        `${API_BASE}/presentations/${presId}/ppt`,
-        { headers: this.authHeaders() }
-      )
+      }>(`${API_BASE}/presentations/${presId}/ppt`, {
+        headers: this.authHeaders(),
+      })
     );
-  
+
     // 1) Prioridad: Abrir / descargar en Presenton
     if (resp.presentonUrl) {
       window.open(resp.presentonUrl, '_blank');
       return;
     }
-  
+
     // 2) Fallback: URL directa (S3 u otro)
     if (resp.downloadUrl) {
       window.open(resp.downloadUrl, '_blank');
       return;
     }
-  
+
     // 3) Último recurso: nada encontrado
     alert('No se encontró PPT para esta presentación');
   }
@@ -683,30 +711,36 @@ export class CollectionDetailComponent implements OnInit {
         description: 'Creado desde sub-busqueda',
         history: this.historyNote?.trim() || null,
         selectedItemIds: Array.from(this.selectedIds),
-        coverItemId: this.coverCandidateId ?? Array.from(this.selectedIds)[0]
+        coverItemId:
+          this.coverCandidateId ?? Array.from(this.selectedIds)[0],
       };
 
       this.busy.set(true);
       this.error.set(null);
 
       const resp = await firstValueFrom(
-        this.http.post<any>(
-          `${API_BASE}/collections/${id}/derive`,
+        this.api.post<any>(
+          `/collections/${id}/derive`,
           body,
-          { headers: this.authHeaders() }
+          this.authHeaders()
         )
       );
       const childId = Number(resp.id);
       const presIdFromBack = Number(resp.presentationId || 0);
 
       if (genPpt) {
-        const presId = presIdFromBack || await this.findOrCreatePresentation(childId, name);
+        const presId =
+          presIdFromBack ||
+          (await this.findOrCreatePresentation(childId, name));
         await this.generatePptForPresentation(presId, { maxSlides: 15 });
       }
 
       this.router.navigate(['/collections']);
     } catch (e: any) {
-      if (e?.status === 409 || /Duplicate entry/i.test(e?.error?.message || '')) {
+      if (
+        e?.status === 409 ||
+        /Duplicate entry/i.test(e?.error?.message || '')
+      ) {
         try {
           const id = this.collectionId()!;
           const retryName = await this.uniqueCollectionName(
@@ -718,21 +752,24 @@ export class CollectionDetailComponent implements OnInit {
             description: 'Creado desde sub-busqueda',
             history: this.historyNote?.trim() || null,
             selectedItemIds: Array.from(this.selectedIds),
-            coverItemId: this.coverCandidateId ?? Array.from(this.selectedIds)[0]
+            coverItemId:
+              this.coverCandidateId ?? Array.from(this.selectedIds)[0],
           };
 
           const resp2 = await firstValueFrom(
-            this.http.post<any>(
-              `${API_BASE}/collections/${id}/derive`,
+            this.api.post<any>(
+              `/collections/${id}/derive`,
               body,
-              { headers: this.authHeaders() }
+              this.authHeaders()
             )
           );
           const childId2 = Number(resp2.id);
           const presId2 = Number(resp2.presentationId || 0);
 
           if (genPpt) {
-            const pid = presId2 || await this.findOrCreatePresentation(childId2, retryName);
+            const pid =
+              presId2 ||
+              (await this.findOrCreatePresentation(childId2, retryName));
             await this.generatePptForPresentation(pid, { maxSlides: 15 });
           }
 
@@ -741,7 +778,11 @@ export class CollectionDetailComponent implements OnInit {
         } catch {}
       }
 
-      this.error.set(e?.error?.message || e?.message || 'No se pudo crear la colección Snapshot');
+      this.error.set(
+        e?.error?.message ||
+          e?.message ||
+          'No se pudo crear la colección Snapshot'
+      );
     } finally {
       this.busy.set(false);
     }
@@ -756,14 +797,20 @@ export class CollectionDetailComponent implements OnInit {
       if (this.viewingSub) {
         extra.q = this.form.q?.trim() || undefined;
         extra.country = this.form.country?.trim() || undefined;
-        if (this.form.yearFrom != null) extra.yearFrom = Number(this.form.yearFrom);
-        if (this.form.yearTo != null)   extra.yearTo   = Number(this.form.yearTo);
-        const tagNames = this.tagsComma.split(',').map(s => s.trim()).filter(Boolean);
+        if (this.form.yearFrom != null)
+          extra.yearFrom = Number(this.form.yearFrom);
+        if (this.form.yearTo != null)
+          extra.yearTo = Number(this.form.yearTo);
+        const tagNames = this.tagsComma
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
         if (tagNames.length) extra.tagNames = tagNames;
-        extra.tagsMode = (this.form.tagsMode || 'OR');
+        extra.tagsMode = this.form.tagsMode || 'OR';
         if (this.attrsJson?.trim()) {
-          try { extra.attrs = JSON.parse(this.attrsJson); }
-          catch {
+          try {
+            extra.attrs = JSON.parse(this.attrsJson);
+          } catch {
             this.error.set('Attrs JSON inválido');
             return;
           }
@@ -776,22 +823,26 @@ export class CollectionDetailComponent implements OnInit {
         description: 'Sub-búsqueda persistente',
         history: this.historyNote?.trim() || null,
         extraFilter: extra,
-        coverItemId: this.coverCandidateId || null
+        coverItemId: this.coverCandidateId || null,
       };
 
-      this.busy.set(true); 
+      this.busy.set(true);
       this.error.set(null);
 
       await firstValueFrom(
-        this.http.post<any>(
-          `${API_BASE}/collections/${id}/derive`,
+        this.api.post<any>(
+          `/collections/${id}/derive`,
           body,
-          { headers: this.authHeaders() }
+          this.authHeaders()
         )
       );
       this.router.navigate(['/collections']);
-    } catch (e:any) {
-      this.error.set(e?.error?.message || e?.message || 'No se pudo crear la colección Smart');
+    } catch (e: any) {
+      this.error.set(
+        e?.error?.message ||
+          e?.message ||
+          'No se pudo crear la colección Smart'
+      );
     } finally {
       this.busy.set(false);
     }
@@ -818,12 +869,13 @@ export class CollectionDetailComponent implements OnInit {
   private async uniqueCollectionName(base: string): Promise<string> {
     try {
       const cols = await firstValueFrom(
-        this.http.get<any[]>(
-          `${API_BASE}/collections`,
-          { headers: this.authHeaders() }
-        )
+        this.http.get<any[]>(`${API_BASE}/collections`, {
+          headers: this.authHeaders(),
+        })
       );
-      const existing = new Set<string>((cols || []).map(c => String(c.name)));
+      const existing = new Set<string>(
+        (cols || []).map((c) => String(c.name))
+      );
       if (!existing.has(base)) return base;
 
       let i = 2;
@@ -834,7 +886,10 @@ export class CollectionDetailComponent implements OnInit {
       }
       return candidate;
     } catch {
-      const stamp = new Date().toISOString().slice(11,19).replace(/:/g,'');
+      const stamp = new Date()
+        .toISOString()
+        .slice(11, 19)
+        .replace(/:/g, '');
       return `${base} ${stamp}`;
     }
   }

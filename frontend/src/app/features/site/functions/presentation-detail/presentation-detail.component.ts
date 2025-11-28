@@ -241,14 +241,45 @@
 //     console.error(e);
 //   }
 // }
-import { Component, computed, effect, signal, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { HttpClient, HttpErrorResponse, HttpHeaders, HttpClientModule } from '@angular/common/http';
-import { FormBuilder, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
+import {
+  Component,
+  computed,
+  effect,
+  signal,
+  inject,
+  OnInit,
+  Inject
+} from '@angular/core';
+import {
+  CommonModule,
+  isPlatformBrowser
+} from '@angular/common';
+import {
+  ActivatedRoute,
+  Router,
+  RouterModule
+} from '@angular/router';
+import {
+  HttpClient,
+  HttpErrorResponse,
+  HttpHeaders,
+  HttpClientModule
+} from '@angular/common/http';
+import {
+  FormBuilder,
+  ReactiveFormsModule,
+  Validators,
+  FormsModule
+} from '@angular/forms';
+import { PLATFORM_ID } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 
-// 👇 IMPORTA environment (usa la MISMA ruta que en presentations-home o my-items)
+// 👇 IMPORTA environment
 import { environment } from '../../../../core/environments/environment';
+// 👇 ApiService para POST
+import { ApiService } from '../../../../core/services/api.service';
+
+const API_BASE = environment.apiBaseUrl;
 
 type Pres = {
   id: number;
@@ -261,7 +292,7 @@ type Pres = {
   assetsCount?: number;
 };
 
-// 👇 único cambio útil: tipar mejor metaJson
+// 👇 metaJson tipado
 type AssetMeta = {
   caption?: string;
   edit_path?: string;
@@ -270,28 +301,47 @@ type AssetMeta = {
 
 type Asset = {
   id: number;
-  kind: 'video'|'ppt'|'image'|'text'|'link';
+  kind: 'video' | 'ppt' | 'image' | 'text' | 'link';
   filePath?: string | null;
   url?: string | null;
-  metaJson?: AssetMeta;   // ⬅️ aquí
+  metaJson?: AssetMeta;
   createdAt: string;
 };
 
 @Component({
   selector: 'app-presentation-detail',
   standalone: true,
-  imports: [CommonModule, RouterModule, ReactiveFormsModule, FormsModule, HttpClientModule],
+  imports: [
+    CommonModule,
+    RouterModule,
+    ReactiveFormsModule,
+    FormsModule,
+    HttpClientModule
+  ],
   templateUrl: './presentation-detail.component.html',
   styleUrls: ['./presentation-detail.component.scss']
 })
-export class PresentationDetailComponent {
-  // 🔹 AHORA base URL viene del environment → Azure o lo que tengas configurado
-  private api = environment.apiBaseUrl;
-
+export class PresentationDetailComponent implements OnInit {
   private fb = inject(FormBuilder);
   private route = inject(ActivatedRoute);
   private http = inject(HttpClient);
   private router = inject(Router);
+  private apiService = inject(ApiService);
+
+  constructor(@Inject(PLATFORM_ID) private platformId: Object) {
+    // Sincroniza el form cuando cambia `pres`
+    effect(() => {
+      const p = this.pres();
+      if (p) {
+        this.editForm.patchValue(
+          { title: p.title, description: p.description ?? '' },
+          { emitEvent: false }
+        );
+      }
+    });
+  }
+
+  isBrowser = false;
 
   id = signal<number | null>(null);
   loading = signal<boolean>(true);
@@ -307,135 +357,193 @@ export class PresentationDetailComponent {
     description: ['']
   });
 
-  newKind = signal<'image'|'ppt'|'video'|'link'|'text'>('image');
-  newUrl  = signal<string>('');
+  newKind = signal<'image' | 'ppt' | 'video' | 'link' | 'text'>('image');
+  newUrl = signal<string>('');
   newText = signal<string>('');
   newFile: File | null = null;
 
-  constructor(){
-    this.route.paramMap.subscribe(p => {
+  ngOnInit(): void {
+    this.isBrowser = isPlatformBrowser(this.platformId);
+
+    this.route.paramMap.subscribe((p) => {
       const pid = Number(p.get('id'));
-      if (!Number.isFinite(pid)) { this.error.set('ID inválido'); return; }
+      if (!Number.isFinite(pid)) {
+        this.error.set('ID inválido');
+        return;
+      }
       this.id.set(pid);
       this.loadAll();
     });
-
-    effect(() => {
-      const p = this.pres();
-      if (p) {
-        this.editForm.patchValue(
-          { title: p.title, description: p.description ?? '' },
-          { emitEvent: false }
-        );
-      }
-    });
   }
 
-  async loadAll(){
-    try{
+  /** Headers con Authorization (si hay token) */
+  private authHeaders(): HttpHeaders {
+    if (!this.isBrowser) return new HttpHeaders();
+    const token =
+      localStorage.getItem('accessToken') ||
+      sessionStorage.getItem('accessToken') ||
+      '';
+    return token
+      ? new HttpHeaders({ Authorization: `Bearer ${token}` })
+      : new HttpHeaders();
+  }
+
+  async loadAll() {
+    try {
       this.loading.set(true);
       this.error.set(null);
       const pid = this.id()!;
-      const pres = await this.http.get<Pres>(`${this.api}/presentations/${pid}`).toPromise();
-      this.pres.set(pres!);
-      const assets = await this.http.get<Asset[]>(`${this.api}/presentations/${pid}/assets`).toPromise();
+      // GET presentación
+      const pres = await firstValueFrom(
+        this.http.get<Pres>(`${API_BASE}/presentations/${pid}`, {
+          headers: this.authHeaders()
+        })
+      );
+      this.pres.set(pres);
+      // GET assets
+      const assets = await firstValueFrom(
+        this.http.get<Asset[]>(`${API_BASE}/presentations/${pid}/assets`, {
+          headers: this.authHeaders()
+        })
+      );
       this.assets.set(assets || []);
-    }catch(e:any){
+    } catch (e: any) {
       this.handleError(e);
-    }finally{
+    } finally {
       this.loading.set(false);
     }
   }
 
-  async saveMeta(){
+  async saveMeta() {
     if (this.editForm.invalid || !this.pres()) return;
-    try{
+    try {
       this.saving.set(true);
       const pid = this.pres()!.id;
       const body = {
         title: this.editForm.value.title?.trim(),
         description: (this.editForm.value.description ?? '').trim()
       };
-      await this.http.put(`${this.api}/presentations/${pid}`, body).toPromise();
-      const updated = await this.http.get<Pres>(`${this.api}/presentations/${pid}`).toPromise();
-      this.pres.set(updated!);
-    }catch(e:any){
+
+      await firstValueFrom(
+        this.http.put(
+          `${API_BASE}/presentations/${pid}`,
+          body,
+          { headers: this.authHeaders() }
+        )
+      );
+
+      await this.reloadPresOnly();
+    } catch (e: any) {
       this.handleError(e);
-    }finally{
+    } finally {
       this.saving.set(false);
     }
   }
 
-  async onCoverChange(evt: Event){
+  async onCoverChange(evt: Event) {
     const inp = evt.target as HTMLInputElement;
     const file = inp.files?.[0];
     if (!file || !this.pres()) return;
-    try{
+    try {
       this.saving.set(true);
       const pid = this.pres()!.id;
       const fd = new FormData();
-      fd.append('metadata', new Blob([JSON.stringify({})], { type: 'application/json'}));
+      fd.append(
+        'metadata',
+        new Blob([JSON.stringify({})], { type: 'application/json' })
+      );
       fd.append('cover', file, file.name);
-      await this.http.put(`${this.api}/presentations/${pid}`, fd, {
-        headers: new HttpHeaders({})
-      }).toPromise();
+
+      await firstValueFrom(
+        this.http.put(
+          `${API_BASE}/presentations/${pid}`,
+          fd,
+          { headers: this.authHeaders() } // NO seteamos Content-Type, deja que el browser lo ponga
+        )
+      );
+
       await this.reloadPresOnly();
-    }catch(e:any){
+    } catch (e: any) {
       this.handleError(e);
-    }finally{
+    } finally {
       (evt.target as HTMLInputElement).value = '';
       this.saving.set(false);
     }
   }
 
-  async clearCover(){
+  async clearCover() {
     if (!this.pres()) return;
-    try{
+    try {
       this.saving.set(true);
       const pid = this.pres()!.id;
-      await this.http.put(`${this.api}/presentations/${pid}`, { clearCover: true }).toPromise();
+      await firstValueFrom(
+        this.http.put(
+          `${API_BASE}/presentations/${pid}`,
+          { clearCover: true },
+          { headers: this.authHeaders() }
+        )
+      );
       await this.reloadPresOnly();
-    }catch(e:any){
+    } catch (e: any) {
       this.handleError(e);
-    }finally{
+    } finally {
       this.saving.set(false);
     }
   }
 
-  private async reloadPresOnly(){
+  private async reloadPresOnly() {
     const pid = this.pres()!.id;
-    const updated = await this.http.get<Pres>(`${this.api}/presentations/${pid}`).toPromise();
-    this.pres.set(updated!);
+    const updated = await firstValueFrom(
+      this.http.get<Pres>(`${API_BASE}/presentations/${pid}`, {
+        headers: this.authHeaders()
+      })
+    );
+    this.pres.set(updated);
   }
 
-  onFileChange(ev: Event){
+  onFileChange(ev: Event) {
     const inp = ev.target as HTMLInputElement;
     this.newFile = inp.files?.[0] ?? null;
   }
 
-  async addAsset(){
-    const pres = this.pres(); if (!pres) return;
+  async addAsset() {
+    const pres = this.pres();
+    if (!pres) return;
     const kind = this.newKind();
-    try{
+    try {
       this.saving.set(true);
 
-      if (kind === 'text'){
+      if (kind === 'text') {
         const meta: AssetMeta = { caption: (this.newText() || '').trim() };
-        await this.http.post(`${this.api}/presentations/${pres.id}/assets`, {
-          kind, meta_json: meta
-        }).toPromise();
-      } else if (kind === 'link'){
+        await firstValueFrom(
+          this.apiService.post(
+            `/presentations/${pres.id}/assets`,
+            { kind, meta_json: meta },
+            this.authHeaders()
+          )
+        );
+      } else if (kind === 'link') {
         const url = (this.newUrl() || '').trim();
         if (!url) throw new Error('URL requerida');
-        await this.http.post(`${this.api}/presentations/${pres.id}/assets`, {
-          kind, url
-        }).toPromise();
+        await firstValueFrom(
+          this.apiService.post(
+            `/presentations/${pres.id}/assets`,
+            { kind, url },
+            this.authHeaders()
+          )
+        );
       } else {
         if (!this.newFile) throw new Error('Archivo requerido');
         const fd = new FormData();
         fd.append('kind', kind);
         fd.append('file', this.newFile, this.newFile.name);
-        await this.http.post(`${this.api}/presentations/${pres.id}/assets`, fd).toPromise();
+        await firstValueFrom(
+          this.apiService.post(
+            `/presentations/${pres.id}/assets`,
+            fd,
+            this.authHeaders()
+          )
+        );
       }
 
       this.newUrl.set('');
@@ -444,46 +552,73 @@ export class PresentationDetailComponent {
       const f = document.getElementById('asset-file') as HTMLInputElement | null;
       if (f) f.value = '';
 
-      const assets = await this.http.get<Asset[]>(`${this.api}/presentations/${pres.id}/assets`).toPromise();
+      const assets = await firstValueFrom(
+        this.http.get<Asset[]>(`${API_BASE}/presentations/${pres.id}/assets`, {
+          headers: this.authHeaders()
+        })
+      );
       this.assets.set(assets || []);
-    }catch(e:any){
+    } catch (e: any) {
       this.handleError(e);
-    }finally{
+    } finally {
       this.saving.set(false);
     }
   }
 
-  async deleteAsset(a: Asset){
-    const pres = this.pres(); if (!pres) return;
+  async deleteAsset(a: Asset) {
+    const pres = this.pres();
+    if (!pres) return;
     if (!confirm('¿Eliminar este recurso?')) return;
-    try{
+    try {
       this.saving.set(true);
-      await this.http.delete(`${this.api}/presentations/${pres.id}/assets/${a.id}`).toPromise();
-      this.assets.set(this.assets().filter(x => x.id !== a.id));
-    }catch(e:any){
+      await firstValueFrom(
+        this.http.delete(
+          `${API_BASE}/presentations/${pres.id}/assets/${a.id}`,
+          { headers: this.authHeaders() }
+        )
+      );
+      this.assets.set(this.assets().filter((x) => x.id !== a.id));
+    } catch (e: any) {
       this.handleError(e);
-    }finally{
+    } finally {
       this.saving.set(false);
     }
   }
 
-  fmtDate(d?: string){ return d ? new Date(d) : null; }
-  kindIcon(a: Asset){
-    switch(a.kind){
-      case 'image': return '🖼️';
-      case 'video': return '🎬';
-      case 'ppt':   return '📑';
-      case 'link':  return '🔗';
-      case 'text':  return '📝';
-      default:      return '📄';
+  fmtDate(d?: string) {
+    return d ? new Date(d) : null;
+  }
+
+  kindIcon(a: Asset) {
+    switch (a.kind) {
+      case 'image':
+        return '🖼️';
+      case 'video':
+        return '🎬';
+      case 'ppt':
+        return '📑';
+      case 'link':
+        return '🔗';
+      case 'text':
+        return '📝';
+      default:
+        return '📄';
     }
   }
-  isMedia(a: Asset){ return a.kind === 'image' || a.kind === 'video'; }
 
-  back(){ this.router.navigate(['/presentations']); }
+  isMedia(a: Asset) {
+    return a.kind === 'image' || a.kind === 'video';
+  }
 
-  private handleError(e: any){
-    const msg = (e as HttpErrorResponse)?.error?.message || (e as Error)?.message || 'error';
+  back() {
+    this.router.navigate(['/presentations']);
+  }
+
+  private handleError(e: any) {
+    const msg =
+      (e as HttpErrorResponse)?.error?.message ||
+      (e as Error)?.message ||
+      'error';
     this.error.set(msg);
     console.error(e);
   }

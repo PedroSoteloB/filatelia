@@ -454,7 +454,6 @@
 // //     }
 // //   }
 // // }
-
 import { Component, inject, signal, computed, OnInit, Inject } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
@@ -463,7 +462,9 @@ import { firstValueFrom } from 'rxjs';
 import { PLATFORM_ID } from '@angular/core';
 
 // 👇 IMPORTA environment (misma ruta que en los otros componentes de features)
-import { environment } from '../../../../core/environments/environment';
+import { environment } from '../../../../core/environments/environment.prod';
+// 👇 IMPORTA ApiService para los POST (logout)
+import { ApiService } from '../../../../core/services/api.service';
 
 // base del backend (Azure)
 const API_BASE = environment.apiBaseUrl;
@@ -509,8 +510,9 @@ function isExpired(token: string): boolean {
   host: { class: 'collections-page' }
 })
 export class CollectionsListComponent implements OnInit {
-  private http = inject(HttpClient);
+  private http   = inject(HttpClient);
   private router = inject(Router);
+  private api    = inject(ApiService);
 
   constructor(@Inject(PLATFORM_ID) private platformId: Object) {}
 
@@ -576,16 +578,20 @@ export class CollectionsListComponent implements OnInit {
   goCollections() { this.navigateOrLogin('/collections'); }
   goPresentation() { this.navigateOrLogin('/presentations'); }
 
-  logout() {
+  // 🔁 LOGOUT ahora usando ApiService (igual que en los otros componentes)
+  async logout() {
     if (!this.isBrowser) return;
-    const refresh = localStorage.getItem('refreshToken') ?? sessionStorage.getItem('refreshToken');
+    const refresh =
+      localStorage.getItem('refreshToken') ??
+      sessionStorage.getItem('refreshToken');
 
-    // 🔹 ahora logout al backend:
-    fetch(`${API_BASE}/auth/logout`, {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify({ refreshToken: refresh })
-    }).catch(() => {});
+    try {
+      await firstValueFrom(
+        this.api.post('/auth/logout', { refreshToken: refresh })
+      );
+    } catch {
+      // si falla igual limpiamos sesión
+    }
 
     localStorage.clear(); sessionStorage.clear();
     this.isAuth = false; this.isAdmin = false;

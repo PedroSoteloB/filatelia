@@ -196,15 +196,23 @@
 //   }
 // }
 // src/app/features/items/item-details/item-details.component.ts
-import { Component, ViewEncapsulation, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {
+  Component,
+  ViewEncapsulation,
+  inject,
+  signal,
+  OnInit,
+  Inject
+} from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
+import { PLATFORM_ID } from '@angular/core';
 
 // ⭐ IMPORTA environment (ajusta la ruta igual que en los otros componentes)
-import { environment } from '../../../../core/environments/environment';
+import { environment } from '../../../../core/environments/environment.prod';
 
 // ⭐ base URL del backend
 const API_BASE = environment.apiBaseUrl;
@@ -238,14 +246,17 @@ type MyItem = {
   updatedAt?: string | null;
   tags?: Tag[];
   attributes?: AttributeValue[];
-  images?: ImageRef[];         // 👈 ahora incluimos las imágenes
+  images?: ImageRef[];
 };
 
 /** Utilidad: elegir cover desde images (primaria o primera). */
-function pickCoverFromImages(imgs: ImageRef[] | undefined, fallback?: any): string | null {
+function pickCoverFromImages(
+  imgs: ImageRef[] | undefined,
+  fallback?: any
+): string | null {
   const arr = Array.isArray(imgs) ? imgs : [];
-  const primary = arr.find(im => !!(im?.primary) && !!im?.file)?.file ?? null;
-  const first   = arr.find(im => !!im?.file)?.file ?? null;
+  const primary = arr.find((im) => !!im?.primary && !!im?.file)?.file ?? null;
+  const first = arr.find((im) => !!im?.file)?.file ?? null;
   const rawCover = typeof fallback?.cover === 'string' ? fallback.cover : null;
   return primary || first || rawCover || null;
 }
@@ -315,15 +326,21 @@ function normalizeItem(raw: any): MyItem {
   encapsulation: ViewEncapsulation.None,
   host: { class: 'item-details-page block p-4' },
 })
-export class ItemDetailsComponent {
+export class ItemDetailsComponent implements OnInit {
   private http = inject(HttpClient);
   private route = inject(ActivatedRoute);
+  @Inject(PLATFORM_ID) private platformId: Object = inject(PLATFORM_ID);
 
   busy = signal(false);
   error = signal<string | null>(null);
   item = signal<MyItem | null>(null);
+  isBrowser = false;
 
-  constructor() {
+  constructor() {}
+
+  ngOnInit(): void {
+    this.isBrowser = isPlatformBrowser(this.platformId);
+
     this.route.paramMap.subscribe((pm) => {
       const id = Number(pm.get('id'));
       if (!id) {
@@ -336,11 +353,15 @@ export class ItemDetailsComponent {
 
   /** Auth header para endpoints protegidos */
   private buildHeaders(): HttpHeaders {
+    if (!this.isBrowser) return new HttpHeaders();
+
     const token =
       localStorage.getItem('accessToken') ||
       sessionStorage.getItem('accessToken') ||
       '';
-    return token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : new HttpHeaders();
+    return token
+      ? new HttpHeaders({ Authorization: `Bearer ${token}` })
+      : new HttpHeaders();
   }
 
   /** Carga el item base y completa tags/attributes si hace falta. */
@@ -348,51 +369,56 @@ export class ItemDetailsComponent {
     this.busy.set(true);
     this.error.set(null);
 
-    // ⭐ ahora usamos API_BASE
-    this.http.get(`${API_BASE}/items/${id}`, { headers: this.buildHeaders() }).subscribe({
-      next: (raw) => {
-        const base = normalizeItem(raw);
+    this.http
+      .get(`${API_BASE}/items/${id}`, { headers: this.buildHeaders() })
+      .subscribe({
+        next: (raw) => {
+          const base = normalizeItem(raw);
 
-        const needsTags = !Array.isArray(base.tags);
-        const needsAttrs = !Array.isArray(base.attributes);
+          const needsTags = !Array.isArray(base.tags);
+          const needsAttrs = !Array.isArray(base.attributes);
 
-        if (!needsTags && !needsAttrs) {
-          this.item.set(base);
-          this.busy.set(false);
-          return;
-        }
-
-        forkJoin({
-          tags: needsTags
-            ? this.http
-                .get<Tag[]>(`${API_BASE}/items/${id}/tags`, { headers: this.buildHeaders() })
-                .pipe(catchError(() => of([] as Tag[])))
-            : of(base.tags as Tag[]),
-          attrs: needsAttrs
-            ? this.http
-                .get<AttributeValue[]>(`${API_BASE}/items/${id}/attributes`, { headers: this.buildHeaders() })
-                .pipe(catchError(() => of([] as AttributeValue[])))
-            : of(base.attributes as AttributeValue[]),
-        }).subscribe({
-          next: ({ tags, attrs }) => {
-            this.item.set({ ...base, tags, attributes: attrs });
-            this.busy.set(false);
-          },
-          error: () => {
+          if (!needsTags && !needsAttrs) {
             this.item.set(base);
-            this.error.set('No se pudo completar tags/atributos.');
             this.busy.set(false);
-          },
-        });
-      },
-      error: (err) => {
-        const msg =
-          err?.error?.message ??
-          (typeof err?.message === 'string' ? err.message : null) ??
-          'No se pudo cargar el item.';
-        this.error.set(msg);
-        this.busy.set(false);
-      },
-    });
+            return;
+          }
+
+          forkJoin({
+            tags: needsTags
+              ? this.http
+                  .get<Tag[]>(`${API_BASE}/items/${id}/tags`, {
+                    headers: this.buildHeaders(),
+                  })
+                  .pipe(catchError(() => of([] as Tag[])))
+              : of(base.tags as Tag[]),
+            attrs: needsAttrs
+              ? this.http
+                  .get<AttributeValue[]>(`${API_BASE}/items/${id}/attributes`, {
+                    headers: this.buildHeaders(),
+                  })
+                  .pipe(catchError(() => of([] as AttributeValue[])))
+              : of(base.attributes as AttributeValue[]),
+          }).subscribe({
+            next: ({ tags, attrs }) => {
+              this.item.set({ ...base, tags, attributes: attrs });
+              this.busy.set(false);
+            },
+            error: () => {
+              this.item.set(base);
+              this.error.set('No se pudo completar tags/atributos.');
+              this.busy.set(false);
+            },
+          });
+        },
+        error: (err) => {
+          const msg =
+            err?.error?.message ??
+            (typeof err?.message === 'string' ? err.message : null) ??
+            'No se pudo cargar el item.';
+          this.error.set(msg);
+          this.busy.set(false);
+        },
+      });
   }
 }
