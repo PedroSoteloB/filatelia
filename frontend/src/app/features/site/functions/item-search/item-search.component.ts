@@ -1,8 +1,9 @@
-// import { Component, inject, signal } from '@angular/core';
-// import { CommonModule } from '@angular/common';
-// import { RouterLink } from '@angular/router';
-// import { HttpClient, HttpParams } from '@angular/common/http';
+// import { Component, inject, signal, OnInit, Inject } from '@angular/core';
+// import { CommonModule, isPlatformBrowser } from '@angular/common';
+// import { Router, RouterLink } from '@angular/router';
+// import { HttpClient, HttpParams, HttpHeaders } from '@angular/common/http';
 // import { firstValueFrom } from 'rxjs';
+// import { PLATFORM_ID } from '@angular/core';
 
 // type SortDir = 'asc' | 'desc';
 
@@ -34,6 +35,23 @@
 //   cover?: string | null;
 // };
 
+// // ==== Helpers JWT (roles y expiración) ====
+// function getRoleFromToken(token: string): any {
+//   if (!token) return undefined;
+//   try {
+//     const payload = JSON.parse(
+//       atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))
+//     );
+//     return payload.role ?? payload.roles ?? payload.permissions;
+//   } catch { return undefined; }
+// }
+// function isExpired(token: string): boolean {
+//   try {
+//     const { exp } = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+//     return typeof exp === 'number' && Date.now()/1000 >= exp;
+//   } catch { return true; }
+// }
+
 // @Component({
 //   selector: 'app-item-search',
 //   standalone: true,
@@ -41,8 +59,16 @@
 //   templateUrl: './item-search.component.html',
 //   styleUrls: ['./item-search.component.scss']
 // })
-// export class ItemSearchComponent {
+// export class ItemSearchComponent implements OnInit {
 //   private http = inject(HttpClient);
+//   private router = inject(Router);
+
+//   constructor(@Inject(PLATFORM_ID) private platformId: Object) {}
+
+//   // ---- auth/ui
+//   isAuth = false;
+//   isAdmin = false;
+//   isBrowser = false;
 
 //   // ---- estado UI/negocio
 //   busy = signal(false);
@@ -68,20 +94,89 @@
 //   results = signal<ItemRow[]>([]);
 //   snapshotLimit = signal<number>(40);
 
-//   // === NUEVO: límite y whitelist de condiciones válidas (ajusta a tus enums reales)
+//   // límite y whitelist de condiciones válidas (ajusta a tus enums reales)
 //   readonly SEARCH_LIMIT = 20;
 //   private readonly VALID_CONDITIONS = new Set(['MINT','USED','VF','F','G']);
 
-//   constructor() {
-//     this.bootstrap();
+//   // ===== lifecycle =====
+//   async ngOnInit() {
+//     // auth/roles
+//     this.isBrowser = isPlatformBrowser(this.platformId);
+//     if (this.isBrowser) {
+//       const token =
+//         localStorage.getItem('accessToken') ??
+//         sessionStorage.getItem('accessToken') ??
+//         '';
+
+//       if (token && !isExpired(token)) {
+//         this.isAuth = true;
+//         const role = getRoleFromToken(token);
+//         this.isAdmin = Array.isArray(role) ? role.includes('admin') : role === 'admin';
+//       } else {
+//         if (token) { localStorage.clear(); sessionStorage.clear(); }
+//         this.isAuth = false;
+//         this.isAdmin = false;
+//       }
+//     }
+
+//     // bootstrap de catálogos (público)
+//     await Promise.all([this.loadTags(), this.loadAttrDefs()]);
 //   }
 
-//   // -------- lifecycle helpers
-//   private async bootstrap() {
-//     this.loadTags();
-//     this.loadAttrDefs();
+//   // ===== NAV (usados por el header de esta vista) =====
+//   goInicio() { this.router.navigateByUrl('/'); }
+
+//   goLogin(returnUrl: string = this.router.url) {
+//     this.router.navigate(['/login'], { queryParams: { returnUrl } });
 //   }
 
+//   // Helper: si no hay sesión, manda a login preservando destino
+//   private navigateOrLogin(targetUrl: string) {
+//     if (!this.isAuth) { this.goLogin(targetUrl); return; }
+//     this.router.navigateByUrl(targetUrl);
+//   }
+
+//   goUpload() { this.navigateOrLogin('/items/upload'); }
+//   goMyItems() { this.navigateOrLogin('/items/mine'); }
+//   goSearch() { this.router.navigateByUrl('/items/search'); }
+//   goCollections() { this.navigateOrLogin('/collections'); }
+//   goPresentation() { this.navigateOrLogin('/presentations'); }
+
+//   logout() {
+//     if (!this.isBrowser) return;
+
+//     const refresh =
+//       localStorage.getItem('refreshToken') ??
+//       sessionStorage.getItem('refreshToken');
+
+//     fetch('/auth/logout', {
+//       method: 'POST',
+//       headers: { 'Content-Type':'application/json' },
+//       body: JSON.stringify({ refreshToken: refresh })
+//     }).catch(() => {});
+
+//     localStorage.clear();
+//     sessionStorage.clear();
+//     this.isAuth = false;
+//     this.isAdmin = false;
+//     this.router.navigate(['/']);
+//   }
+
+//   // ===== headers con token para endpoints protegidos =====
+//   private authHeaders(): HttpHeaders {
+//     if (!this.isBrowser) return new HttpHeaders();
+//     const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken') || '';
+//     return token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : new HttpHeaders();
+//   }
+//   private requireAuthOrLogin(): boolean {
+//     if (!this.isAuth) {
+//       this.goLogin(this.router.url);
+//       return false;
+//     }
+//     return true;
+//   }
+
+//   // -------- bootstrap
 //   async loadTags() {
 //     try {
 //       const tags = await firstValueFrom(this.http.get<TagDTO[]>('/tags'));
@@ -216,7 +311,7 @@
 //     this.error.set(null);
 //   }
 
-//   // -------- búsqueda
+//   // -------- búsqueda (pública)
 //   async search() {
 //     try {
 //       this.busy.set(true);
@@ -228,13 +323,13 @@
 //       const country   = this.normTrim(this.country());            // respeta casing (ej. "Peru")
 //       const condition = this.normTrim(this.condition()).toUpperCase(); // aseguramos mayúsculas
 
-//       // === Claves básicas (como en Thunder Client) ===
+//       // === Claves básicas ===
 //       if (q)         params = params.set('q', q);
 //       if (country)   params = params.set('country', country);
 //       if (this.yearFrom() != null) params = params.set('yearFrom', String(this.yearFrom()));
 //       if (this.yearTo()   != null) params = params.set('yearTo',   String(this.yearTo()));
 
-//       // Enviar condition SOLO si es válida (evita errores como "PERU" en condition)
+//       // Enviar condition SOLO si es válida
 //       if (condition && this.VALID_CONDITIONS.has(condition)) {
 //         params = params.set('condition', condition);
 //       }
@@ -254,7 +349,6 @@
 //         params = params.set('attrs', JSON.stringify(this.attrFilters()));
 //       }
 
-//       // Inspección rápida en consola
 //       console.debug('[search] /items/search?', params.toString());
 
 //       const rows = await firstValueFrom(
@@ -268,15 +362,16 @@
 //     }
 //   }
 
-//   // -------- “Guardar búsqueda”
+//   // -------- “Guardar búsqueda” (protegido)
 //   async saveSearch(name: string) {
+//     if (!this.requireAuthOrLogin()) return;
 //     const nm = (name || '').trim();
 //     if (!nm) { this.error.set('Nombre requerido para guardar búsqueda'); return; }
 //     try {
 //       this.busy.set(true);
 //       this.error.set(null);
 //       const payload = { name: nm, filter_json: this.currentFilterJson() };
-//       await firstValueFrom(this.http.post('/saved-searches', payload));
+//       await firstValueFrom(this.http.post('/saved-searches', payload, { headers: this.authHeaders() }));
 //     } catch (e: any) {
 //       this.error.set(e?.message || 'No se pudo guardar la búsqueda');
 //     } finally {
@@ -284,13 +379,14 @@
 //     }
 //   }
 
-//   // -------- SMART collection
+//   // -------- SMART collection (protegido)
 //   onCreateSmartClick(name: string, sortKey: string, sortDir: string) {
 //     const dir: SortDir = (sortDir === 'desc' ? 'desc' : 'asc');
 //     this.createSmartCollection(name, sortKey, dir);
 //   }
 
 //   async createSmartCollection(name: string, sort_key: string, sort_dir: SortDir) {
+//     if (!this.requireAuthOrLogin()) return;
 //     const nm = (name || '').trim();
 //     if (!nm) { this.error.set('Nombre requerido para SMART collection'); return; }
 //     try {
@@ -304,7 +400,7 @@
 //         sort_key,
 //         sort_dir
 //       };
-//       await firstValueFrom(this.http.post('/collections', payload));
+//       await firstValueFrom(this.http.post('/collections', payload, { headers: this.authHeaders() }));
 //     } catch (e: any) {
 //       this.error.set(e?.message || 'No se pudo crear la colección SMART');
 //     } finally {
@@ -312,7 +408,7 @@
 //     }
 //   }
 
-//   // -------- SNAPSHOT estático
+//   // -------- SNAPSHOT estático (protegido)
 //   onSnapshotClick(name: string, nRaw: string) {
 //     const n = Number(nRaw);
 //     const howMany = Number.isFinite(n) && n > 0 ? n : this.snapshotLimit();
@@ -320,6 +416,8 @@
 //   }
 
 //   async createStaticSnapshot(name: string, howMany: number) {
+//     if (!this.requireAuthOrLogin()) return;
+
 //     const nm = (name || '').trim();
 //     if (!nm) { this.error.set('Nombre requerido para SNAPSHOT'); return; }
 
@@ -335,7 +433,9 @@
 //         sort_key: 'issue_year',
 //         sort_dir: 'asc'
 //       };
-//       const created: any = await firstValueFrom(this.http.post('/collections', payload));
+//       const created: any = await firstValueFrom(
+//         this.http.post('/collections', payload, { headers: this.authHeaders() })
+//       );
 //       const collectionId = created?.id;
 //       if (!collectionId) throw new Error('No se obtuvo id de la colección');
 
@@ -343,7 +443,9 @@
 
 //       const items = this.results().slice(0, howMany);
 //       for (const it of items) {
-//         await firstValueFrom(this.http.post(`/collections/${collectionId}/items`, { itemId: it.id }));
+//         await firstValueFrom(
+//           this.http.post(`/collections/${collectionId}/items`, { itemId: it.id }, { headers: this.authHeaders() })
+//         );
 //       }
 //     } catch (e: any) {
 //       this.error.set(e?.message || 'No se pudo crear el snapshot estático');
@@ -375,6 +477,12 @@ import { Router, RouterLink } from '@angular/router';
 import { HttpClient, HttpParams, HttpHeaders } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { PLATFORM_ID } from '@angular/core';
+
+// 👇 IMPORTA environment (ajusta la ruta IGUAL que en los otros componentes)
+import { environment } from '../../../../core/environments/environment';
+
+// base del backend (Azure)
+const API_BASE = environment.apiBaseUrl;
 
 type SortDir = 'asc' | 'desc';
 
@@ -501,7 +609,6 @@ export class ItemSearchComponent implements OnInit {
     this.router.navigate(['/login'], { queryParams: { returnUrl } });
   }
 
-  // Helper: si no hay sesión, manda a login preservando destino
   private navigateOrLogin(targetUrl: string) {
     if (!this.isAuth) { this.goLogin(targetUrl); return; }
     this.router.navigateByUrl(targetUrl);
@@ -520,7 +627,8 @@ export class ItemSearchComponent implements OnInit {
       localStorage.getItem('refreshToken') ??
       sessionStorage.getItem('refreshToken');
 
-    fetch('/auth/logout', {
+    // 🔹 Ahora logout va al backend (no a la SPA)
+    fetch(`${API_BASE}/auth/logout`, {
       method: 'POST',
       headers: { 'Content-Type':'application/json' },
       body: JSON.stringify({ refreshToken: refresh })
@@ -550,7 +658,9 @@ export class ItemSearchComponent implements OnInit {
   // -------- bootstrap
   async loadTags() {
     try {
-      const tags = await firstValueFrom(this.http.get<TagDTO[]>('/tags'));
+      const tags = await firstValueFrom(
+        this.http.get<TagDTO[]>(`${API_BASE}/tags`)
+      );
       this.allTags.set(tags || []);
     } catch (e: any) {
       this.error.set(e?.message || 'No se pudieron cargar tags');
@@ -559,7 +669,9 @@ export class ItemSearchComponent implements OnInit {
 
   async loadAttrDefs() {
     try {
-      const defs = await firstValueFrom(this.http.get<AttrDefDTO[]>('/attributes'));
+      const defs = await firstValueFrom(
+        this.http.get<AttrDefDTO[]>(`${API_BASE}/attributes`)
+      );
       this.allAttrDefs.set(defs || []);
     } catch (e: any) {
       this.error.set(e?.message || 'No se pudieron cargar atributos');
@@ -570,18 +682,18 @@ export class ItemSearchComponent implements OnInit {
     return (s ?? '').trim();
   }
 
-  // -------- cambios de inputs básicos (salen del template)
+  // -------- cambios de inputs básicos
   onQChange(evt: Event) {
     const v = (evt.target as HTMLInputElement)?.value ?? '';
     this.q.set(v);
   }
   onCountryChange(evt: Event) {
     const v = (evt.target as HTMLInputElement)?.value ?? '';
-    this.country.set(this.normTrim(v)); // sin toLowerCase(): el back puede ser case-sensitive
+    this.country.set(this.normTrim(v));
   }
   onConditionChange(evt: Event) {
     const v = (evt.target as HTMLInputElement)?.value ?? '';
-    this.condition.set(this.normTrim(v).toUpperCase()); // enums suelen ir en mayúsculas
+    this.condition.set(this.normTrim(v).toUpperCase());
   }
   onYearFromChange(evt: Event) {
     const raw = (evt.target as HTMLInputElement)?.value ?? '';
@@ -691,31 +803,26 @@ export class ItemSearchComponent implements OnInit {
       let params = new HttpParams();
 
       const q         = this.normTrim(this.q());
-      const country   = this.normTrim(this.country());            // respeta casing (ej. "Peru")
-      const condition = this.normTrim(this.condition()).toUpperCase(); // aseguramos mayúsculas
+      const country   = this.normTrim(this.country());
+      const condition = this.normTrim(this.condition()).toUpperCase();
 
-      // === Claves básicas ===
       if (q)         params = params.set('q', q);
       if (country)   params = params.set('country', country);
       if (this.yearFrom() != null) params = params.set('yearFrom', String(this.yearFrom()));
       if (this.yearTo()   != null) params = params.set('yearTo',   String(this.yearTo()));
 
-      // Enviar condition SOLO si es válida
       if (condition && this.VALID_CONDITIONS.has(condition)) {
         params = params.set('condition', condition);
       }
 
-      // tagsMode y limit
       params = params.set('tagsMode', this.tagsMode());
       params = params.set('limit', String(this.SEARCH_LIMIT));
 
-      // Tags seleccionados
       const tagIds = this.selectedTagIds();
       if (tagIds.length) {
         tagIds.forEach(v => params = params.append('tagIds', String(v)));
       }
 
-      // Atributos dinámicos
       if (this.attrFilters().length) {
         params = params.set('attrs', JSON.stringify(this.attrFilters()));
       }
@@ -723,7 +830,7 @@ export class ItemSearchComponent implements OnInit {
       console.debug('[search] /items/search?', params.toString());
 
       const rows = await firstValueFrom(
-        this.http.get<ItemRow[]>('/items/search', { params })
+        this.http.get<ItemRow[]>(`${API_BASE}/items/search`, { params })
       );
       this.results.set(rows || []);
     } catch (e: any) {
@@ -742,7 +849,9 @@ export class ItemSearchComponent implements OnInit {
       this.busy.set(true);
       this.error.set(null);
       const payload = { name: nm, filter_json: this.currentFilterJson() };
-      await firstValueFrom(this.http.post('/saved-searches', payload, { headers: this.authHeaders() }));
+      await firstValueFrom(
+        this.http.post(`${API_BASE}/saved-searches`, payload, { headers: this.authHeaders() })
+      );
     } catch (e: any) {
       this.error.set(e?.message || 'No se pudo guardar la búsqueda');
     } finally {
@@ -771,7 +880,9 @@ export class ItemSearchComponent implements OnInit {
         sort_key,
         sort_dir
       };
-      await firstValueFrom(this.http.post('/collections', payload, { headers: this.authHeaders() }));
+      await firstValueFrom(
+        this.http.post(`${API_BASE}/collections`, payload, { headers: this.authHeaders() })
+      );
     } catch (e: any) {
       this.error.set(e?.message || 'No se pudo crear la colección SMART');
     } finally {
@@ -804,18 +915,26 @@ export class ItemSearchComponent implements OnInit {
         sort_key: 'issue_year',
         sort_dir: 'asc'
       };
+
+      // 1) Crear colección
       const created: any = await firstValueFrom(
-        this.http.post('/collections', payload, { headers: this.authHeaders() })
+        this.http.post(`${API_BASE}/collections`, payload, { headers: this.authHeaders() })
       );
       const collectionId = created?.id;
       if (!collectionId) throw new Error('No se obtuvo id de la colección');
 
+      // 2) Asegurar resultados
       if (!this.results().length) await this.search();
 
+      // 3) Vincular items
       const items = this.results().slice(0, howMany);
       for (const it of items) {
         await firstValueFrom(
-          this.http.post(`/collections/${collectionId}/items`, { itemId: it.id }, { headers: this.authHeaders() })
+          this.http.post(
+            `${API_BASE}/collections/${collectionId}/items`,
+            { itemId: it.id },
+            { headers: this.authHeaders() }
+          )
         );
       }
     } catch (e: any) {
@@ -830,7 +949,7 @@ export class ItemSearchComponent implements OnInit {
     const f: any = {};
     if (this.q().trim()) f.q = this.q().trim();
     if (this.country().trim())   f.country   = this.country().trim();
-    if (this.condition().trim()) f.condition = this.condition().trim(); // ya upper en setter
+    if (this.condition().trim()) f.condition = this.condition().trim();
     if (this.yearFrom() != null) f.yearFrom = this.yearFrom();
     if (this.yearTo()   != null) f.yearTo   = this.yearTo();
     if (this.selectedTagIds().length) {

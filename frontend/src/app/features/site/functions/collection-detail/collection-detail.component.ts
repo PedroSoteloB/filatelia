@@ -43,13 +43,22 @@
 //   items = signal<CollectionItemRow[]>([]);
 
 //   // ---- Sub-búsqueda / selección ----
-//   form: SubFilter = { q: '', country: '', yearFrom: undefined, yearTo: undefined, tagNames: [], tagsMode: 'OR', attrs: [] };
+//   form: SubFilter = {
+//     q: '',
+//     country: '',
+//     yearFrom: undefined,
+//     yearTo: undefined,
+//     tagNames: [],
+//     tagsMode: 'OR',
+//     attrs: []
+//   };
 //   tagsComma = '';
 //   attrsJson = '';
 //   selectedIds = new Set<number>();
 //   coverCandidateId: number | null = null;
 
-//   historyNote: string = '';  // 👈 campo para la historia opcional de la colección
+//   // 👇 historia opcional de la colección (se manda al back como "history")
+//   historyNote: string = '';
 
 //   // Para saber si estamos viendo base o resultado de sub-búsqueda
 //   private viewingSub = false;
@@ -104,13 +113,16 @@
 //         yearFrom: this.form.yearFrom ? Number(this.form.yearFrom) : undefined,
 //         yearTo: this.form.yearTo ? Number(this.form.yearTo) : undefined,
 //         tagNames: this.tagsComma.split(',').map(s => s.trim()).filter(Boolean),
-//         tagsMode: (this.form.tagsMode || 'OR') as 'OR'|'AND',
+//         tagsMode: (this.form.tagsMode || 'OR') as 'OR' | 'AND',
 //       };
 
 //       // attrs desde JSON (opcional)
 //       if (this.attrsJson?.trim()) {
 //         try { f.attrs = JSON.parse(this.attrsJson); }
-//         catch { return this.error.set('Attrs JSON inválido'); }
+//         catch {
+//           this.error.set('Attrs JSON inválido');
+//           return;
+//         }
 //       }
 
 //       // construir querystring
@@ -142,7 +154,15 @@
 //   }
 
 //   resetSubSearch() {
-//     this.form = { q: '', country: '', yearFrom: undefined, yearTo: undefined, tagNames: [], tagsMode: 'OR', attrs: [] };
+//     this.form = {
+//       q: '',
+//       country: '',
+//       yearFrom: undefined,
+//       yearTo: undefined,
+//       tagNames: [],
+//       tagsMode: 'OR',
+//       attrs: []
+//     };
 //     this.tagsComma = '';
 //     this.attrsJson = '';
 //     this.selectedIds.clear();
@@ -189,29 +209,25 @@
   
 //   private async downloadPpt(presId: number) {
 //     const resp = await firstValueFrom(
-//       this.http.get(`/presentations/${presId}/ppt`, {
-//         responseType: 'blob',
-//         observe: 'response'
-//       })
+//       this.http.get<{ presentonUrl: string | null; downloadUrl: string | null; filePath: string | null }>(
+//         `/presentations/${presId}/ppt`
+//       )
 //     );
   
-//     // Intenta extraer nombre de archivo del header Content-Disposition
-//     let filename = `presentation-${presId}.pptx`;
-//     const dispo = resp.headers.get('Content-Disposition') || resp.headers.get('content-disposition');
-//     if (dispo) {
-//       const m = /filename="?([^"]+)"?/i.exec(dispo);
-//       if (m?.[1]) filename = m[1];
+//     // 1) Prioridad: Abrir / descargar en Presenton
+//     if (resp.presentonUrl) {
+//       window.open(resp.presentonUrl, '_blank');  // 👈 este es el botón "Abrir / descargar en Presenton"
+//       return;
 //     }
   
-//     const blob = resp.body as Blob;
-//     const url = URL.createObjectURL(blob);
-//     const a = document.createElement('a');
-//     a.href = url;
-//     a.download = filename;
-//     document.body.appendChild(a);
-//     a.click();
-//     a.remove();
-//     URL.revokeObjectURL(url);
+//     // 2) Fallback: URL directa (S3 u otro)
+//     if (resp.downloadUrl) {
+//       window.open(resp.downloadUrl, '_blank');
+//       return;
+//     }
+  
+//     // 3) Último recurso: nada encontrado
+//     alert('No se encontró PPT para esta presentación');
 //   }
   
 
@@ -227,14 +243,14 @@
 //         return;
 //       }
 
-//       const baseName = `Subconjunto de #${id} (${this.selectedIds.size} ítems)`;
+//       const baseName = `Subconjunto de ${id} (${this.selectedIds.size} items)`;
 //       const name = await this.uniqueCollectionName(baseName);
 
 //       const body = {
 //         mode: 'snapshot',
 //         name,
-//         description: 'Creado desde sub-búsqueda',
-//         history: this.historyNote || null,
+//         description: 'Creado desde sub-busqueda',
+//         history: this.historyNote?.trim() || null,    // 👈 se envía al back
 //         selectedItemIds: Array.from(this.selectedIds),
 //         coverItemId: this.coverCandidateId ?? Array.from(this.selectedIds)[0]
 //       };
@@ -242,12 +258,12 @@
 //       this.busy.set(true);
 //       this.error.set(null);
 
-//       // ⬇️ Deriva la colección (el back devuelve { id, presentationId, ... })
+//       // Deriva la colección (el back devuelve { id, presentationId, ... })
 //       const resp = await firstValueFrom(this.http.post<any>(`/collections/${id}/derive`, body));
 //       const childId = Number(resp.id);
 //       const presIdFromBack = Number(resp.presentationId || 0);
 
-//       // ⬇️ Si hay que generar PPT, usa el presentationId devuelto; si no viene, haz fallback
+//       // Si hay que generar PPT, usa el presentationId devuelto; si no viene, fallback
 //       if (genPpt) {
 //         const presId = presIdFromBack || await this.findOrCreatePresentation(childId, name);
 //         await this.generatePptForPresentation(presId, { maxSlides: 15 });
@@ -260,12 +276,13 @@
 //         try {
 //           const id = this.collectionId()!;
 //           const retryName = await this.uniqueCollectionName(
-//             `Subconjunto de #${id} (${this.selectedIds.size} ítems)`
+//             `Subconjunto de  ${id} (${this.selectedIds.size} items)`
 //           );
 //           const body = {
 //             mode: 'snapshot',
 //             name: retryName,
-//             description: 'Creado desde sub-búsqueda',
+//             description: 'Creado desde sub-busqueda',
+//             history: this.historyNote?.trim() || null,   // 👈 también en el retry
 //             selectedItemIds: Array.from(this.selectedIds),
 //             coverItemId: this.coverCandidateId ?? Array.from(this.selectedIds)[0]
 //           };
@@ -290,7 +307,6 @@
 //     }
 //   }
 
-
 //   async createSmart() {
 //     try {
 //       const id = this.collectionId();
@@ -308,7 +324,10 @@
 //         extra.tagsMode = (this.form.tagsMode || 'OR');
 //         if (this.attrsJson?.trim()) {
 //           try { extra.attrs = JSON.parse(this.attrsJson); }
-//           catch { return this.error.set('Attrs JSON inválido'); }
+//           catch {
+//             this.error.set('Attrs JSON inválido');
+//             return;
+//           }
 //         }
 //       }
 
@@ -316,6 +335,7 @@
 //         mode: 'smart',
 //         name: `Smart de #${id}`,
 //         description: 'Sub-búsqueda persistente',
+//         history: this.historyNote?.trim() || null,   // 👈 también permitimos historia en smart
 //         extraFilter: extra,
 //         coverItemId: this.coverCandidateId || null
 //       };
@@ -374,9 +394,15 @@
 import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { FormsModule } from '@angular/forms';
+
+// 👇 IMPORTA environment (ajusta la ruta si hace falta con Ctrl+. en VSCode)
+import { environment } from '../../../../core/environments/environment';
+
+// Base del backend (Azure)
+const API_BASE = environment.apiBaseUrl;
 
 type CollectionItemRow = {
   id: number;
@@ -447,20 +473,32 @@ export class CollectionDetailComponent implements OnInit {
     await this.loadItems(idNum); // base (colección)
   }
 
+  // ====== Auth headers ======
+  private authHeaders(): HttpHeaders {
+    const token =
+      localStorage.getItem('accessToken') ||
+      sessionStorage.getItem('accessToken') ||
+      '';
+    return token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : new HttpHeaders();
+  }
+
   // --------- Carga base (sin filtros extra) ----------
   async loadItems(id: number) {
     try {
       this.busy.set(true);
       this.error.set(null);
       const rows = await firstValueFrom(
-        this.http.get<CollectionItemRow[]>(`/collections/${id}/items`)
+        this.http.get<CollectionItemRow[]>(
+          `${API_BASE}/collections/${id}/items`,
+          { headers: this.authHeaders() }
+        )
       );
       this.items.set(rows || []);
       this.viewingSub = false;
       this.selectedIds.clear();
       this.coverCandidateId = null;
     } catch (e: any) {
-      this.error.set(e?.message || 'No se pudieron cargar los ítems de la colección');
+      this.error.set(e?.error?.message || e?.message || 'No se pudieron cargar los ítems de la colección');
     } finally {
       this.busy.set(false);
     }
@@ -509,12 +547,14 @@ export class CollectionDetailComponent implements OnInit {
       }
       if (f.tagsMode) qs.set('tagsMode', f.tagsMode);
       if (f.attrs && f.attrs.length) qs.set('attrs', JSON.stringify(f.attrs));
-      qs.set('limit', '25'); // 50→25
+      qs.set('limit', '25');
       qs.set('offset', '0');
 
-      const url = `/collections/${id}/items/search-sub?` + qs.toString();
+      const url = `${API_BASE}/collections/${id}/items/search-sub?` + qs.toString();
 
-      const rows = await firstValueFrom(this.http.get<CollectionItemRow[]>(url));
+      const rows = await firstValueFrom(
+        this.http.get<CollectionItemRow[]>(url, { headers: this.authHeaders() })
+      );
       this.items.set(rows || []);
       this.viewingSub = true;
       this.selectedIds.clear();
@@ -555,16 +595,27 @@ export class CollectionDetailComponent implements OnInit {
   // ======== Helpers: presentación & PPT ========
   private async findOrCreatePresentation(collectionId: number, titleFallback: string): Promise<number> {
     // Buscar si ya existe una presentación para esa colección
-    const presList = await firstValueFrom(this.http.get<any[]>(`/presentations?limit=100`));
+    const presList = await firstValueFrom(
+      this.http.get<any[]>(
+        `${API_BASE}/presentations?limit=100`,
+        { headers: this.authHeaders() }
+      )
+    );
     const found = (presList || []).find(p => Number(p.collection_id) === Number(collectionId));
     if (found?.id) return Number(found.id);
 
     // Crear si no existe
-    const created = await firstValueFrom(this.http.post<any>(`/presentations`, {
-      collection_id: collectionId,
-      title: titleFallback || `Presentación de colección #${collectionId}`,
-      description: 'Generada desde UI'
-    }));
+    const created = await firstValueFrom(
+      this.http.post<any>(
+        `${API_BASE}/presentations`,
+        {
+          collection_id: collectionId,
+          title: titleFallback || `Presentación de colección #${collectionId}`,
+          description: 'Generada desde UI'
+        },
+        { headers: this.authHeaders() }
+      )
+    );
     return Number(created.id);
   }
 
@@ -573,7 +624,11 @@ export class CollectionDetailComponent implements OnInit {
     const qs = new URLSearchParams();
     if (opts?.maxSlides != null) qs.set('maxSlides', String(opts.maxSlides));
     await firstValueFrom(
-      this.http.post(`/presentations/${presId}/generate-ppt?${qs.toString()}`, {})
+      this.http.post(
+        `${API_BASE}/presentations/${presId}/generate-ppt?${qs.toString()}`,
+        {},
+        { headers: this.authHeaders() }
+      )
     );
   
     // 2) Descarga con HttpClient (con Authorization) y dispara la descarga
@@ -582,14 +637,19 @@ export class CollectionDetailComponent implements OnInit {
   
   private async downloadPpt(presId: number) {
     const resp = await firstValueFrom(
-      this.http.get<{ presentonUrl: string | null; downloadUrl: string | null; filePath: string | null }>(
-        `/presentations/${presId}/ppt`
+      this.http.get<{
+        presentonUrl: string | null;
+        downloadUrl: string | null;
+        filePath: string | null;
+      }>(
+        `${API_BASE}/presentations/${presId}/ppt`,
+        { headers: this.authHeaders() }
       )
     );
   
     // 1) Prioridad: Abrir / descargar en Presenton
     if (resp.presentonUrl) {
-      window.open(resp.presentonUrl, '_blank');  // 👈 este es el botón "Abrir / descargar en Presenton"
+      window.open(resp.presentonUrl, '_blank');
       return;
     }
   
@@ -602,10 +662,8 @@ export class CollectionDetailComponent implements OnInit {
     // 3) Último recurso: nada encontrado
     alert('No se encontró PPT para esta presentación');
   }
-  
 
   // --------- Crear derivadas ----------
-  // genPpt: si true, encadena creación de presentación + PPT
   async createSnapshot(genPpt = false) {
     try {
       const id = this.collectionId();
@@ -623,7 +681,7 @@ export class CollectionDetailComponent implements OnInit {
         mode: 'snapshot',
         name,
         description: 'Creado desde sub-busqueda',
-        history: this.historyNote?.trim() || null,    // 👈 se envía al back
+        history: this.historyNote?.trim() || null,
         selectedItemIds: Array.from(this.selectedIds),
         coverItemId: this.coverCandidateId ?? Array.from(this.selectedIds)[0]
       };
@@ -631,12 +689,16 @@ export class CollectionDetailComponent implements OnInit {
       this.busy.set(true);
       this.error.set(null);
 
-      // Deriva la colección (el back devuelve { id, presentationId, ... })
-      const resp = await firstValueFrom(this.http.post<any>(`/collections/${id}/derive`, body));
+      const resp = await firstValueFrom(
+        this.http.post<any>(
+          `${API_BASE}/collections/${id}/derive`,
+          body,
+          { headers: this.authHeaders() }
+        )
+      );
       const childId = Number(resp.id);
       const presIdFromBack = Number(resp.presentationId || 0);
 
-      // Si hay que generar PPT, usa el presentationId devuelto; si no viene, fallback
       if (genPpt) {
         const presId = presIdFromBack || await this.findOrCreatePresentation(childId, name);
         await this.generatePptForPresentation(presId, { maxSlides: 15 });
@@ -644,7 +706,6 @@ export class CollectionDetailComponent implements OnInit {
 
       this.router.navigate(['/collections']);
     } catch (e: any) {
-      // Fallback si choca por duplicado: reintenta con nombre único y también genera PPT si corresponde
       if (e?.status === 409 || /Duplicate entry/i.test(e?.error?.message || '')) {
         try {
           const id = this.collectionId()!;
@@ -655,12 +716,18 @@ export class CollectionDetailComponent implements OnInit {
             mode: 'snapshot',
             name: retryName,
             description: 'Creado desde sub-busqueda',
-            history: this.historyNote?.trim() || null,   // 👈 también en el retry
+            history: this.historyNote?.trim() || null,
             selectedItemIds: Array.from(this.selectedIds),
             coverItemId: this.coverCandidateId ?? Array.from(this.selectedIds)[0]
           };
 
-          const resp2 = await firstValueFrom(this.http.post<any>(`/collections/${id}/derive`, body));
+          const resp2 = await firstValueFrom(
+            this.http.post<any>(
+              `${API_BASE}/collections/${id}/derive`,
+              body,
+              { headers: this.authHeaders() }
+            )
+          );
           const childId2 = Number(resp2.id);
           const presId2 = Number(resp2.presentationId || 0);
 
@@ -685,7 +752,6 @@ export class CollectionDetailComponent implements OnInit {
       const id = this.collectionId();
       if (!id) return;
 
-      // si no estamos viendo sub-búsqueda, no hay filtros extra
       const extra: any = {};
       if (this.viewingSub) {
         extra.q = this.form.q?.trim() || undefined;
@@ -708,7 +774,7 @@ export class CollectionDetailComponent implements OnInit {
         mode: 'smart',
         name: `Smart de #${id}`,
         description: 'Sub-búsqueda persistente',
-        history: this.historyNote?.trim() || null,   // 👈 también permitimos historia en smart
+        history: this.historyNote?.trim() || null,
         extraFilter: extra,
         coverItemId: this.coverCandidateId || null
       };
@@ -716,8 +782,14 @@ export class CollectionDetailComponent implements OnInit {
       this.busy.set(true); 
       this.error.set(null);
 
-      const resp = await firstValueFrom(this.http.post<any>(`/collections/${id}/derive`, body));
-      this.router.navigate(['/collections']); // o: this.router.navigate(['/collections', resp.id]);
+      await firstValueFrom(
+        this.http.post<any>(
+          `${API_BASE}/collections/${id}/derive`,
+          body,
+          { headers: this.authHeaders() }
+        )
+      );
+      this.router.navigate(['/collections']);
     } catch (e:any) {
       this.error.set(e?.error?.message || e?.message || 'No se pudo crear la colección Smart');
     } finally {
@@ -745,8 +817,12 @@ export class CollectionDetailComponent implements OnInit {
   // Devuelve un nombre único agregando " (2)", " (3)", ... si ya existe
   private async uniqueCollectionName(base: string): Promise<string> {
     try {
-      // Trae tus colecciones (el endpoint ya existe en tu back)
-      const cols = await firstValueFrom(this.http.get<any[]>(`/collections`));
+      const cols = await firstValueFrom(
+        this.http.get<any[]>(
+          `${API_BASE}/collections`,
+          { headers: this.authHeaders() }
+        )
+      );
       const existing = new Set<string>((cols || []).map(c => String(c.name)));
       if (!existing.has(base)) return base;
 
@@ -758,7 +834,6 @@ export class CollectionDetailComponent implements OnInit {
       }
       return candidate;
     } catch {
-      // Si falla el fetch, al menos evita el choque con timestamp corto
       const stamp = new Date().toISOString().slice(11,19).replace(/:/g,'');
       return `${base} ${stamp}`;
     }

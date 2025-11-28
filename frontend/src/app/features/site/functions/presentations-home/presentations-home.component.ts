@@ -1,5 +1,5 @@
-// import { Component, OnInit, signal, inject } from '@angular/core';
-// import { CommonModule } from '@angular/common';
+// import { Component, OnInit, signal, inject, Inject } from '@angular/core';
+// import { CommonModule, isPlatformBrowser } from '@angular/common';
 // import {
 //   ReactiveFormsModule,
 //   FormBuilder,
@@ -7,9 +7,13 @@
 //   FormGroup,
 //   FormControl
 // } from '@angular/forms';
-// import { RouterLink } from '@angular/router';
+// import { Router, RouterLink } from '@angular/router';
 // import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http';
+// import { PLATFORM_ID } from '@angular/core';
 
+// /**
+//  * Coincide con el back
+//  */
 // type Pres = {
 //   id: number;
 //   title: string;
@@ -19,6 +23,25 @@
 //   created_at: string;
 //   updated_at: string;
 // };
+
+// // === Helpers JWT (roles/exp) ===
+// function getRoleFromToken(token: string): any {
+//   if (!token) return undefined;
+//   try {
+//     const payload = JSON.parse(
+//       atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))
+//     );
+//     return payload.role ?? payload.roles ?? payload.permissions;
+//   } catch { return undefined; }
+// }
+// // ✅ Si no hay `exp`, lo consideramos **no vencido**
+// function isExpired(token: string): boolean {
+//   try {
+//     const { exp } = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+//     if (typeof exp !== 'number') return false;
+//     return Date.now()/1000 >= exp;
+//   } catch { return false; }
+// }
 
 // @Component({
 //   selector: 'app-presentations-home',
@@ -31,6 +54,13 @@
 
 //   private http = inject(HttpClient);
 //   private fb   = inject(FormBuilder);
+//   private router = inject(Router);
+//   constructor(@Inject(PLATFORM_ID) private platformId: Object) {}
+
+//   // Auth/UI
+//   isAuth = false;
+//   isAdmin = false;
+//   isBrowser = false;
 
 //   loading = signal<boolean>(false);
 //   error   = signal<string | null>(null);
@@ -57,11 +87,68 @@
 //   // 🔹 Atajo para el template: usar fc.title, fc.collection_id, etc.
 //   get fc() { return this.createForm.controls; }
 
-//   ngOnInit(): void { this.load(); }
+//   ngOnInit(): void {
+//     // Auth/roles
+//     this.isBrowser = isPlatformBrowser(this.platformId);
+//     if (this.isBrowser) {
+//       const token =
+//         localStorage.getItem('accessToken') ??
+//         sessionStorage.getItem('accessToken') ??
+//         '';
+
+//       if (token && !isExpired(token)) {
+//         this.isAuth = true;
+//         const role = getRoleFromToken(token);
+//         this.isAdmin = Array.isArray(role) ? role.includes('admin') : role === 'admin';
+//       } else {
+//         // si estaba corrupto o vencido, limpia pero NO fuerces logout si quieres dejar ver la vista
+//         if (token && isExpired(token)) { localStorage.clear(); sessionStorage.clear(); }
+//         this.isAuth = false;
+//         this.isAdmin = false;
+//         // si esta vista requiere login sí o sí, descomenta:
+//         // this.goLogin(this.router.url);
+//         // return;
+//       }
+//     }
+
+//     this.load();
+//   }
+
+//   // ===== NAV (para header en el template) =====
+//   goInicio() { this.router.navigateByUrl('/'); }
+//   goLogin(returnUrl: string = this.router.url) {
+//     this.router.navigate(['/login'], { queryParams: { returnUrl } });
+//   }
+//   private navigateOrLogin(targetUrl: string) {
+//     if (!this.isAuth) { this.goLogin(targetUrl); return; }
+//     this.router.navigateByUrl(targetUrl);
+//   }
+//   goUpload() { this.navigateOrLogin('/items/upload'); }
+//   goMyItems() { this.navigateOrLogin('/items/mine'); }
+//   goSearch() { this.router.navigateByUrl('/items/search'); }
+//   goCollections() { this.navigateOrLogin('/collections'); }
+//   goPresentation() { this.navigateOrLogin('/presentations'); }
+//   logout() {
+//     if (!this.isBrowser) return;
+//     const refresh =
+//       localStorage.getItem('refreshToken') ??
+//       sessionStorage.getItem('refreshToken');
+//     fetch('/auth/logout', {
+//       method: 'POST',
+//       headers: { 'Content-Type':'application/json' },
+//       body: JSON.stringify({ refreshToken: refresh })
+//     }).catch(() => {});
+//     localStorage.clear(); sessionStorage.clear();
+//     this.isAuth = false; this.isAdmin = false;
+//     this.router.navigate(['/']);
+//   }
 
 //   private authHeaders(): HttpHeaders {
-//     const token = localStorage.getItem('accessToken') || '';
-//     return new HttpHeaders({ Authorization: token ? `Bearer ${token}` : '' });
+//     if (!this.isBrowser) return new HttpHeaders();
+//     const token =
+//       localStorage.getItem('accessToken') ||
+//       sessionStorage.getItem('accessToken') || '';
+//     return token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : new HttpHeaders();
 //   }
 
 //   load(direction: 'init'|'next'|'prev' = 'init') {
@@ -71,18 +158,20 @@
 //     this.loading.set(true);
 //     this.error.set(null);
 
-//     this.http.get<Pres[]>(`/presentations?offset=${this.offset}&limit=${this.limit}`, { headers: this.authHeaders() })
-//       .subscribe({
-//         next: rows => {
-//           this.items.set(rows);
-//           this.hasMore.set(rows.length === this.limit);
-//           this.loading.set(false);
-//         },
-//         error: err => {
-//           this.error.set(err?.error?.message || 'Http error');
-//           this.loading.set(false);
-//         }
-//       });
+//     this.http.get<Pres[]>(
+//       `/presentations?offset=${this.offset}&limit=${this.limit}`,
+//       { headers: this.authHeaders() }
+//     ).subscribe({
+//       next: rows => {
+//         this.items.set(rows);
+//         this.hasMore.set(rows.length === this.limit);
+//         this.loading.set(false);
+//       },
+//       error: err => {
+//         this.error.set(err?.error?.message || 'Http error');
+//         this.loading.set(false);
+//       }
+//     });
 //   }
 
 //   toggleCreate() { this.showCreate.set(!this.showCreate()); }
@@ -110,7 +199,7 @@
 //       fd.append('metadata', JSON.stringify({ collection_id, title, description }));
 //       fd.append('cover', cover);
 //       body = fd;
-//       headers = this.authHeaders(); // NO seteamos Content-Type; el browser pone multipart
+//       headers = this.authHeaders(); // el browser setea el boundary
 //     } else {
 //       body = { collection_id, title, description };
 //       headers = this.authHeaders().set('Content-Type', 'application/json');
@@ -135,7 +224,6 @@
 
 //   trackById = (_: number, it: Pres) => it.id;
 // }
-
 import { Component, OnInit, signal, inject, Inject } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import {
@@ -148,6 +236,11 @@ import {
 import { Router, RouterLink } from '@angular/router';
 import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http';
 import { PLATFORM_ID } from '@angular/core';
+
+// ⭐ CAMBIO: importa environment (ajusta la ruta si hace falta)
+import { environment } from '../../../../core/environments/environment';
+
+const API_BASE = environment.apiBaseUrl;   // ⭐ CAMBIO
 
 /**
  * Coincide con el back
@@ -222,7 +315,6 @@ export class PresentationsHomeComponent implements OnInit {
     cover:         this.fb.control<File | null>(null),
   });
 
-  // 🔹 Atajo para el template: usar fc.title, fc.collection_id, etc.
   get fc() { return this.createForm.controls; }
 
   ngOnInit(): void {
@@ -239,20 +331,16 @@ export class PresentationsHomeComponent implements OnInit {
         const role = getRoleFromToken(token);
         this.isAdmin = Array.isArray(role) ? role.includes('admin') : role === 'admin';
       } else {
-        // si estaba corrupto o vencido, limpia pero NO fuerces logout si quieres dejar ver la vista
         if (token && isExpired(token)) { localStorage.clear(); sessionStorage.clear(); }
         this.isAuth = false;
         this.isAdmin = false;
-        // si esta vista requiere login sí o sí, descomenta:
-        // this.goLogin(this.router.url);
-        // return;
       }
     }
 
     this.load();
   }
 
-  // ===== NAV (para header en el template) =====
+  // ===== NAV =====
   goInicio() { this.router.navigateByUrl('/'); }
   goLogin(returnUrl: string = this.router.url) {
     this.router.navigate(['/login'], { queryParams: { returnUrl } });
@@ -266,16 +354,20 @@ export class PresentationsHomeComponent implements OnInit {
   goSearch() { this.router.navigateByUrl('/items/search'); }
   goCollections() { this.navigateOrLogin('/collections'); }
   goPresentation() { this.navigateOrLogin('/presentations'); }
+
   logout() {
     if (!this.isBrowser) return;
     const refresh =
       localStorage.getItem('refreshToken') ??
       sessionStorage.getItem('refreshToken');
-    fetch('/auth/logout', {
+
+    // ⭐ CAMBIO: ahora pegamos al backend (Azure), no a la SPA
+    fetch(`${API_BASE}/auth/logout`, {
       method: 'POST',
       headers: { 'Content-Type':'application/json' },
       body: JSON.stringify({ refreshToken: refresh })
     }).catch(() => {});
+
     localStorage.clear(); sessionStorage.clear();
     this.isAuth = false; this.isAdmin = false;
     this.router.navigate(['/']);
@@ -296,20 +388,21 @@ export class PresentationsHomeComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
 
-    this.http.get<Pres[]>(
-      `/presentations?offset=${this.offset}&limit=${this.limit}`,
-      { headers: this.authHeaders() }
-    ).subscribe({
-      next: rows => {
-        this.items.set(rows);
-        this.hasMore.set(rows.length === this.limit);
-        this.loading.set(false);
-      },
-      error: err => {
-        this.error.set(err?.error?.message || 'Http error');
-        this.loading.set(false);
-      }
-    });
+    // ⭐ CAMBIO: URL completa al backend
+    const url = `${API_BASE}/presentations?offset=${this.offset}&limit=${this.limit}`;
+
+    this.http.get<Pres[]>(url, { headers: this.authHeaders() })
+      .subscribe({
+        next: rows => {
+          this.items.set(rows);
+          this.hasMore.set(rows.length === this.limit);
+          this.loading.set(false);
+        },
+        error: err => {
+          this.error.set(err?.error?.message || 'Http error');
+          this.loading.set(false);
+        }
+      });
   }
 
   toggleCreate() { this.showCreate.set(!this.showCreate()); }
@@ -326,7 +419,6 @@ export class PresentationsHomeComponent implements OnInit {
       return;
     }
 
-    // ✅ Tipado a partir del FormGroup
     const { collection_id, title, description, cover } = this.createForm.getRawValue();
 
     let body: any;
@@ -344,7 +436,9 @@ export class PresentationsHomeComponent implements OnInit {
     }
 
     this.loading.set(true);
-    this.http.post<{ id: number }>(`/presentations`, body, { headers })
+
+    // ⭐ CAMBIO: POST a Azure
+    this.http.post<{ id: number }>(`${API_BASE}/presentations`, body, { headers })
       .subscribe({
         next: () => {
           this.loading.set(false);

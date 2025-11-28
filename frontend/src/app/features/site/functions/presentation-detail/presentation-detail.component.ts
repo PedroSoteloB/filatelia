@@ -15,32 +15,37 @@
 //   assetsCount?: number;
 // };
 
+// // 👇 único cambio útil: tipar mejor metaJson
+// type AssetMeta = {
+//   caption?: string;
+//   edit_path?: string;
+//   [key: string]: any;
+// };
+
 // type Asset = {
 //   id: number;
 //   kind: 'video'|'ppt'|'image'|'text'|'link';
 //   filePath?: string | null;
 //   url?: string | null;
-//   metaJson?: any;
+//   metaJson?: AssetMeta;   // ⬅️ aquí
 //   createdAt: string;
 // };
 
 // @Component({
 //   selector: 'app-presentation-detail',
 //   standalone: true,
-//   imports: [CommonModule, RouterModule, ReactiveFormsModule, FormsModule], // ✅ FormsModule
+//   imports: [CommonModule, RouterModule, ReactiveFormsModule, FormsModule],
 //   templateUrl: './presentation-detail.component.html',
 //   styleUrls: ['./presentation-detail.component.scss']
 // })
 // export class PresentationDetailComponent {
-//   private api = ''; // si usas proxy: '' | de lo contrario coloca la base (p.ej. 'http://localhost:3000')
+//   private api = ''; // proxy o base URL
 
-//   // ✅ inyecta servicios vía inject() para poder usarlos en campos de clase
 //   private fb = inject(FormBuilder);
 //   private route = inject(ActivatedRoute);
 //   private http = inject(HttpClient);
 //   private router = inject(Router);
 
-//   // ---- state ----
 //   id = signal<number | null>(null);
 //   loading = signal<boolean>(true);
 //   saving = signal<boolean>(false);
@@ -50,20 +55,17 @@
 //   assets = signal<Asset[]>([]);
 //   hasCover = computed(() => !!this.pres()?.cover);
 
-//   // ---- form (✅ ya no dispara TS2729) ----
 //   editForm = this.fb.group({
 //     title: ['', [Validators.required, Validators.maxLength(180)]],
 //     description: ['']
 //   });
 
-//   // ---- crear asset (rápido) ----
 //   newKind = signal<'image'|'ppt'|'video'|'link'|'text'>('image');
 //   newUrl  = signal<string>('');
 //   newText = signal<string>('');
 //   newFile: File | null = null;
 
 //   constructor(){
-//     // Lee :id y carga datos
 //     this.route.paramMap.subscribe(p => {
 //       const pid = Number(p.get('id'));
 //       if (!Number.isFinite(pid)) { this.error.set('ID inválido'); return; }
@@ -71,7 +73,6 @@
 //       this.loadAll();
 //     });
 
-//     // Sincroniza form con pres
 //     effect(() => {
 //       const p = this.pres();
 //       if (p) {
@@ -99,7 +100,6 @@
 //     }
 //   }
 
-//   // Guardar cambios básicos
 //   async saveMeta(){
 //     if (this.editForm.invalid || !this.pres()) return;
 //     try{
@@ -110,7 +110,6 @@
 //         description: (this.editForm.value.description ?? '').trim()
 //       };
 //       await this.http.put(`${this.api}/presentations/${pid}`, body).toPromise();
-//       // refresca pres (updated_at)
 //       const updated = await this.http.get<Pres>(`${this.api}/presentations/${pid}`).toPromise();
 //       this.pres.set(updated!);
 //     }catch(e:any){
@@ -120,7 +119,6 @@
 //     }
 //   }
 
-//   // Subir portada
 //   async onCoverChange(evt: Event){
 //     const inp = evt.target as HTMLInputElement;
 //     const file = inp.files?.[0];
@@ -132,7 +130,7 @@
 //       fd.append('metadata', new Blob([JSON.stringify({})], { type: 'application/json'}));
 //       fd.append('cover', file, file.name);
 //       await this.http.put(`${this.api}/presentations/${pid}`, fd, {
-//         headers: new HttpHeaders({ /* boundary lo setea el navegador */ })
+//         headers: new HttpHeaders({})
 //       }).toPromise();
 //       await this.reloadPresOnly();
 //     }catch(e:any){
@@ -143,7 +141,6 @@
 //     }
 //   }
 
-//   // Quitar portada
 //   async clearCover(){
 //     if (!this.pres()) return;
 //     try{
@@ -164,7 +161,6 @@
 //     this.pres.set(updated!);
 //   }
 
-//   // --------- Assets ----------
 //   onFileChange(ev: Event){
 //     const inp = ev.target as HTMLInputElement;
 //     this.newFile = inp.files?.[0] ?? null;
@@ -177,7 +173,7 @@
 //       this.saving.set(true);
 
 //       if (kind === 'text'){
-//         const meta = { caption: (this.newText() || '').trim() };
+//         const meta: AssetMeta = { caption: (this.newText() || '').trim() };
 //         await this.http.post(`${this.api}/presentations/${pres.id}/assets`, {
 //           kind, meta_json: meta
 //         }).toPromise();
@@ -195,14 +191,12 @@
 //         await this.http.post(`${this.api}/presentations/${pres.id}/assets`, fd).toPromise();
 //       }
 
-//       // limpiar UI
 //       this.newUrl.set('');
 //       this.newText.set('');
 //       this.newFile = null;
 //       const f = document.getElementById('asset-file') as HTMLInputElement | null;
 //       if (f) f.value = '';
 
-//       // recargar
 //       const assets = await this.http.get<Asset[]>(`${this.api}/presentations/${pres.id}/assets`).toPromise();
 //       this.assets.set(assets || []);
 //     }catch(e:any){
@@ -226,7 +220,6 @@
 //     }
 //   }
 
-//   // helpers UI
 //   fmtDate(d?: string){ return d ? new Date(d) : null; }
 //   kindIcon(a: Asset){
 //     switch(a.kind){
@@ -251,8 +244,11 @@
 import { Component, computed, effect, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpHeaders, HttpClientModule } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
+
+// 👇 IMPORTA environment (usa la MISMA ruta que en presentations-home o my-items)
+import { environment } from '../../../../core/environments/environment';
 
 type Pres = {
   id: number;
@@ -284,12 +280,13 @@ type Asset = {
 @Component({
   selector: 'app-presentation-detail',
   standalone: true,
-  imports: [CommonModule, RouterModule, ReactiveFormsModule, FormsModule],
+  imports: [CommonModule, RouterModule, ReactiveFormsModule, FormsModule, HttpClientModule],
   templateUrl: './presentation-detail.component.html',
   styleUrls: ['./presentation-detail.component.scss']
 })
 export class PresentationDetailComponent {
-  private api = ''; // proxy o base URL
+  // 🔹 AHORA base URL viene del environment → Azure o lo que tengas configurado
+  private api = environment.apiBaseUrl;
 
   private fb = inject(FormBuilder);
   private route = inject(ActivatedRoute);
