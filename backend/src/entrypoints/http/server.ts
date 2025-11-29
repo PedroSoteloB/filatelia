@@ -789,13 +789,47 @@ app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any)
 });
 
 // GET /items/:id
+// app.get('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+//     const itemId = Number(req.params.id);
+//     if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'id inválido' });
+
+//     // SQL SERVER: sin JSON_ARRAYAGG, hacemos 2 queries
+//     const [rows]: any = await db.execute(
+//       `SELECT *
+//          FROM philatelic_items
+//         WHERE id = ? AND owner_user_id = ?`,
+//       [itemId, ownerId]
+//     );
+//     const item = rows?.[0];
+//     if (!item) return reply.code(404).send({ message: 'not_found' });
+
+//     const [imgRows]: any = await db.execute(
+//       `SELECT id,
+//              file_path AS [file], 
+//               is_primary AS [primary]
+//          FROM item_images
+//         WHERE item_id = ?
+//         ORDER BY is_primary DESC, id ASC`,
+//       [itemId]
+//     );
+
+//     item.images = (imgRows || []).map((im: any) => ({
+//       ...im,
+//       file: toPublicUrl(im.file)
+//     }));
+
+//     reply.send(item);
+//   } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+// });
+
 app.get('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
     const itemId = Number(req.params.id);
     if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'id inválido' });
 
-    // SQL SERVER: sin JSON_ARRAYAGG, hacemos 2 queries
     const [rows]: any = await db.execute(
       `SELECT *
          FROM philatelic_items
@@ -808,21 +842,36 @@ app.get('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) =>
     const [imgRows]: any = await db.execute(
       `SELECT id,
              file_path AS [file], 
-              is_primary AS [primary]
+             is_primary AS [primary]
          FROM item_images
         WHERE item_id = ?
         ORDER BY is_primary DESC, id ASC`,
       [itemId]
     );
 
-    item.images = (imgRows || []).map((im: any) => ({
-      ...im,
-      file: toPublicUrl(im.file)
-    }));
+    // 🔹 aquí el cambio
+    item.images = (imgRows || []).map((im: any) => {
+      const rel = toPublicUrl(im.file);   // "/uploads/..."
+      const abs = toAbsoluteUrl(rel);     // "https://filatelia-api.../uploads/..."
+      return {
+        ...im,
+        file: abs || rel,
+      };
+    });
+
+    // opcional: normalizar cover si existe
+    if (item.cover) {
+      const relCover = toPublicUrl(item.cover);
+      const absCover = toAbsoluteUrl(relCover);
+      item.cover = absCover || relCover;
+    }
 
     reply.send(item);
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e: any) {
+    reply.code(500).send({ message: e?.message || 'internal_error' });
+  }
 });
+
 
 app.put('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
