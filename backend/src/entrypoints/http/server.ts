@@ -695,7 +695,98 @@ reply.send(out);
   } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
 });
 
-// /items/search
+
+// app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+//     const q: any = req.query || {};
+//     const attrs = parseJsonSafely(q.attrs, undefined);
+
+//     const f = {
+//       q: q.q, country: q.country, condition: q.condition,
+//       yearFrom: q.yearFrom ? Number(q.yearFrom) : undefined,
+//       yearTo:   q.yearTo   ? Number(q.yearTo)   : undefined,
+//       tagIds: Array.isArray(q.tagIds) ? q.tagIds : (q.tagIds ? [q.tagIds] : []),
+//       tagNames: Array.isArray(q.tagNames) ? q.tagNames : (q.tagNames ? [q.tagNames] : []),
+//       tagsMode: q.tagsMode,
+//       attrs
+//     };
+
+//     const { where, params: whereParams, tagIds, tagNames, tagMode, attrFilters } =
+//       buildWhereFromFilter(ownerId, f);
+
+//     let join = '';
+//     const joinParams: any[] = [];
+
+//     if ((tagIds.length + tagNames.length) > 0) {
+//       let allTagIds = [...tagIds];
+
+//       if (tagNames.length) {
+//         const placeholders = tagNames.map(() => '?').join(',');
+//         const ownerFilter = await tagsOwnerWhere(ownerId);
+//         const [trs]: any = await db.execute(
+//           `SELECT id FROM tags WHERE ${ownerFilter.where} AND name IN (${placeholders})`,
+//           [...ownerFilter.params, ...tagNames]
+//         );
+//         allTagIds = allTagIds.concat(trs.map((r: any) => r.id));
+//       }
+
+//       const uniqueIds = Array.from(new Set(allTagIds.map(Number).filter(Number.isFinite)));
+//       if (uniqueIds.length) {
+//         if (tagMode === 'AND') {
+//           join += `
+//             JOIN (
+//               SELECT it.item_id
+//               FROM item_tags it
+//               WHERE it.tag_id IN (${uniqueIds.map(() => '?').join(',')})
+//               GROUP BY it.item_id
+//               HAVING COUNT(DISTINCT it.tag_id) = ${uniqueIds.length}
+//             ) tfilter ON tfilter.item_id = i.id`;
+//           joinParams.push(...uniqueIds);
+//         } else {
+//           join += `
+//             JOIN item_tags itf
+//               ON itf.item_id = i.id
+//              AND itf.tag_id IN (${uniqueIds.map(() => '?').join(',')})`;
+//           joinParams.push(...uniqueIds);
+//         }
+//       }
+//     }
+
+//     const { join: attrJoin, params: attrParams } = await buildAttrJoins(ownerId, attrFilters);
+//     join += attrJoin;
+//     joinParams.push(...attrParams);
+
+//     const offset = Number.isFinite(Number(q.offset)) && Number(q.offset) >= 0 ? Number(q.offset) : 0;
+//     const limit  = Number.isFinite(Number(q.limit))  && Number(q.limit)  >  0 ? Number(q.limit)  : 20;
+
+//     const sql = `
+//       SELECT DISTINCT
+//         i.id,
+//         i.title,
+//         i.country,
+//         i.issue_year AS issueYear,
+//         i.created_at AS createdAt,
+//         (
+//           SELECT TOP 1 file_path
+//           FROM item_images
+//           WHERE item_id = i.id
+//           ORDER BY is_primary DESC, id ASC
+//         ) AS cover
+//       FROM philatelic_items i
+//       ${join}
+//       WHERE ${where.join(' AND ')}
+//       ORDER BY createdAt DESC
+//       OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
+
+//     const [rows]: any = await db.execute(sql, [...joinParams, ...whereParams]);
+//     const out = rows.map((r: any) => ({ ...r, cover: toPublicUrl(r.cover) }));
+//     reply.send(out);
+//   } catch (e:any) {
+//     if (e.message === 'UNAUTHORIZED') return reply.code(401).send({ message: 'unauthorized' });
+//     reply.code(500).send({ message: e?.message || 'internal_error' });
+//   }
+// });
 app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -703,7 +794,9 @@ app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any)
     const attrs = parseJsonSafely(q.attrs, undefined);
 
     const f = {
-      q: q.q, country: q.country, condition: q.condition,
+      q: q.q,
+      country: q.country,
+      condition: q.condition,
       yearFrom: q.yearFrom ? Number(q.yearFrom) : undefined,
       yearTo:   q.yearTo   ? Number(q.yearTo)   : undefined,
       tagIds: Array.isArray(q.tagIds) ? q.tagIds : (q.tagIds ? [q.tagIds] : []),
@@ -712,8 +805,14 @@ app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any)
       attrs
     };
 
-    const { where, params: whereParams, tagIds, tagNames, tagMode, attrFilters } =
-      buildWhereFromFilter(ownerId, f);
+    const {
+      where,
+      params: whereParams,
+      tagIds,
+      tagNames,
+      tagMode,
+      attrFilters
+    } = buildWhereFromFilter(ownerId, f);
 
     let join = '';
     const joinParams: any[] = [];
@@ -731,7 +830,10 @@ app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any)
         allTagIds = allTagIds.concat(trs.map((r: any) => r.id));
       }
 
-      const uniqueIds = Array.from(new Set(allTagIds.map(Number).filter(Number.isFinite)));
+      const uniqueIds = Array.from(
+        new Set(allTagIds.map(Number).filter(Number.isFinite))
+      );
+
       if (uniqueIds.length) {
         if (tagMode === 'AND') {
           join += `
@@ -757,8 +859,14 @@ app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any)
     join += attrJoin;
     joinParams.push(...attrParams);
 
-    const offset = Number.isFinite(Number(q.offset)) && Number(q.offset) >= 0 ? Number(q.offset) : 0;
-    const limit  = Number.isFinite(Number(q.limit))  && Number(q.limit)  >  0 ? Number(q.limit)  : 20;
+    const offset =
+      Number.isFinite(Number(q.offset)) && Number(q.offset) >= 0
+        ? Number(q.offset)
+        : 0;
+    const limit =
+      Number.isFinite(Number(q.limit)) && Number(q.limit) > 0
+        ? Number(q.limit)
+        : 20;
 
     const sql = `
       SELECT DISTINCT
@@ -780,13 +888,26 @@ app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any)
       OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
 
     const [rows]: any = await db.execute(sql, [...joinParams, ...whereParams]);
-    const out = rows.map((r: any) => ({ ...r, cover: toPublicUrl(r.cover) }));
+
+    // 🔹 normaliza la URL de cover
+    const out = rows.map((r: any) => {
+      const rel = toPublicUrl(r.cover);   // "/uploads/..."
+      const abs = toAbsoluteUrl(rel);     // "https://filatelia-api.../uploads/..."
+      return {
+        ...r,
+        cover: abs || rel,
+      };
+    });
+
     reply.send(out);
-  } catch (e:any) {
-    if (e.message === 'UNAUTHORIZED') return reply.code(401).send({ message: 'unauthorized' });
+  } catch (e: any) {
+    if (e.message === 'UNAUTHORIZED') {
+      return reply.code(401).send({ message: 'unauthorized' });
+    }
     reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });
+
 
 // GET /items/:id
 // app.get('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -1364,6 +1485,137 @@ app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) 
   }
 });
 
+// app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     if (req.method === 'GET' && req.body != null) {
+//       try { req.log?.warn({ bodyType: typeof req.body }, 'GET con body recibido; se ignora'); } catch {}
+//       // @ts-ignore
+//       req.body = undefined;
+//     }
+
+//     const ownerId = ensureAuth(req);
+//     const id = Number(req.params.id);
+//     if (!Number.isFinite(id)) return reply.code(400).send({ message: 'id inválido' });
+
+//     const [rows]: any = await db.execute(
+//       `SELECT TOP 1 id, type, filter_json, sort_key, sort_dir
+//          FROM collections
+//         WHERE id = ? AND owner_user_id = ?`,
+//       [id, ownerId]
+//     );
+//     const col = rows?.[0];
+//     if (!col) return reply.code(404).send({ message: 'not_found' });
+
+//     let items: any[] = [];
+
+//     if (col.type === 'static') {
+//       const [is]: any = await db.execute(
+//         `SELECT i.id,
+//                 i.title,
+//                 i.country,
+//                 i.issue_year AS issueYear,
+//                 (
+//                   SELECT TOP 1 file_path
+//                   FROM item_images
+//                   WHERE item_id = i.id
+//                   ORDER BY is_primary DESC, id ASC
+//                 ) AS cover
+//            FROM collection_items ci
+//            JOIN philatelic_items i
+//              ON i.id = ci.item_id
+//             AND i.owner_user_id = ?
+//           WHERE ci.collection_id = ?
+//           ORDER BY i.${col.sort_key || 'issue_year'} ${String(col.sort_dir || 'asc').toUpperCase()}`,
+//         [ownerId, id]
+//       );
+//       items = is;
+//     } else {
+//       let f: any = {};
+//       try {
+//         const raw = col.filter_json;
+//         if (raw == null || raw === '') f = {};
+//         else if (typeof raw === 'string') f = JSON.parse(raw);
+//         else if (Buffer.isBuffer(raw)) f = JSON.parse(raw.toString('utf8'));
+//         else if (typeof raw === 'object') f = raw;
+//         else f = {};
+//       } catch {
+//         f = {};
+//       }
+
+//       const { where, params, tagIds, tagNames, tagMode, attrFilters } = buildWhereFromFilter(ownerId, f);
+//       let join = '';
+
+//       if ((tagIds.length + tagNames.length) > 0) {
+//         let allTagIds = [...tagIds];
+
+//         if (tagNames.length) {
+//           const placeholders = tagNames.map(() => '?').join(',');
+//           const ownerFilter = await tagsOwnerWhere(ownerId);
+//           const [trs]: any = await db.execute(
+//             `SELECT id
+//                FROM tags
+//               WHERE ${ownerFilter.where}
+//                 AND name IN (${placeholders})`,
+//             [...ownerFilter.params, ...tagNames]
+//           );
+//           allTagIds = allTagIds.concat(trs.map((r: any) => r.id));
+//         }
+
+//         const uniqueIds = Array.from(new Set(allTagIds.map(Number).filter(Number.isFinite)));
+//         if (uniqueIds.length) {
+//           if (tagMode === 'AND') {
+//             join += `
+//               JOIN (
+//                 SELECT it.item_id
+//                   FROM item_tags it
+//                  WHERE it.tag_id IN (${uniqueIds.map(() => '?').join(',')})
+//                  GROUP BY it.item_id
+//                 HAVING COUNT(DISTINCT it.tag_id) = ${uniqueIds.length}
+//               ) tfilter ON tfilter.item_id = i.id`;
+//             params.push(...uniqueIds);
+//           } else {
+//             join += `
+//               JOIN item_tags itf
+//                 ON itf.item_id = i.id
+//                AND itf.tag_id IN (${uniqueIds.map(() => '?').join(',')})`;
+//             params.push(...uniqueIds);
+//           }
+//         }
+//       }
+
+//       const { join: attrJoin, params: attrParams } = await buildAttrJoins(ownerId, attrFilters);
+//       join += attrJoin;
+//       params.push(...attrParams);
+
+//       const sql = `
+//         SELECT DISTINCT
+//                i.id,
+//                i.title,
+//                i.country,
+//                i.issue_year AS issueYear,
+//                (
+//                  SELECT TOP 1 file_path
+//                  FROM item_images
+//                  WHERE item_id = i.id
+//                  ORDER BY is_primary DESC, id ASC
+//                ) AS cover
+//           FROM philatelic_items i
+//           ${join}
+//          WHERE ${where.join(' AND ')}
+//          ORDER BY i.${col.sort_key || 'issue_year'} ${String(col.sort_dir || 'asc').toUpperCase()}`;
+
+//       const [is]: any = await db.execute(sql, params);
+//       items = is;
+//     }
+
+//     const out = items.map((r:any) => ({ ...r, cover: toPublicUrl(r.cover) }));
+//     reply.send(out);
+//   } catch (e: any) {
+//     req.log?.error(e, 'Error en GET /collections/:id/items');
+//     reply.code(500).send({ message: e?.message || 'internal_error' });
+//   }
+// });
+
 app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     if (req.method === 'GET' && req.body != null) {
@@ -1487,13 +1739,20 @@ app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, re
       items = is;
     }
 
-    const out = items.map((r:any) => ({ ...r, cover: toPublicUrl(r.cover) }));
+    // 🔹 AQUÍ el cambio importante
+    const out = items.map((r: any) => {
+      const rel = toPublicUrl(r.cover);   // "/uploads/..."
+      const abs = toAbsoluteUrl(rel);     // "https://filatelia-api.../uploads/..."
+      return { ...r, cover: abs || rel };
+    });
+
     reply.send(out);
   } catch (e: any) {
     req.log?.error(e, 'Error en GET /collections/:id/items');
     reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });
+
 
 app.post('/collections/:id/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
@@ -1663,6 +1922,184 @@ app.get('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: an
 });
 
 // ------------------- SUB-BÚSQUEDA EN COLECCIÓN -------------------
+// app.get('/collections/:id/items/search-sub', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+//     const colId = Number(req.params.id);
+//     if (!Number.isFinite(colId)) return reply.code(400).send({ message: 'id inválido' });
+
+//     const [crows]: any = await db.execute(
+//       `SELECT TOP 1 id, type, filter_json, sort_key, sort_dir
+//          FROM collections
+//         WHERE id = ? AND owner_user_id = ?`,
+//       [colId, ownerId]
+//     );
+//     const col = crows?.[0];
+//     if (!col) return reply.code(404).send({ message: 'collection_not_found' });
+
+//     const q:any = req.query || {};
+//     const attrsExtra = parseJsonSafely(q.attrs, undefined);
+//     const extra = {
+//       q: q.q, country: q.country, condition: q.condition,
+//       yearFrom: q.yearFrom ? Number(q.yearFrom) : undefined,
+//       yearTo:   q.yearTo   ? Number(q.yearTo)   : undefined,
+//       tagIds:   Array.isArray(q.tagIds)   ? q.tagIds   : (q.tagIds   ? [q.tagIds]   : []),
+//       tagNames: Array.isArray(q.tagNames) ? q.tagNames : (q.tagNames ? [q.tagNames] : []),
+//       tagsMode: q.tagsMode,
+//       attrs:    attrsExtra
+//     };
+
+//     const offset = Number.isFinite(Number(q.offset)) && Number(q.offset) >= 0 ? Number(q.offset) : 0;
+//     const limit  = Number.isFinite(Number(q.limit))  && Number(q.limit)  >  0 ? Number(q.limit)  : 25;
+
+//     let baseJoin = '';
+//     const baseJoinParams:any[] = [];
+//     let whereParts:string[] = [];
+//     const whereParams:any[] = [];
+
+//     if (col.type === 'static') {
+//       baseJoin += ' JOIN collection_items ci ON ci.item_id = i.id AND ci.collection_id = ? ';
+//       baseJoinParams.push(colId);
+//       whereParts.push('i.owner_user_id = ?');
+//       whereParams.push(ownerId);
+//     } else {
+//       let fParent:any = {};
+//       try {
+//         const raw = col.filter_json;
+//         fParent = raw == null
+//           ? {}
+//           : (typeof raw === 'string'
+//               ? JSON.parse(raw)
+//               : (Buffer.isBuffer(raw)
+//                   ? JSON.parse(raw.toString('utf8'))
+//                   : raw));
+//       } catch { fParent = {}; }
+
+//       const { where: pWhere, params: pParams, tagIds: pTagIds, tagNames: pTagNames, tagMode: pTagMode, attrFilters: pAttr } =
+//         buildWhereFromFilter(ownerId, fParent);
+
+//       whereParts.push(...pWhere);
+//       whereParams.push(...pParams);
+
+//       if ((pTagIds.length + pTagNames.length) > 0) {
+//         let all = [...pTagIds];
+//         if (pTagNames.length) {
+//           const placeholders = pTagNames.map(()=>'?').join(',');
+//           const ownerFilter = await tagsOwnerWhere(ownerId);
+//           const [trs]: any = await db.execute(
+//             `SELECT id FROM tags WHERE ${ownerFilter.where} AND name IN (${placeholders})`,
+//             [...ownerFilter.params, ...pTagNames]
+//           );
+//           all = all.concat(trs.map((r:any)=>r.id));
+//         }
+//         const unique = Array.from(new Set(all.map(Number).filter(Number.isFinite)));
+//         if (unique.length) {
+//           if (String(pTagMode||'OR').toUpperCase()==='AND') {
+//             baseJoin += `
+//               JOIN (
+//                 SELECT it.item_id
+//                   FROM item_tags it
+//                  WHERE it.tag_id IN (${unique.map(()=>'?').join(',')})
+//                  GROUP BY it.item_id
+//                 HAVING COUNT(DISTINCT it.tag_id) = ${unique.length}
+//               ) tfilter_parent ON tfilter_parent.item_id = i.id`;
+//             baseJoinParams.push(...unique);
+//           } else {
+//             baseJoin += `
+//               JOIN item_tags itf_parent
+//                 ON itf_parent.item_id = i.id
+//                AND itf_parent.tag_id IN (${unique.map(()=>'?').join(',')})`;
+//             baseJoinParams.push(...unique);
+//           }
+//         }
+//       }
+
+//       const { join: aj, params: ap } = await buildAttrJoins(ownerId, pAttr);
+//       baseJoin += aj; baseJoinParams.push(...ap);
+//     }
+
+//     const { where: eWhere, params: eParams, tagIds: eTagIds, tagNames: eTagNames, tagMode: eTagMode, attrFilters: eAttr } =
+//       buildWhereFromFilter(ownerId, extra);
+
+//     const eWhereFiltered:string[] = [];
+//     const eParamsFiltered:any[] = [];
+//     eWhere.forEach((w:string, idx:number) => {
+//       if (w.trim() !== 'i.owner_user_id = ?') {
+//         eWhereFiltered.push(w);
+//         eParamsFiltered.push(eParams[idx]);
+//       }
+//     });
+
+//     whereParts = [...whereParts, ...eWhereFiltered];
+//     whereParams.push(...eParamsFiltered);
+
+//     let joinExtra = '';
+//     const joinExtraParams:any[] = [];
+//     if ((eTagIds.length + eTagNames.length) > 0) {
+//       let all = [...eTagIds];
+//       if (eTagNames.length) {
+//         const placeholders = eTagNames.map(()=>'?').join(',');
+//         const ownerFilter = await tagsOwnerWhere(ownerId);
+//         const [trs]: any = await db.execute(
+//           `SELECT id FROM tags WHERE ${ownerFilter.where} AND name IN (${placeholders})`,
+//           [...ownerFilter.params, ...eTagNames]
+//         );
+//         all = all.concat(trs.map((r:any)=>r.id));
+//       }
+//       const unique = Array.from(new Set(all.map(Number).filter(Number.isFinite)));
+//       if (unique.length) {
+//         if (String(eTagMode||'OR').toUpperCase()==='AND') {
+//           joinExtra += `
+//             JOIN (
+//               SELECT it.item_id
+//                 FROM item_tags it
+//                WHERE it.tag_id IN (${unique.map(()=>'?').join(',')})
+//                GROUP BY it.item_id
+//               HAVING COUNT(DISTINCT it.tag_id) = ${unique.length}
+//             ) tfilter_extra ON tfilter_extra.item_id = i.id`;
+//           joinExtraParams.push(...unique);
+//         } else {
+//           joinExtra += `
+//             JOIN item_tags itf_extra
+//               ON itf_extra.item_id = i.id
+//              AND itf_extra.tag_id IN (${unique.map(()=>'?').join(',')})`;
+//           joinExtraParams.push(...unique);
+//         }
+//       }
+//     }
+
+//     const { join: aj2, params: ap2 } = await buildAttrJoins(ownerId, eAttr);
+//     joinExtra += aj2; joinExtraParams.push(...ap2);
+
+//     const sql = `
+//       SELECT DISTINCT
+//         i.id,
+//         i.title,
+//         i.country,
+//         i.issue_year AS issueYear,
+//         (
+//           SELECT TOP 1 file_path
+//           FROM item_images
+//           WHERE item_id=i.id
+//           ORDER BY is_primary DESC, id ASC
+//         ) AS cover
+//       FROM philatelic_items i
+//       ${baseJoin}
+//       ${joinExtra}
+//       WHERE ${whereParts.join(' AND ')}
+//       ORDER BY i.${col.sort_key || 'issue_year'} ${String(col.sort_dir || 'asc').toUpperCase()}
+//       OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
+
+//     const params = [...baseJoinParams, ...joinExtraParams, ...whereParams];
+//     const [rows]: any = await db.execute(sql, params);
+//     reply.send(rows);
+//   } catch (e:any) {
+//     if (e?.message === 'UNAUTHORIZED') return reply.code(401).send({ message: 'unauthorized' });
+//     req.log?.error(e);
+//     reply.code(500).send({ message: e?.message || 'internal_error' });
+//   }
+// });
+
 app.get('/collections/:id/items/search-sub', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -1833,13 +2270,22 @@ app.get('/collections/:id/items/search-sub', { preHandler: authGuard }, async (r
 
     const params = [...baseJoinParams, ...joinExtraParams, ...whereParams];
     const [rows]: any = await db.execute(sql, params);
-    reply.send(rows);
+
+    // 🔹 normalizamos cover a URL absoluta
+    const out = rows.map((r: any) => {
+      const rel = toPublicUrl(r.cover);   // "/uploads/..."
+      const abs = toAbsoluteUrl(rel);     // "https://filatelia-api.../uploads/..."
+      return { ...r, cover: abs || rel };
+    });
+
+    reply.send(out);
   } catch (e:any) {
     if (e?.message === 'UNAUTHORIZED') return reply.code(401).send({ message: 'unauthorized' });
     req.log?.error(e);
     reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });
+
 
 // =================== PRESENTATIONS: derive colecciones ===================
 app.post(
@@ -2224,10 +2670,65 @@ app.post('/presentations', { preHandler: authGuard }, async (req: any, reply: an
   }
 });
 
+// app.get('/presentations', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+//     const q = req.query || {};
+//     const offset = Number.isFinite(Number(q.offset)) && Number(q.offset) >= 0 ? Number(q.offset) : 0;
+//     const limit  = Number.isFinite(Number(q.limit))  && Number(q.limit)  >  0 ? Math.min(Number(q.limit), 100) : 20;
+
+//     const [rows]: any = await db.execute(
+//       `SELECT p.id,
+//               p.title,
+//               p.description,
+//               p.cover_image_path AS cover,
+//               p.collection_id,
+//               p.created_at,
+//               p.updated_at
+//          FROM presentations p
+//         WHERE p.owner_user_id = ?
+//         ORDER BY p.updated_at DESC
+//         OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`,
+//       [ownerId]
+//     );
+//     reply.send(rows);
+//   } catch (e:any) {
+//     reply.code(500).send({ message: e?.message || 'internal_error' });
+//   }
+// });
+
+// app.get('/presentations/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+//     const id = Number(req.params.id);
+//     if (!Number.isFinite(id)) return reply.code(400).send({ message: 'id inválido' });
+
+//     const [rows]: any = await db.execute(
+//       `SELECT TOP 1
+//               p.id,
+//               p.title,
+//               p.description,
+//               p.cover_image_path AS cover,
+//               p.collection_id,
+//               p.created_at,
+//               p.updated_at,
+//               (SELECT COUNT(*)
+//                  FROM presentation_assets a
+//                 WHERE a.presentation_id = p.id) AS assetsCount
+//          FROM presentations p
+//         WHERE p.id = ? AND p.owner_user_id = ?`,
+//       [id, ownerId]
+//     );
+//     if (!rows.length) return reply.code(404).send({ message: 'not_found' });
+//     reply.send(rows[0]);
+//   } catch (e:any) {
+//     reply.code(500).send({ message: e?.message || 'internal_error' });
+//   }
+// });
 app.get('/presentations', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
-    const q = req.query || {};
+    const q: any = req.query || {};
     const offset = Number.isFinite(Number(q.offset)) && Number(q.offset) >= 0 ? Number(q.offset) : 0;
     const limit  = Number.isFinite(Number(q.limit))  && Number(q.limit)  >  0 ? Math.min(Number(q.limit), 100) : 20;
 
@@ -2245,11 +2746,19 @@ app.get('/presentations', { preHandler: authGuard }, async (req: any, reply: any
         OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`,
       [ownerId]
     );
-    reply.send(rows);
+
+    const out = (rows || []).map((r: any) => {
+      const rel = toPublicUrl(r.cover);   // "/uploads/..."
+      const abs = toAbsoluteUrl(rel);     // "https://filatelia-api.../uploads/..."
+      return { ...r, cover: abs || rel };
+    });
+
+    reply.send(out);
   } catch (e:any) {
     reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });
+
 
 app.get('/presentations/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
@@ -2274,11 +2783,20 @@ app.get('/presentations/:id', { preHandler: authGuard }, async (req: any, reply:
       [id, ownerId]
     );
     if (!rows.length) return reply.code(404).send({ message: 'not_found' });
-    reply.send(rows[0]);
+
+    const row = rows[0];
+
+    // 🔹 normaliza la portada
+    const rel = toPublicUrl(row.cover);   // "/uploads/..."
+    const abs = toAbsoluteUrl(rel);       // "https://filatelia-api.../uploads/..."
+    const out = { ...row, cover: abs || rel };
+
+    reply.send(out);
   } catch (e:any) {
     reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });
+
 
 app.put('/presentations/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
