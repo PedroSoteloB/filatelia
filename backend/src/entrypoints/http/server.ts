@@ -854,26 +854,22 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
     // ================== PARSEO BODY / FILES ==================
     if (isMultipart) {
+      // ----- multipart/form-data -----
       const parts = await (req.parts?.() as AsyncIterable<any>);
-      if (!parts) {
-        return reply.code(400).send({ message: 'multipart requerido' });
-      }
+      if (!parts) return reply.code(400).send({ message: 'multipart requerido' });
 
       const allowed = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
       const maxImages = 12;
 
       for await (const p of parts) {
-        // campo metadata (JSON)
+        // Campo de texto "metadata"
         if (p?.type === 'field' && p.fieldname === 'metadata') {
-          try {
-            meta = JSON.parse(String(p.value ?? '{}'));
-          } catch {
-            return reply.code(400).send({ message: 'metadata inválido (JSON)' });
-          }
+          try { meta = JSON.parse(String(p.value ?? '{}')); }
+          catch { return reply.code(400).send({ message: 'metadata inválido (JSON)' }); }
           continue;
         }
 
-        // archivos
+        // Archivos (image1, image2, ...)
         if (p?.type === 'file') {
           if (files.length >= maxImages) {
             await p.file?.resume?.();
@@ -883,18 +879,15 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           const filename = String(p.filename ?? 'image');
           const mime = String(p.mimetype ?? '');
           if (!buf?.length) continue;
-
           if (!allowed.has(mime)) {
-            return reply
-              .code(400)
-              .send({ message: 'Formato no soportado (JPG/PNG/WEBP/GIF)' });
+            return reply.code(400).send({ message: 'Formato no soportado (JPG/PNG/WEBP/GIF)' });
           }
-
           files.push({ buffer: buf, filename, mime });
           continue;
         }
       }
     } else {
+      // ----- application/json -----
       meta = req.body || null;
     }
 
@@ -911,6 +904,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       return reply.code(400).send({ message: 'al menos una imagen requerida' });
     }
 
+    // Siempre público
     const visibility = 'public';
 
     // ================== INSERT PRINCIPAL ==================
@@ -940,18 +934,13 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     if (files.length) {
       const fs = require('fs');
       const path = require('path');
-      const base =
-        process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
+      const base = process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
       if (!fs.existsSync(base)) fs.mkdirSync(base, { recursive: true });
 
       for (const [i, f] of files.entries()) {
-        const safeName = `${itemId}-${Date.now()}-${i}-${f.filename}`.replace(
-          /[^\w.\-]+/g,
-          '_'
-        );
+        const safeName = `${itemId}-${Date.now()}-${i}-${f.filename}`.replace(/[^\w.\-]+/g, '_');
         const fullPath = path.join(base, safeName);
         fs.writeFileSync(fullPath, f.buffer);
-
         await db.execute(
           'INSERT INTO item_images (item_id, file_path, is_primary) VALUES (?,?,?)',
           [itemId, fullPath, i === 0 ? 1 : 0]
@@ -959,85 +948,78 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       }
     }
 
-    // ================== TAGS ==================
+    // ================== TAGS (TEMAS) ==================
     if (Array.isArray(meta?.tags) && meta.tags.length) {
       const tagNames: string[] = meta.tags
         .map((t: any) => String(t ?? '').trim())
         .filter(Boolean);
 
-      const tagIds: number[] = [];
+      const ids: number[] = [];
 
       for (const name of tagNames) {
-        // En dbo.tags la PK es "id"
+        // MySQL: ... LIMIT 1   →   SQL Server: TOP 1 ...
         const [ex]: any = await db.execute(
-          'SELECT TOP 1 id FROM dbo.tags WHERE owner_user_id = ? AND name = ?',
+          'SELECT TOP 1 id FROM tags WHERE owner_user_id = ? AND name = ?',
           [ownerId, name]
         );
 
-        let tagId: number;
-
         if (ex.length) {
-          tagId = Number(ex[0].id);
+          ids.push(Number(ex[0].id));
         } else {
           const [ins]: any = await db.execute(
-            'INSERT INTO dbo.tags (name, owner_user_id) VALUES (?,?)',
+            'INSERT INTO tags (name, owner_user_id) VALUES (?,?)',
             [name, ownerId]
           );
-          tagId = Number(ins.insertId);
+          ids.push(Number(ins.insertId));
         }
-
-        tagIds.push(tagId);
       }
 
-      // Relaciones únicas item_tags (item_id, tag_id)
-      for (const tid of Array.from(new Set(tagIds))) {
+      // MySQL: INSERT IGNORE → SQL Server: IF NOT EXISTS ... INSERT
+      for (const tid of Array.from(new Set(ids))) {
         await db.execute(
-          `IF NOT EXISTS (SELECT 1 FROM dbo.item_tags WHERE item_id = ? AND tag_id = ?)
-             INSERT INTO dbo.item_tags (item_id, tag_id) VALUES (?, ?)`,
+          `IF NOT EXISTS (SELECT 1 FROM item_tags WHERE item_id = ? AND tag_id = ?)
+             INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)`,
           [itemId, tid, itemId, tid]
         );
       }
     }
 
-    // ================== ATRIBUTOS DINÁMICOS ==================
+    // ================== CATEGORÍAS / ATRIBUTOS DINÁMICOS ==================
     if (Array.isArray(meta?.categories) && meta.categories.length) {
       for (const c of meta.categories) {
         if (!c || !c.name) continue;
         const attrName = String(c.name).trim();
         if (!attrName) continue;
 
+        // obtener/crear definición
         let attrId: number | null = null;
 
-        // attribute_definitions también tiene PK "id"
         const [exA]: any = await db.execute(
-          'SELECT TOP 1 id FROM dbo.attribute_definitions WHERE owner_user_id = ? AND name = ?',
+          'SELECT TOP 1 id FROM attribute_definitions WHERE owner_user_id = ? AND name = ?',
           [ownerId, attrName]
         );
 
         if (exA.length) {
           attrId = Number(exA[0].id);
         } else {
-          const aType = ['text', 'number', 'date', 'list'].includes(
-            String(c.attrType)
-          )
+          const aType = ['text', 'number', 'date', 'list'].includes(String(c.attrType))
             ? String(c.attrType)
             : 'text';
 
+          // OJO: created_at es NOT NULL → lo seteamos con SYSUTCDATETIME()
           const [insA]: any = await db.execute(
-            'INSERT INTO dbo.attribute_definitions (owner_user_id, name, attr_type) VALUES (?,?,?)',
+            `INSERT INTO attribute_definitions
+               (owner_user_id, name, attr_type, created_at)
+             VALUES (?,?,?, SYSUTCDATETIME())`,
             [ownerId, attrName, aType]
           );
           attrId = Number(insA.insertId);
         }
         if (!attrId) continue;
 
+        // decidir value_*
         const v = c.value;
-        const vText =
-          typeof v === 'string'
-            ? v
-            : v != null && typeof v.toString === 'function'
-              ? String(v)
-              : null;
+        const vText = typeof v === 'string' ? v : null;
         const vNum =
           typeof v === 'number'
             ? v
@@ -1046,15 +1028,14 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
               : null;
         const vDate = c.attrType === 'date' && v ? v : null; // 'YYYY-MM-DD'
 
-        // borro valor anterior del mismo atributo para este item
+        // borrar valor anterior del mismo atributo para este item
         await db.execute(
-          'DELETE FROM dbo.item_attributes WHERE item_id = ? AND attribute_id = ?',
+          'DELETE FROM item_attributes WHERE item_id = ? AND attribute_id = ?',
           [itemId, attrId]
         );
 
         await db.execute(
-          `INSERT INTO dbo.item_attributes
-             (item_id, attribute_id, value_text, value_number, value_date)
+          `INSERT INTO item_attributes (item_id, attribute_id, value_text, value_number, value_date)
            VALUES (?,?,?,?,?)`,
           [itemId, attrId, vText ?? null, vNum ?? null, vDate ?? null]
         );
@@ -1068,9 +1049,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       return reply.code(401).send({ message: 'unauthorized' });
     }
     req.log?.error(e);
-    reply
-      .code(500)
-      .send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });
 
