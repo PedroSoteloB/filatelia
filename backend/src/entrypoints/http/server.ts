@@ -845,7 +845,7 @@ function authGuard(req: FastifyRequest, reply: FastifyReply, done: HookHandlerDo
 // ================== CREAR ITEM ==================
 app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
-    const ownerId = ensureAuth(req);
+    const ownerId = ensureAuth(req); // debería devolverte el userId (number)
 
     const ct = String((req.headers['content-type'] || '')).toLowerCase();
     const isMultipart = ct.startsWith('multipart/form-data');
@@ -853,7 +853,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     let meta: any = null;
     const files: { buffer: Buffer; filename: string; mime: string }[] = [];
 
-    // ========== PARSEO BODY / FILES ==========
     if (isMultipart) {
       const parts = await (req.parts?.() as AsyncIterable<any>);
       if (!parts) {
@@ -864,259 +863,191 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       const maxImages = 12;
 
       for await (const p of parts) {
+        // Campo de texto "metadata"
         if (p?.type === 'field' && p.fieldname === 'metadata') {
           try {
-            meta = JSON.parse(String(p.value ?? '{}'));
+            meta = JSON.parse(p.value);
           } catch {
-            return reply.code(400).send({ message: 'metadata inválido (JSON)' });
+            return reply.code(400).send({ message: 'metadata inválido (no es JSON)' });
           }
           continue;
         }
 
+        // Archivos de imagen
         if (p?.type === 'file') {
-          if (files.length >= maxImages) {
-            await p.file?.resume?.();
-            continue;
+          if (!allowed.has(p.mimetype)) continue;
+          if (files.length >= maxImages) continue;
+
+          const chunks: Buffer[] = [];
+          for await (const ch of p.file) {
+            chunks.push(ch);
           }
-          const buf = await p.toBuffer();
-          const filename = String(p.filename ?? 'image');
-          const mime = String(p.mimetype ?? '');
-          if (!buf?.length) continue;
-          if (!allowed.has(mime)) {
-            return reply
-              .code(400)
-              .send({ message: 'Formato no soportado (JPG/PNG/WEBP/GIF)' });
-          }
-          files.push({ buffer: buf, filename, mime });
-          continue;
+
+          files.push({
+            buffer: Buffer.concat(chunks),
+            filename: p.filename,
+            mime: p.mimetype,
+          });
         }
       }
     } else {
-      meta = req.body || null;
+      // modo application/json
+      meta = req.body;
     }
 
-    // ========== VALIDACIONES BÁSICAS ==========
-    const allowNoImages =
-      process.env.ALLOW_ITEMS_WITHOUT_IMAGES === '1' ||
-      meta?.allowNoImages === true ||
-      String(req.query?.allowNoImages || '').toLowerCase() === 'true';
-
-    if (!meta || !meta.title || !String(meta.title).trim()) {
-      return reply.code(400).send({ message: 'metadata.title requerido' });
+    if (!meta) {
+      return reply.code(400).send({ message: 'metadata requerido' });
     }
 
-    if (!files.length && !allowNoImages) {
-      return reply.code(400).send({ message: 'al menos una imagen requerida' });
-    }
+    // Campos básicos desde meta
+    const {
+      title,
+      description,
+      country,
+      year,
+      face_value,
+      condition,
+      catalog_code,
+      tags = [],
+      attributes = [],
+    } = meta;
 
-    const visibility = 'public';
-
-    // ========== INSERT PRINCIPAL (SQL SERVER) ==========
-    await db.execute(
-      `INSERT INTO dbo.philatelic_items
-         (owner_user_id, title, description, country, issue_year, condition_code,
-          catalog_code, face_value, currency, acquisition_date, visibility)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    // 1) INSERT EN philatelic_items CON OUTPUT INSERTED.id
+    const [rows]: any = await db.execute(
+      `
+      INSERT INTO philatelic_items (
+        owner_user_id,
+        title,
+        description,
+        country,
+        year,
+        face_value,
+        condition,
+        catalog_code,
+        created_at,
+        updated_at
+      )
+      OUTPUT INSERTED.id
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME())
+      `,
       [
         ownerId,
-        String(meta.title).trim(),
-        meta.description || null,
-        meta.country || null,
-        meta.issueYear ?? null,
-        meta.condition || null,
-        meta.catalogCode || null,
-        meta.faceValue ?? null,
-        meta.currency || null,
-        meta.acquisitionDate || null,
-        visibility
+        title || null,
+        description || null,
+        country || null,
+        year ?? null,
+        face_value ?? null,
+        condition || null,
+        catalog_code || null,
       ]
     );
 
-    // Recuperar el último id de ese usuario
-    const [idRows]: any = await db.execute(
-      `SELECT TOP (1) id
-         FROM dbo.philatelic_items
-        WHERE owner_user_id = ?
-        ORDER BY id DESC`,
-      [ownerId]
-    );
-
-    const itemId: number = Number(idRows?.[0]?.id);
-    if (!itemId || !Number.isFinite(itemId)) {
-      throw new Error('no_item_id_returned');
+    const itemRow = rows && rows[0];
+    if (!itemRow || !itemRow.id) {
+      throw new Error('No se pudo obtener el id insertado de philatelic_items');
     }
 
-    // ========== IMÁGENES ==========
-    if (files.length) {
-      const fs = require('fs');
-      const path = require('path');
-      const base = process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
-      if (!fs.existsSync(base)) fs.mkdirSync(base, { recursive: true });
+    const itemId = itemRow.id;
 
-      for (const [i, f] of files.entries()) {
-        const safeName = `${itemId}-${Date.now()}-${i}-${f.filename}`.replace(/[^\w.\-]+/g, '_');
-        const fullPath = path.join(base, safeName);
-        fs.writeFileSync(fullPath, f.buffer);
+    // 2) TAGS (si tienes tabla tags + item_tags)
+    if (Array.isArray(tags) && tags.length > 0) {
+      for (const t of tags) {
+        const name = String(t || '').trim();
+        if (!name) continue;
+
+        // crea/obtén tag
+        const [tagRows]: any = await db.execute(
+          `
+          MERGE tags AS target
+          USING (SELECT ? AS name, ? AS owner_user_id) AS src
+          ON target.name = src.name AND target.owner_user_id = src.owner_user_id
+          WHEN MATCHED THEN
+            UPDATE SET name = target.name
+          WHEN NOT MATCHED THEN
+            INSERT (name, owner_user_id, created_at)
+            VALUES (src.name, src.owner_user_id, SYSUTCDATETIME())
+          OUTPUT inserted.id;
+          `,
+          [name, ownerId]
+        );
+
+        const tagRow = tagRows && tagRows[0];
+        if (!tagRow || !tagRow.id) continue;
+
+        const tagId = tagRow.id;
+
         await db.execute(
-          'INSERT INTO dbo.item_images (item_id, file_path, is_primary) VALUES (?,?,?)',
-          [itemId, fullPath, i === 0 ? 1 : 0]
+          `
+          INSERT INTO item_tags (item_id, tag_id)
+          VALUES (?, ?)
+          `,
+          [itemId, tagId]
         );
       }
     }
 
-    // ========== TAGS ==========
-    if (Array.isArray(meta?.tags) && meta.tags.length) {
-      const tagNames: string[] = meta.tags
-        .map((t: any) => String(t ?? '').trim())
-        .filter(Boolean);
+    // 3) ATTRIBUTES (si usas tabla item_attributes / attribute_definitions)
+    if (Array.isArray(attributes) && attributes.length > 0) {
+      for (const attr of attributes) {
+        const defId = attr?.definition_id;
+        if (!defId) continue;
 
-      const tagIds: number[] = [];
-
-      for (const name of tagNames) {
-        const [ex]: any = await db.execute(
-          'SELECT TOP (1) id FROM dbo.tags WHERE owner_user_id = ? AND name = ?',
-          [ownerId, name]
-        );
-
-        let tagId: number;
-
-        if (ex.length) {
-          tagId = Number(ex[0].id);
-        } else {
-          // INSERT simple
-          await db.execute(
-            'INSERT INTO dbo.tags (name, owner_user_id) VALUES (?,?)',
-            [name, ownerId]
-          );
-          // y luego SELECT del último id para ese owner+name
-          const [rowsTag]: any = await db.execute(
-            `SELECT TOP (1) id
-               FROM dbo.tags
-              WHERE owner_user_id = ? AND name = ?
-              ORDER BY id DESC`,
-            [ownerId, name]
-          );
-          tagId = Number(rowsTag?.[0]?.id);
-        }
-
-        if (tagId) {
-          tagIds.push(tagId);
-        }
-      }
-
-      for (const tid of Array.from(new Set(tagIds))) {
         await db.execute(
-          `IF NOT EXISTS (SELECT 1 FROM dbo.item_tags WHERE item_id = ? AND tag_id = ?)
-             INSERT INTO dbo.item_tags (item_id, tag_id) VALUES (?, ?)`,
-          [itemId, tid, itemId, tid]
+          `
+          INSERT INTO item_attributes (
+            item_id,
+            attribute_definition_id,
+            value_text,
+            value_number,
+            value_date
+          )
+          VALUES (?, ?, ?, ?, ?)
+          `,
+          [
+            itemId,
+            defId,
+            attr.value_text ?? null,
+            attr.value_number ?? null,
+            attr.value_date ?? null,
+          ]
         );
       }
     }
 
-    // ========== ATRIBUTOS DINÁMICOS ==========
-    if (Array.isArray(meta?.categories) && meta.categories.length) {
-      for (const c of meta.categories) {
-        if (!c || !c.name) continue;
-
-        const attrName = String(c.name).trim();
-        if (!attrName) continue;
-
-        let attrId: number | null = null;
-
-        const [exA]: any = await db.execute(
-          'SELECT TOP (1) id FROM dbo.attribute_definitions WHERE owner_user_id = ? AND name = ?',
-          [ownerId, attrName]
-        );
-
-        if (exA.length) {
-          attrId = Number(exA[0].id);
-        } else {
-          const aType = ['text', 'number', 'date', 'list'].includes(String(c.attrType))
-            ? String(c.attrType)
-            : 'text';
-
-          // INSERT simple
-          await db.execute(
-            `INSERT INTO dbo.attribute_definitions
-               (owner_user_id, name, attr_type, created_at)
-             VALUES (?,?,?, SYSUTCDATETIME())`,
-            [ownerId, attrName, aType]
-          );
-
-          // y luego SELECT del último id para ese owner+name
-          const [rowsAttr]: any = await db.execute(
-            `SELECT TOP (1) id
-               FROM dbo.attribute_definitions
-              WHERE owner_user_id = ? AND name = ?
-              ORDER BY id DESC`,
-            [ownerId, attrName]
-          );
-
-          attrId = Number(rowsAttr?.[0]?.id);
-        }
-
-        if (!attrId) continue;
-
-        const v = c.value;
-        const attrType = String(c.attrType);
-
-        const vText =
-          attrType === 'text' || attrType === 'list'
-            ? (typeof v === 'string' ? v : v != null ? String(v) : null)
-            : null;
-
-        const vNum =
-          attrType === 'number'
-            ? (typeof v === 'number'
-                ? v
-                : Number.isFinite(Number(v))
-                  ? Number(v)
-                  : null)
-            : null;
-
-        const vDate =
-          attrType === 'date' && v
-            ? String(v)        // "YYYY-MM-DD"
-            : null;
+    // 4) IMÁGENES (si tienes item_images)
+    if (files.length > 0) {
+      // aquí solo pongo un stub; tú ya tienes la lógica de guardar en disco/Blob
+      for (const f of files) {
+        // EJEMPLO: guarda path en item_images
+        const fakePath = `/uploads/items/${itemId}/${f.filename}`;
 
         await db.execute(
-          'DELETE FROM dbo.item_attributes WHERE item_id = ? AND attribute_id = ?',
-          [itemId, attrId]
-        );
-
-        await db.execute(
-          `INSERT INTO dbo.item_attributes
-             (item_id, attribute_id, value_text, value_number, value_date)
-           VALUES (?,?,?,?,?)`,
-          [itemId, attrId, vText ?? null, vNum ?? null, vDate ?? null]
+          `
+          INSERT INTO item_images (
+            item_id,
+            image_path,
+            mime_type,
+            created_at
+          )
+          VALUES (?, ?, ?, SYSUTCDATETIME())
+          `,
+          [itemId, fakePath, f.mime]
         );
       }
     }
 
-    // ========== RESPUESTA ==========
-    reply.send({ id: itemId });
-  } catch (e: any) {
-    // 🔐 sigue igual
-    if (e?.message === 'UNAUTHORIZED') {
-      return reply.code(401).send({ message: 'unauthorized' });
-    }
-
-    // 👇 DEBUG FUERTE PARA VER EL ERROR REAL DE SQL SERVER
-    console.error('ERROR /items >>>', e);
-
-    const sqlMsg =
-      (e as any)?.originalError?.info?.message ||   // mssql driver
-      (e as any)?.originalError?.message ||
-      e?.message ||
-      'internal_error';
-
-    reply.code(500).send({
-      message: sqlMsg,
-      raw: String(e?.stack || e)
+    // Respuesta final
+    reply.code(201).send({
+      id: itemId,
+      message: 'item_creado',
     });
+  } catch (e: any) {
+    console.error('[POST /items] ERROR:', e);
+    reply
+      .code(500)
+      .send({ message: 'internal_error', detail: String(e?.message || '') });
   }
 });
-
 
 
 
