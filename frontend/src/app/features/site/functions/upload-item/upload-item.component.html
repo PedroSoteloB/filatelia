@@ -1,77 +1,111 @@
-<!-- src/app/features/site/landing/landing.component.html -->
-<header class="topbar">
-  <div class="brand" (click)="goInicio()" style="cursor:pointer">
-    <svg class="stamp" viewBox="0 0 120 120" aria-hidden="true">
-      <defs>
-        <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#b08968" />
-          <stop offset="100%" stop-color="#7f5539" />
-        </linearGradient>
-      </defs>
-      <rect x="8" y="8" width="104" height="104" rx="8" fill="url(#g1)" opacity="0.2"></rect>
-      <circle cx="60" cy="52" r="24" fill="#85586F"></circle>
-      <path d="M30 82h60" stroke="#85586F" stroke-width="6" stroke-linecap="round" />
-    </svg>
-    <div class="title">
-      <h1>Filatelia</h1>
-      <p>Catálogo personal de sellos</p>
+<!-- src/app/features/site/landing/landing.component.html (vista de upload) -->
+<main class="upload-item-page">
+  <header class="topbar">
+    <div class="brand" (click)="goInicio()" style="cursor:pointer">
+      <svg class="stamp" viewBox="0 0 120 120" aria-hidden="true">
+        <defs>
+          <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#b08968" />
+            <stop offset="100%" stop-color="#7f5539" />
+          </linearGradient>
+        </defs>
+        <rect x="8" y="8" width="104" height="104" rx="8" fill="url(#g1)" opacity="0.2"></rect>
+        <circle cx="60" cy="52" r="24" fill="#85586F"></circle>
+        <path d="M30 82h60" stroke="#85586F" stroke-width="6" stroke-linecap="round" />
+      </svg>
+      <div class="title">
+        <h1>Filatelia</h1>
+        <p>Catálogo personal de sellos</p>
+      </div>
     </div>
-  </div>
 
-  <nav class="actions">
-    <a class="link" (click)="goInicio()">Inicio</a>
+    <nav class="actions">
+      <a class="link" (click)="goInicio()">Inicio</a>
 
-    <!-- Versión autenticada -->
-    <ng-container *ngIf="isAuth; else anon">
-      <button class="btn" (click)="goUpload()">Nueva pieza</button>
-      <button class="btn" (click)="goMyItems()">Mis items</button>
-      <button class="btn" (click)="goSearch()">Búsqueda</button>
-      <button class="btn" (click)="goCollections()">Mis colecciones</button>
-      <button class="btn" (click)="goPresentation()">Mis Presentaciones</button>
-      <button class="btn light" (click)="logout()">Cerrar sesión</button>
-    </ng-container>
+      <!-- Versión autenticada -->
+      <ng-container *ngIf="isAuth; else anon">
+        <button class="btn" (click)="goUpload()">Nueva pieza</button>
+        <button class="btn" (click)="goMyItems()">Mis items</button>
+        <button class="btn" (click)="goSearch()">Búsqueda</button>
+        <button class="btn" (click)="goCollections()">Mis colecciones</button>
+        <button class="btn" (click)="goPresentation()">Mis Presentaciones</button>
+        <button class="btn light" (click)="logout()">Cerrar sesión</button>
+      </ng-container>
 
-    <!-- Versión anónima -->
-    <ng-template #anon>
-      <a class="link" (click)="goLogin()">Iniciar sesión</a>
-    </ng-template>
-  </nav>
-</header>
+      <!-- Versión anónima -->
+      <ng-template #anon>
+        <a class="link" (click)="goLogin()">Iniciar sesión</a>
+      </ng-template>
+    </nav>
+  </header>
 
+  <div class="upload-wrap">
+    <h1 class="page-title">Cargar material filatélico</h1>
 
-<div class="upload-wrap">
-  <h1 class="page-title">Cargar material filatélico</h1>
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="card">
+      <fieldset [disabled]="busy()" [attr.aria-busy]="busy()" class="fieldset">
 
-  <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="card">
-    <fieldset [disabled]="busy()" [attr.aria-busy]="busy()" class="fieldset">
-      <div class="grid-2">
-        <!-- Columna izquierda -->
-        <div class="col">
-          <label class="field">
-            <span class="label">Título *</span>
-            <input type="text" formControlName="title" [attr.maxlength]="200" />
-            <small class="error" *ngIf="form.get('title')?.touched && form.get('title')?.hasError('required')">
-              El título es obligatorio.
-            </small>
-            <small class="error" *ngIf="form.get('title')?.touched && form.get('title')?.hasError('maxlength')">
-              Máximo 200 caracteres.
-            </small>
-          </label>
+        <!-- BLOQUE 1: Datos de la pieza -->
+        <section class="block">
+          <h3>Datos de la pieza</h3>
 
-          <label class="field">
-            <span class="label">Año de emisión</span>
-            <input type="number" formControlName="issueYear" inputmode="numeric" min="1800" max="2100" />
-          </label>
+          <div class="grid-2">
+            <!-- fila 1 -->
+            <label class="field">
+              <span class="label">Título *</span>
+              <input type="text" formControlName="title" [attr.maxlength]="200" />
+              <small class="error" *ngIf="form.get('title')?.touched && form.get('title')?.hasError('required')">
+                El título es obligatorio.
+              </small>
+              <small class="error" *ngIf="form.get('title')?.touched && form.get('title')?.hasError('maxlength')">
+                Máximo 200 caracteres.
+              </small>
+            </label>
 
-          <label class="field">
-            <span class="label">Código de catálogo</span>
-            <input type="text" formControlName="catalogCode" placeholder="Scott/Edifil/Yvert…" />
-          </label>
+            <label class="field">
+              <span class="label">País</span>
+              <input type="text" formControlName="country" />
+            </label>
 
-          <label class="field">
-            <span class="label">Moneda</span>
-            <input type="text" formControlName="currency" placeholder="PEN, USD, etc." />
-          </label>
+            <!-- fila 2 -->
+            <label class="field">
+              <span class="label">Año de emisión</span>
+              <input type="number" formControlName="issueYear" inputmode="numeric" min="1800" max="2100" />
+            </label>
+
+            <label class="field">
+              <span class="label">Valor facial</span>
+              <input type="number" step="0.01" formControlName="faceValue" inputmode="decimal" />
+            </label>
+
+            <!-- fila 3 -->
+            <label class="field">
+              <span class="label">Código de catálogo</span>
+              <input type="text" formControlName="catalogCode" placeholder="Scott/Edifil/Yvert…" />
+            </label>
+
+            <label class="field">
+              <span class="label">Condición</span>
+              <input type="text" formControlName="condition" placeholder="Mint, Usado, CTO, etc." />
+            </label>
+          </div>
+        </section>
+
+        <!-- BLOQUE 2: Información de registro -->
+        <section class="block">
+          <h3>Información de registro</h3>
+
+          <div class="grid-2">
+            <label class="field">
+              <span class="label">Moneda</span>
+              <input type="text" formControlName="currency" placeholder="PEN, USD, etc." />
+            </label>
+
+            <label class="field">
+              <span class="label">Fecha de adquisición</span>
+              <input type="date" formControlName="acquisitionDate" placeholder="dd/mm/aaaa" />
+            </label>
+          </div>
 
           <label class="field">
             <span class="label">Visibilidad</span>
@@ -80,31 +114,12 @@
               <option value="public">Público</option>
             </select>
           </label>
-        </div>
+        </section>
 
-        <!-- Columna derecha -->
-        <div class="col">
-          <label class="field">
-            <span class="label">País</span>
-            <input type="text" formControlName="country" />
-          </label>
+        <!-- BLOQUE 3: Etiquetas -->
+        <section class="block">
+          <h3>Etiquetas</h3>
 
-          <label class="field">
-            <span class="label">Condición</span>
-            <input type="text" formControlName="condition" placeholder="Mint, Usado, CTO, etc." />
-          </label>
-
-          <label class="field">
-            <span class="label">Valor facial</span>
-            <input type="number" step="0.01" formControlName="faceValue" inputmode="decimal" />
-          </label>
-
-          <label class="field">
-            <span class="label">Fecha de adquisición</span>
-            <input type="date" formControlName="acquisitionDate" placeholder="dd/mm/aaaa" />
-          </label>
-
-          <!-- Etiquetas -->
           <div class="field">
             <span class="label">Etiquetas</span>
             <div class="tag-row">
@@ -128,117 +143,122 @@
               </span>
             </div>
           </div>
-        </div>
-      </div>
+        </section>
 
-      <!-- Atributos dinámicos -->
-      <section class="attrs">
-        <h3>Atributos dinámicos</h3>
+        <!-- BLOQUE 4: Atributos dinámicos -->
+        <section class="attrs block">
+          <h3>Atributos dinámicos</h3>
 
-        <div class="attrs-row">
-          <input
-            class="attr-name"
-            type="text"
-            [value]="attrNameDraft()"
-            (input)="onAttrNameInput($event)"
-            placeholder="Nombre" />
-
-          <select
-            class="attr-type"
-            [value]="attrTypeDraft()"
-            (change)="onAttrTypeChange($event)">
-            <option value="text">Texto</option>
-            <option value="number">Número</option>
-            <option value="date">Fecha</option>
-            <option value="list">Lista</option>
-          </select>
-
-          <!-- input de valor que se adapta al tipo -->
-          <ng-container [ngSwitch]="attrTypeDraft()">
+          <div class="attrs-row">
             <input
-              *ngSwitchCase="'number'"
-              class="attr-value"
-              type="number"
-              [value]="attrValueDraft()"
-              (input)="onAttrValueInput($event)"
-              placeholder="Valor número" />
-            <input
-              *ngSwitchCase="'date'"
-              class="attr-value"
-              type="date"
-              [value]="attrValueDraft()"
-              (input)="onAttrValueInput($event)"
-              placeholder="YYYY-MM-DD" />
-            <input
-              *ngSwitchDefault
-              class="attr-value"
+              class="attr-name"
               type="text"
-              [value]="attrValueDraft()"
-              (input)="onAttrValueInput($event)"
-              placeholder="Valor texto" />
-          </ng-container>
+              [value]="attrNameDraft()"
+              (input)="onAttrNameInput($event)"
+              placeholder="Nombre" />
 
-          <button type="button" class="btn" (click)="addAttr()" [disabled]="!attrNameDraft().trim()">
-            Agregar atributo
-          </button>
-        </div>
+            <select
+              class="attr-type"
+              [value]="attrTypeDraft()"
+              (change)="onAttrTypeChange($event)">
+              <option value="text">Texto</option>
+              <option value="number">Número</option>
+              <option value="date">Fecha</option>
+              <option value="list">Lista</option>
+            </select>
 
-        <div class="attr-help">
-          Ejemplos: Dentado (número 12.5), Serie (texto <em>Flora</em>), Fecha de emisión (fecha).
-        </div>
+            <!-- input de valor que se adapta al tipo -->
+            <ng-container [ngSwitch]="attrTypeDraft()">
+              <input
+                *ngSwitchCase="'number'"
+                class="attr-value"
+                type="number"
+                [value]="attrValueDraft()"
+                (input)="onAttrValueInput($event)"
+                placeholder="Valor número" />
+              <input
+                *ngSwitchCase="'date'"
+                class="attr-value"
+                type="date"
+                [value]="attrValueDraft()"
+                (input)="onAttrValueInput($event)"
+                placeholder="YYYY-MM-DD" />
+              <input
+                *ngSwitchDefault
+                class="attr-value"
+                type="text"
+                [value]="attrValueDraft()"
+                (input)="onAttrValueInput($event)"
+                placeholder="Valor texto" />
+            </ng-container>
 
-        <div class="attr-list" *ngIf="attrs().length">
-          <div class="attr-pill" *ngFor="let a of attrs(); index as i">
-            <strong>{{ a.name }}</strong> — <em>{{ a.type }}</em> : <span>{{ a.value }}</span>
-            <button type="button" class="pill-x" (click)="removeAttr(i)" aria-label="Quitar atributo">×</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- Descripción -->
-      <label class="field">
-        <span class="label">Descripción</span>
-        <textarea rows="5" formControlName="description" placeholder="Descripción de la pieza, serie, temática…"></textarea>
-      </label>
-
-      <!-- Imágenes -->
-      <section class="images">
-        <h3>Imágenes</h3>
-        <div class="sub">
-          {{ remaining() }} restantes (máx {{ maxImages }}). Hasta {{ maxFileMB }}MB por archivo. JPG/PNG/WEBP/GIF.
-        </div>
-
-        <input
-          type="file"
-          multiple
-          (change)="onFilePick($event)"
-          accept="image/jpeg,image/png,image/webp,image/gif"
-          aria-label="Cargar imágenes" />
-
-        <div class="file-list" *ngIf="files().length">
-          <div class="file-item" *ngFor="let f of files(); index as i">
-            <div class="file-name">{{ f.name }}</div>
-            <div class="file-size">{{ (f.size / 1024 / 1024) | number: '1.1-1' }} MB</div>
-            <button
-              type="button"
-              class="btn ghost"
-              (click)="removeFile(i)"
-              [attr.aria-label]="'Quitar ' + f.name">
-              Quitar
+            <button type="button" class="btn" (click)="addAttr()" [disabled]="!attrNameDraft().trim()">
+              Agregar atributo
             </button>
           </div>
+
+          <div class="attr-help">
+            Ejemplos: Dentado (número 12.5), Serie (texto <em>Flora</em>), Fecha de emisión (fecha).
+          </div>
+
+          <div class="attr-list" *ngIf="attrs().length">
+            <div class="attr-pill" *ngFor="let a of attrs(); index as i">
+              <strong>{{ a.name }}</strong> — <em>{{ a.type }}</em> : <span>{{ a.value }}</span>
+              <button type="button" class="pill-x" (click)="removeAttr(i)" aria-label="Quitar atributo">×</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- BLOQUE 5: Descripción -->
+        <section class="block">
+          <label class="field">
+            <span class="label">Descripción</span>
+            <textarea
+              rows="5"
+              formControlName="description"
+              placeholder="Descripción de la pieza, serie, temática…"></textarea>
+          </label>
+        </section>
+
+        <!-- BLOQUE 6: Imágenes -->
+        <section class="images block">
+          <h3>Imágenes</h3>
+          <div class="sub">
+            {{ remaining() }} restantes (máx {{ maxImages }}). Hasta {{ maxFileMB }}MB por archivo. JPG/PNG/WEBP/GIF.
+          </div>
+
+          <input
+            type="file"
+            multiple
+            (change)="onFilePick($event)"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            aria-label="Cargar imágenes" />
+
+          <div class="file-list" *ngIf="files().length">
+            <div class="file-item" *ngFor="let f of files(); index as i">
+              <div class="file-name">{{ f.name }}</div>
+              <div class="file-size">{{ (f.size / 1024 / 1024) | number: '1.1-1' }} MB</div>
+              <button
+                type="button"
+                class="btn ghost"
+                (click)="removeFile(i)"
+                [attr.aria-label]="'Quitar ' + f.name">
+                Quitar
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Acciones -->
+        <div class="actions">
+          <button class="btn primary" type="submit" [disabled]="form.invalid || !files().length || busy()">
+            {{ busy() ? 'Subiendo…' : 'Crear pieza' }}
+          </button>
         </div>
-      </section>
+      </fieldset>
+    </form>
 
-      <!-- Acciones -->
-      <div class="actions">
-        <button class="btn primary" type="submit" [disabled]="form.invalid || !files().length || busy()">
-          {{ busy() ? 'Subiendo…' : 'Crear pieza' }}
-        </button>
-      </div>
-    </fieldset>
-  </form>
-
-  <p *ngIf="error()" class="alert error" role="alert">{{ error() }}</p>
-  <p *ngIf="successId()" class="alert ok">¡Pieza creada! ID: {{ successId() }}</p>
-</div>
+    <p *ngIf="error()" class="alert error" role="alert">{{ error() }}</p>
+    <p *ngIf="successId()" class="alert ok">¡Pieza creada! ID: {{ successId() }}</p>
+  </div>
+</main>

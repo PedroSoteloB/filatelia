@@ -1,63 +1,106 @@
 <!-- src/app/features/site/landing/landing.component.html -->
 <header class="topbar">
-  <div class="brand" (click)="goInicio()" style="cursor:pointer">
-    <svg class="stamp" viewBox="0 0 120 120" aria-hidden="true">
-      <defs>
-        <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#b08968" />
-          <stop offset="100%" stop-color="#7f5539" />
-        </linearGradient>
-      </defs>
-      <rect x="8" y="8" width="104" height="104" rx="8" fill="url(#g1)" opacity="0.2"></rect>
-      <circle cx="60" cy="52" r="24" fill="#85586F"></circle>
-      <path d="M30 82h60" stroke="#85586F" stroke-width="6" stroke-linecap="round" />
-    </svg>
-    <div class="title">
-      <h1>Filatelia</h1>
-      <p>Catálogo personal de sellos</p>
+  <div class="topbar-inner container">
+    <div class="brand" (click)="goInicio()" style="cursor:pointer">
+      <svg class="stamp" viewBox="0 0 120 120" aria-hidden="true">
+        <defs>
+          <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#b08968" />
+            <stop offset="100%" stop-color="#7f5539" />
+          </linearGradient>
+        </defs>
+        <rect x="8" y="8" width="104" height="104" rx="18" fill="url(#g1)" opacity="0.25"></rect>
+        <circle cx="60" cy="50" r="23" fill="#85586F"></circle>
+        <path d="M32 82h56" stroke="#85586F" stroke-width="6" stroke-linecap="round" />
+      </svg>
+      <div class="title">
+        <span class="eyebrow">Catálogo digital</span>
+        <h1>Filatelia</h1>
+        <p>Tu inventario moderno de sellos postales</p>
+      </div>
     </div>
+
+    <nav class="actions">
+      <a class="link" (click)="goInicio()">Inicio</a>
+
+      <!-- Versión autenticada -->
+      <ng-container *ngIf="isAuth; else anon">
+        <button class="btn nav" (click)="goUpload()">Nueva pieza</button>
+        <button class="btn nav" (click)="goMyItems()">Mis ítems</button>
+        <button class="btn nav" (click)="goSearch()">Búsqueda</button>
+        <button class="btn nav" (click)="goCollections()">Colecciones</button>
+        <button class="btn nav" (click)="goPresentation()">Presentaciones</button>
+        <button class="btn nav light" (click)="logout()">Cerrar sesión</button>
+      </ng-container>
+
+      <!-- Versión anónima -->
+      <ng-template #anon>
+        <button class="btn nav primary" (click)="goLogin()">Iniciar sesión</button>
+      </ng-template>
+    </nav>
   </div>
-
-  <nav class="actions">
-    <a class="link" (click)="goInicio()">Inicio</a>
-
-    <!-- Versión autenticada -->
-    <ng-container *ngIf="isAuth; else anon">
-      <button class="btn" (click)="goUpload()">Nueva pieza</button>
-      <button class="btn" (click)="goMyItems()">Mis items</button>
-      <button class="btn" (click)="goSearch()">Búsqueda</button>
-      <button class="btn" (click)="goCollections()">Mis colecciones</button>
-      <button class="btn" (click)="goPresentation()">Mis Presentaciones</button>
-      <button class="btn light" (click)="logout()">Cerrar sesión</button>
-    </ng-container>
-
-    <!-- Versión anónima -->
-    <ng-template #anon>
-      <a class="link" (click)="goLogin()">Iniciar sesión</a>
-    </ng-template>
-  </nav>
 </header>
 
 <main class="hero">
-  <section class="panel">
-    <h2>Bienvenido al mundo de la filatelia</h2>
-    <p>
-      La <strong>filatelia</strong> es el estudio y coleccionismo de sellos postales y piezas
-      relacionadas: matasellos, sobres de primer día, enteros postales, viñetas, tarjetas máximas
-      y más. Aquí puedes catalogar tus piezas, registrar metadatos (país, año, condición, código
-      de catálogo…), añadir imágenes y decidir si cada una es <em>pública</em> o <em>privada</em>.
-    </p>
+  <div class="hero-inner container">
+    <section class="panel">
+      <span class="badge">Pensado para coleccionistas</span>
+      <h2>Bienvenido al mundo de la filatelia digital</h2>
+      <p>
+        La <strong>filatelia</strong> es el estudio y coleccionismo de sellos postales y piezas
+        relacionadas: matasellos, sobres de primer día, enteros postales, viñetas, tarjetas máximas
+        y más. Aquí puedes catalogar tus piezas, registrar metadatos (país, año, condición, código
+        de catálogo…), añadir imágenes y decidir si cada una es <em>pública</em> o <em>privada</em>.
+      </p>
 
-    <p class="muted">
-      Sube imágenes de tus sellos y organiza tu colección. Filtra por país, año o condición y
-      encuentra rápidamente lo que buscas. Comparte con la comunidad lo que quieras con visibilidad
-      <em>pública</em>.
-    </p>
+      <p class="muted">
+        Sube imágenes de tus sellos y organiza tu colección. Filtra por país, año o condición y
+        encuentra rápidamente lo que buscas. Comparte con la comunidad lo que quieras con visibilidad
+        <em>pública</em>.
+      </p>
 
-    <div class="cta">
-      <button class="btn" (click)="scrollToCatalog()">Ver catálogo público</button>
-    </div>
-  </section>
+      <div class="cta">
+        <button class="btn primary" (click)="scrollToCatalog()">Ver catálogo</button>
+        <button class="btn ghost" *ngIf="!isAuth" (click)="goLogin()">Crear cuenta gratuita</button>
+      </div>
+    </section>
+
+    <!-- Lado visual decorativo -->
+    <aside class="hero-visual" aria-hidden="true">
+      <div class="hero-card">
+        <div class="hero-card-header">
+          <span class="pill pill-green">+2,145 sellos</span>
+          <span class="pill pill-neutral">Catálogo</span>
+        </div>
+        <div class="stamps-grid">
+          <div class="stamp-card">
+            <div class="stamp-img"></div>
+            <div class="stamp-meta">
+              <span class="label">Perú · 1975</span>
+              <span class="value">Serie fauna andina</span>
+            </div>
+          </div>
+          <div class="stamp-card">
+            <div class="stamp-img alt"></div>
+            <div class="stamp-meta">
+              <span class="label">Francia · 1958</span>
+              <span class="value">Correo aéreo</span>
+            </div>
+          </div>
+          <div class="stamp-card">
+            <div class="stamp-img"></div>
+            <div class="stamp-meta">
+              <span class="label">Japón · 1964</span>
+              <span class="value">Juegos Olímpicos</span>
+            </div>
+          </div>
+        </div>
+        <div class="hero-card-footer">
+          <span>Organiza, filtra y presenta tu colección en minutos.</span>
+        </div>
+      </div>
+    </aside>
+  </div>
 </main>
 
 <!-- ===================================================== -->
@@ -66,6 +109,9 @@
 <section class="features">
   <div class="container">
     <h3>¿Por qué usar Filatelia?</h3>
+    <p class="section-subtitle">
+      Un espacio diseñado para coleccionistas que quieren orden, detalle y una presentación elegante.
+    </p>
     <div class="feat-grid">
       <article class="feat">
         <div class="feat-ico">📚</div>
@@ -97,7 +143,10 @@
 <section class="how">
   <div class="container">
     <h3>¿Cómo funciona?</h3>
-  <ol class="steps">
+    <p class="section-subtitle">
+      En tres pasos sencillos puedes pasar de fotos sueltas a un catálogo profesional.
+    </p>
+    <ol class="steps">
       <li>
         <div class="step-num">1</div>
         <h4>Sube tus imágenes</h4>
@@ -212,9 +261,9 @@
 
     <nav class="f-nav">
       <a (click)="goInicio()">Inicio</a>
-      <a *ngIf="isAuth" (click)="goMyItems()">Mis items</a>
+      <a *ngIf="isAuth" (click)="goMyItems()">Mis ítems</a>
       <a *ngIf="isAuth" (click)="goCollections()">Mis colecciones</a>
-      <a *ngIf="isAuth" (click)="goPresentation()">Mis Presentaciones</a>
+      <a *ngIf="isAuth" (click)="goPresentation()">Mis presentaciones</a>
       <a *ngIf="!isAuth" (click)="goLogin()">Iniciar sesión</a>
     </nav>
 
