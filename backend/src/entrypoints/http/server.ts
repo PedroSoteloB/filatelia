@@ -904,10 +904,13 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       title,
       description,
       country,
-      year,
+      year,              // se mapeará a issue_year
       face_value,
-      condition,
+      condition,         // se mapeará a condition_code
       catalog_code,
+      currency,
+      acquisition_date,
+      visibility,
       tags = [],
       attributes = [],
     } = meta;
@@ -920,25 +923,31 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         title,
         description,
         country,
-        year,
+        issue_year,
         face_value,
-        condition,
+        condition_code,
         catalog_code,
+        currency,
+        acquisition_date,
+        visibility,
         created_at,
         updated_at
       )
       OUTPUT INSERTED.id
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME())
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME())
       `,
       [
         ownerId,
         title || null,
         description || null,
         country || null,
-        year ?? null,
+        year ?? null,                   // -> issue_year
         face_value ?? null,
-        condition || null,
+        condition || null,              // -> condition_code
         catalog_code || null,
+        currency || null,
+        acquisition_date || null,
+        visibility || 'private',        // o el valor por defecto que uses
       ]
     );
 
