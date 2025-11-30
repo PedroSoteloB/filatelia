@@ -846,7 +846,7 @@ function authGuard(req: FastifyRequest, reply: FastifyReply, done: HookHandlerDo
 
 app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
-    const ownerId = ensureAuth(req); // userId autenticado
+    const ownerId = ensureAuth(req); // userId
 
     const ct = String((req.headers['content-type'] || '')).toLowerCase();
     const isMultipart = ct.startsWith('multipart/form-data');
@@ -855,26 +855,34 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     const files: { buffer: Buffer; filename: string; mime: string }[] = [];
 
     if (isMultipart) {
+      // ----- multipart/form-data -----
       const parts = await (req.parts?.() as AsyncIterable<any>);
       if (!parts) {
         return reply.code(400).send({ message: 'multipart requerido' });
       }
 
-      const allowed = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+      const allowed = new Set([
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'image/gif',
+      ]);
       const maxImages = 12;
 
       for await (const p of parts) {
-        // ---- campo "metadata" (JSON) ----
+        // campo "metadata" (JSON)
         if (p?.type === 'field' && p.fieldname === 'metadata') {
           try {
             meta = JSON.parse(String(p.value ?? '{}'));
           } catch {
-            return reply.code(400).send({ message: 'metadata inválido (JSON)' });
+            return reply
+              .code(400)
+              .send({ message: 'metadata inválido (JSON)' });
           }
           continue;
         }
 
-        // ---- archivos (imágenes) ----
+        // archivos
         if (p?.type === 'file') {
           if (files.length >= maxImages) {
             await p.file?.resume?.();
@@ -885,16 +893,16 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           const mime = String(p.mimetype ?? '');
           if (!buf?.length) continue;
           if (!allowed.has(mime)) {
-            return reply
-              .code(400)
-              .send({ message: 'Formato no soportado (JPG/PNG/WEBP/GIF)' });
+            return reply.code(400).send({
+              message: 'Formato no soportado (JPG/PNG/WEBP/GIF)',
+            });
           }
           files.push({ buffer: buf, filename, mime });
           continue;
         }
       }
     } else {
-      // ----- modo application/json -----
+      // ----- application/json -----
       meta = req.body || null;
     }
 
@@ -912,7 +920,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       return reply.code(400).send({ message: 'al menos una imagen requerida' });
     }
 
-    // --------- MAPEO CAMPOS AL ESQUEMA SQL SERVER ---------
+    // --------- MAPEO CAMPOS philatelic_items ---------
     const title       = String(meta.title).trim();
     const description = meta.description || null;
     const country     = meta.country || null;
@@ -949,10 +957,10 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         ? String(meta.visibility).trim()
         : 'public';
 
-    const tags       = Array.isArray(meta.tags) ? meta.tags : [];
     const attributes = Array.isArray(meta.attributes) ? meta.attributes : [];
+    // OJO: de momento ignoramos meta.tags para no romper por item_tags
 
-    // --------- INSERT EN philatelic_items (usa created_at / updated_at) ---------
+    // --------- INSERT EN philatelic_items ---------
     const [result]: any = await db.execute(
       `
       INSERT INTO philatelic_items (
@@ -996,57 +1004,10 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       );
     }
 
-    // --------- TAGS (usa columnas de dbo.tags de tu captura) ---------
-    if (Array.isArray(tags) && tags.length > 0) {
-      for (const t of tags) {
-        const name = String(t || '').trim();
-        if (!name) continue;
-
-        // 1) Buscar tag existente
-        const [tagRows]: any = await db.execute(
-          `
-          SELECT TOP 1 id
-          FROM tags
-          WHERE owner_user_id = ? AND name = ?
-          `,
-          [ownerId, name]
-        );
-
-        let tagId: number | null = null;
-
-        if (Array.isArray(tagRows) && tagRows.length > 0) {
-          tagId = Number(tagRows[0].id);
-        } else {
-          // 2) Insertar si no existe (SIN created_at, porque esa columna no existe)
-          const [insTag]: any = await db.execute(
-            `
-            INSERT INTO tags (name, owner_user_id)
-            VALUES (?, ?);
-            `,
-            [name, ownerId]
-          );
-          tagId = Number(insTag?.insertId);
-        }
-
-        if (!Number.isFinite(tagId)) continue;
-
-        // 👇 OJO: aquí asumo que la columna en dbo.item_tags se llama "tag_id".
-        // Si en tu SSMS ves otro nombre (por ejemplo "tag_ref_id"),
-        // cambia "tag_id" por el nombre real.
-        await db.execute(
-          `
-          INSERT INTO item_tags (item_id, tag_id)
-          VALUES (?, ?);
-          `,
-          [itemId, tagId]
-        );
-      }
-    }
-
     // --------- ATTRIBUTES (usa item_attributes: item_id, attribute_id, value_*) ---------
     if (Array.isArray(attributes) && attributes.length > 0) {
       for (const attr of attributes) {
-        const defId = attr?.definition_id;
+        const defId = attr?.definition_id ?? attr?.attribute_id;
         if (!defId) continue;
 
         await db.execute(
@@ -1071,7 +1032,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       }
     }
 
-    // --------- IMÁGENES (file_path + is_primary) ---------
+    // --------- IMÁGENES (item_images: item_id, file_path, is_primary) ---------
     if (files.length > 0) {
       const fs   = require('fs');
       const path = require('path');
@@ -1104,6 +1065,10 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         );
       }
     }
+
+    // --------- TAGS: PENDIENTE ---------
+    // TODO: cuando tengamos claro el esquema de dbo.item_tags en SQL Server,
+    // reactivamos aquí el guardado de tags sin usar columnas que no existan.
 
     // --------- RESPUESTA ---------
     reply.code(201).send({
