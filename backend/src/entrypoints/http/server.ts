@@ -957,9 +957,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         ? String(meta.visibility).trim()
         : 'public';
 
-    // meta.attributes: por si el front ya manda definition_id / attribute_id
-    let attributes: any[] = Array.isArray(meta.attributes) ? meta.attributes.slice() : [];
-
     // --------- INSERT EN philatelic_items ---------
     const [result]: any = await db.execute(
       `
@@ -1065,8 +1062,8 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         if (Array.isArray(rowsExist) && rowsExist.length) {
           const row = rowsExist[0];
           tagId = Number(
-            row.id ??
             row.tag_id ??
+            row.id ??
             row.TAG_ID ??
             row.ID ??
             null
@@ -1096,8 +1093,8 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           if (Array.isArray(rowsNew) && rowsNew.length) {
             const r = rowsNew[0];
             tagId = Number(
-              r.id ??
               r.tag_id ??
+              r.id ??
               r.TAG_ID ??
               r.ID ??
               null
@@ -1130,8 +1127,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     }
 
     // ============================================================
-    //  CATEGORIES → attribute_definitions + luego item_attributes
-    //  (como en tu código MySQL, pero unificado)
+    //  CATEGORIES → attribute_definitions + item_attributes
     // ============================================================
     if (Array.isArray(meta?.categories) && meta.categories.length) {
       for (const c of meta.categories) {
@@ -1223,32 +1219,14 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
             ? v
             : null; // se asume 'YYYY-MM-DD'
 
-        // 3) añadimos un "attribute" normalizado a la lista
-        attributes.push({
-          attribute_id: attrId,
-          value_text: vText ?? null,
-          value_number: vNum ?? null,
-          value_date: vDate ?? null,
-        });
-      }
-    }
-
-    // ============================================================
-    //  INSERT FINAL EN item_attributes (con todo lo acumulado)
-    // ============================================================
-    if (Array.isArray(attributes) && attributes.length > 0) {
-      for (const attr of attributes) {
-        const defId = attr?.definition_id ?? attr?.attribute_id;
-        if (!defId) continue;
-
-        // borramos valor anterior de ese atributo para ese item (como en tu MySQL)
+        // 3) borrar valor previo y crear item_attributes DIRECTAMENTE
         await db.execute(
           `
           DELETE FROM item_attributes
            WHERE item_id = ?
              AND attribute_id = ?;
           `,
-          [itemId, defId]
+          [itemId, attrId]
         );
 
         await db.execute(
@@ -1264,10 +1242,10 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           `,
           [
             itemId,
-            defId,
-            attr.value_text ?? null,
-            attr.value_number ?? null,
-            attr.value_date ?? null,
+            attrId,
+            vText ?? null,
+            vNum ?? null,
+            vDate ?? null,
           ]
         );
       }
@@ -1285,6 +1263,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       .send({ message: 'internal_error', detail: String(e?.message || '') });
   }
 });
+
 
 
 
