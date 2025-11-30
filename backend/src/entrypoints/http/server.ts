@@ -883,7 +883,9 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           const mime = String(p.mimetype ?? '');
           if (!buf?.length) continue;
           if (!allowed.has(mime)) {
-            return reply.code(400).send({ message: 'Formato no soportado (JPG/PNG/WEBP/GIF)' });
+            return reply
+              .code(400)
+              .send({ message: 'Formato no soportado (JPG/PNG/WEBP/GIF)' });
           }
           files.push({ buffer: buf, filename, mime });
           continue;
@@ -910,12 +912,12 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     const visibility = 'public';
 
     // ========== INSERT PRINCIPAL (SQL SERVER) ==========
-    // Usamos OUTPUT INSERTED.id para obtener el ID recién creado
-    const [itemRows]: any = await db.execute(
+    // usamos OUTPUT INSERTED.id para obtener el PK
+    const [rIns]: any = await db.execute(
       `INSERT INTO dbo.philatelic_items
          (owner_user_id, title, description, country, issue_year, condition_code,
           catalog_code, face_value, currency, acquisition_date, visibility)
-       OUTPUT INSERTED.id AS id
+       OUTPUT INSERTED.id
        VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       [
         ownerId,
@@ -932,11 +934,10 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       ]
     );
 
-    if (!itemRows || !itemRows[0] || itemRows[0].id == null) {
+    if (!Array.isArray(rIns) || !rIns.length || rIns[0].id == null) {
       throw new Error('no_item_id_returned');
     }
-
-    const itemId: number = Number(itemRows[0].id);
+    const itemId: number = Number(rIns[0].id);
 
     // ========== IMÁGENES ==========
     if (files.length) {
@@ -966,7 +967,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
       for (const name of tagNames) {
         const [ex]: any = await db.execute(
-          'SELECT TOP (1) [id] FROM dbo.[tags] WHERE owner_user_id = ? AND name = ?',
+          'SELECT TOP (1) id FROM dbo.tags WHERE owner_user_id = ? AND name = ?',
           [ownerId, name]
         );
 
@@ -975,13 +976,13 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         if (ex.length) {
           tagId = Number(ex[0].id);
         } else {
-          const [tagRows]: any = await db.execute(
-            `INSERT INTO dbo.[tags] (name, owner_user_id)
-             OUTPUT INSERTED.id AS id
+          const [insTag]: any = await db.execute(
+            `INSERT INTO dbo.tags (name, owner_user_id)
+             OUTPUT INSERTED.id
              VALUES (?,?)`,
             [name, ownerId]
           );
-          tagId = Number(tagRows[0].id);
+          tagId = Number(insTag[0].id);
         }
 
         tagIds.push(tagId);
@@ -1006,9 +1007,8 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
         let attrId: number | null = null;
 
-        // 1) buscar definición existente
         const [exA]: any = await db.execute(
-          'SELECT TOP (1) [id] FROM dbo.attribute_definitions WHERE owner_user_id = ? AND name = ?',
+          'SELECT TOP (1) id FROM dbo.attribute_definitions WHERE owner_user_id = ? AND name = ?',
           [ownerId, attrName]
         );
 
@@ -1019,15 +1019,15 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
             ? String(c.attrType)
             : 'text';
 
-          const [attrRows]: any = await db.execute(
+          const [insA]: any = await db.execute(
             `INSERT INTO dbo.attribute_definitions
                (owner_user_id, name, attr_type, created_at)
-             OUTPUT INSERTED.id AS id
+             OUTPUT INSERTED.id
              VALUES (?,?,?, SYSUTCDATETIME())`,
             [ownerId, attrName, aType]
           );
 
-          attrId = Number(attrRows[0].id);
+          attrId = Number(insA[0].id);
         }
 
         if (!attrId) continue;
@@ -1051,8 +1051,8 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
         const vDate =
           attrType === 'date' && v
-            ? String(v) // "YYYY-MM-DD"
-            : null;
+            ? String(v)
+            : null; // "YYYY-MM-DD"
 
         await db.execute(
           'DELETE FROM dbo.item_attributes WHERE item_id = ? AND attribute_id = ?',
@@ -1078,6 +1078,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });
+
 
 
 
