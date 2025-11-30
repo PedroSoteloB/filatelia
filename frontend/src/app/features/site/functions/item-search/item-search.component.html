@@ -1,4 +1,3 @@
-<!-- src/app/features/site/landing/landing.component.html -->
 <header class="topbar">
   <div class="brand" (click)="goInicio()" style="cursor:pointer">
     <svg class="stamp" viewBox="0 0 120 120" aria-hidden="true">
@@ -38,182 +37,276 @@
   </nav>
 </header>
 
-<div class="wrap">
-    <h1 class="page-title">Búsqueda temática</h1>
-  
+<div class="search-page">
+  <div class="wrap">
+
+    <!-- Cabecera de la página -->
+    <header class="search-header">
+      <div>
+        <h1 class="page-title">Búsqueda temática</h1>
+        <p class="page-subtitle">
+          Combina filtros básicos, tags y atributos dinámicos para construir búsquedas potentes.
+        </p>
+      </div>
+      <div class="header-cta">
+        <button class="btn primary" (click)="search()" [disabled]="busy()">
+          Buscar ahora
+        </button>
+        <span *ngIf="busy()" class="muted small">Buscando…</span>
+      </div>
+    </header>
+
     <!-- Estado -->
     <div *ngIf="error()" class="status error">{{ error() }}</div>
-  
-    <!-- Panel de filtros primarios -->
-    <section class="panel">
-      <h2 class="panel-title">Filtros básicos</h2>
-      <div class="row">
-        <div class="field">
-          <label>Texto libre</label>
-          <input
-            type="text"
-            placeholder="Título, descripción o código de catálogo"
-            [value]="q()"
-            (input)="onQChange($event)"
-            (keydown.enter)="search()" />
-        </div>
-  
-        <div class="field">
-          <label>País</label>
-          <input
-            type="text"
-            placeholder="Peru, Chile…"
-            [value]="country()"
-            (input)="onCountryChange($event)"
-            (keydown.enter)="search()" />
-        </div>
-  
-        <div class="field">
-          <label>Condición</label>
-          <input
-            type="text"
-            placeholder="MINT, USED, VF…"
-            list="conditionList"
-            [value]="condition()"
-            (input)="onConditionChange($event)"
-            (keydown.enter)="search()" />
-          <!-- Sugeridor de condiciones válidas -->
-          <datalist id="conditionList">
-            <option value="MINT"></option>
-            <option value="USED"></option>
-            <option value="VF"></option>
-            <option value="F"></option>
-            <option value="G"></option>
-          </datalist>
-          <div class="muted small">Usa una condición válida. Si no aplica, déjalo vacío.</div>
-        </div>
-  
-        <div class="field">
-          <label>Año desde</label>
-          <input
-            type="number"
-            placeholder="1800"
-            [value]="yearFrom() ?? ''"
-            (input)="onYearFromChange($event)"
-            (keydown.enter)="search()" />
-        </div>
-  
-        <div class="field">
-          <label>Año hasta</label>
-          <input
-            type="number"
-            placeholder="2024"
-            [value]="yearTo() ?? ''"
-            (input)="onYearToChange($event)"
-            (keydown.enter)="search()" />
-        </div>
-      </div>
-    </section>
-  
-    <!-- Panel de tags -->
-    <section class="panel">
-      <div class="panel-title-row">
-        <h2 class="panel-title">Tags</h2>
-        <div class="segmented">
-          <button class="seg" [class.active]="tagsMode() === 'OR'" (click)="setTagsMode('OR')">OR</button>
-          <button class="seg" [class.active]="tagsMode() === 'AND'" (click)="setTagsMode('AND')">AND</button>
-        </div>
-      </div>
-  
-      <div class="chips">
-        <button
-          *ngFor="let t of allTags()"
-          class="chip"
-          [class.selected]="selectedTagIds().includes(t.id)"
-          (click)="toggleTag(t.id)">
-          {{ t.name }}
-        </button>
-      </div>
-  
-      <div class="muted small">Tip: usa AND para “cumplir todos los tags” (presentaciones temáticas estrictas).</div>
-    </section>
-  
-    <!-- Panel de atributos dinámicos -->
-    <section class="panel">
-      <h2 class="panel-title">Atributos dinámicos</h2>
-  
-      <!-- Constructor rápido de filtros -->
-      <div class="attr-builder">
-        <div class="row compact">
+
+    <!-- Grid de paneles de filtros -->
+    <div class="filters-grid">
+
+      <!-- Panel de filtros primarios -->
+      <section class="panel">
+        <h2 class="panel-title">Filtros básicos</h2>
+
+        <div class="row">
           <div class="field grow">
-            <label>Atributo</label>
-            <select #attrSel>
-              <option [value]="''" selected>— seleccionar —</option>
-              <option *ngFor="let a of allAttrDefs()" [value]="a.id">{{ a.name }} ({{ a.attrType }})</option>
-            </select>
+            <label>Texto libre</label>
+            <input
+              type="text"
+              placeholder="Título, descripción o código de catálogo"
+              [value]="q()"
+              (input)="onQChange($event)"
+              (keydown.enter)="search()" />
           </div>
-  
+
           <div class="field">
-            <label>Operador</label>
-            <select #opSel>
-              <option value="=">=</option>
-              <option value="like">like</option>
-              <option value="between">between</option>
-            </select>
+            <label>País</label>
+            <input
+              type="text"
+              placeholder="Peru, Chile…"
+              [value]="country()"
+              (input)="onCountryChange($event)"
+              (keydown.enter)="search()" />
           </div>
-  
-          <!-- NOTA: siempre existen, se ocultan/inhabilitan según operador -->
-          <div class="field" [class.hidden]="opSel.value === 'between'">
-            <label>Valor</label>
-            <input #val1 type="text" placeholder="valor…" [disabled]="opSel.value === 'between'" />
+
+          <div class="field">
+            <label>Condición</label>
+            <input
+              type="text"
+              placeholder="MINT, USED, VF…"
+              list="conditionList"
+              [value]="condition()"
+              (input)="onConditionChange($event)"
+              (keydown.enter)="search()" />
+            <datalist id="conditionList">
+              <option value="MINT"></option>
+              <option value="USED"></option>
+              <option value="VF"></option>
+              <option value="F"></option>
+              <option value="G"></option>
+            </datalist>
+            <div class="muted small">
+              Usa una condición válida. Si no aplica, déjalo vacío.
+            </div>
           </div>
-  
-          <div class="field" [class.hidden]="opSel.value !== 'between'">
-            <label>Desde</label>
-            <input #valFrom type="text" placeholder="número o YYYY-MM-DD" [disabled]="opSel.value !== 'between'" />
+
+          <div class="field">
+            <label>Año desde</label>
+            <input
+              type="number"
+              placeholder="1800"
+              [value]="yearFrom() ?? ''"
+              (input)="onYearFromChange($event)"
+              (keydown.enter)="search()" />
           </div>
-          <div class="field" [class.hidden]="opSel.value !== 'between'">
-            <label>Hasta</label>
-            <input #valTo type="text" placeholder="número o YYYY-MM-DD" [disabled]="opSel.value !== 'between'" />
-          </div>
-  
-          <div class="actions">
-            <button class="btn" (click)="onAddAttrClick(attrSel, opSel.value, val1, valFrom, valTo)">
-              Añadir
-            </button>
+
+          <div class="field">
+            <label>Año hasta</label>
+            <input
+              type="number"
+              placeholder="2024"
+              [value]="yearTo() ?? ''"
+              (input)="onYearToChange($event)"
+              (keydown.enter)="search()" />
           </div>
         </div>
-  
-        <!-- Lista de filtros activos -->
-        <div class="active-attrs" *ngIf="attrFilters().length">
-          <div class="attr-pill" *ngFor="let f of attrFilters(); index as i">
-            <code>
-              {{ f['name'] ? f['name'] : ('#' + f['id']) }}
-              &nbsp;{{ f['op'] || '=' }}
-              &nbsp;
-              <ng-container [ngSwitch]="f['op']">
-                <span *ngSwitchCase="'between'">{{ $any(f).from }} ~ {{ $any(f).to }}</span>
-                <span *ngSwitchDefault>{{ $any(f).value }}</span>
-              </ng-container>
-            </code>
-            <button class="x" (click)="removeAttrFilter(i)" aria-label="Quitar filtro">×</button>
+      </section>
+
+      <!-- Panel de tags (combobox + lista ordenada + seleccionados) -->
+<!-- Panel de tags -->
+<!-- Panel de tags (combobox + chips) -->
+<section class="panel panel-tags">
+  <div class="panel-title-row">
+    <h2 class="panel-title">Tags</h2>
+    <div class="segmented">
+      <button
+        class="seg"
+        [class.active]="tagsMode() === 'OR'"
+        (click)="setTagsMode('OR')">
+        OR
+      </button>
+      <button
+        class="seg"
+        [class.active]="tagsMode() === 'AND'"
+        (click)="setTagsMode('AND')">
+        AND
+      </button>
+    </div>
+  </div>
+
+  <label class="field-label">Buscar tag</label>
+
+  <!-- CONTENEDOR DEL COMBO -->
+  <div class="tag-combo">
+    <input
+      class="tag-combo-input"
+      type="text"
+      placeholder="Escribe parte del tag…"
+      [value]="tagSearch()"
+      (input)="setTagSearch($any($event.target).value)" />
+
+    <!-- LISTA FLOTANTE -->
+    <div
+      class="tag-combo-list"
+      *ngIf="tagSearch().trim().length && filteredTags().length">
+      <button
+        type="button"
+        class="tag-combo-option"
+        *ngFor="let t of filteredTags()"
+        [class.selected]="selectedTagIds().includes(t.id)"
+        (click)="onTagClick(t.id)">
+        {{ t.name }}
+      </button>
+    </div>
+  </div>
+
+  <div class="tags-count muted small">
+    Mostrando {{ filteredTags().length }}
+    de {{ allTags().length }} tags (ordenados alfabéticamente).
+  </div>
+
+  <!-- chips SOLO para los seleccionados -->
+  <div class="selected-tags" *ngIf="selectedTagIds().length">
+    <div class="muted small">Tags seleccionados:</div>
+    <div class="chips">
+      <button
+        type="button"
+        class="chip selected"
+        *ngFor="let t of selectedTags()"
+        (click)="toggleTag(t.id)">
+        {{ t.name }} <span class="x">×</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="muted small">
+    Tip: usa AND para “cumplir todos los tags” (presentaciones temáticas
+    estrictas). Con el buscador puedes manejar cómodamente miles de tags.
+  </div>
+</section>
+
+
+
+      <!-- Panel de atributos dinámicos -->
+      <section class="panel panel-attrs">
+        <h2 class="panel-title">Atributos dinámicos</h2>
+
+        <div class="attr-builder">
+          <div class="row compact">
+            <div class="field grow">
+              <label>Atributo</label>
+              <select #attrSel>
+                <option [value]="''" selected>— seleccionar —</option>
+                <option *ngFor="let a of allAttrDefs()" [value]="a.id">
+                  {{ a.name }} ({{ a.attrType }})
+                </option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Operador</label>
+              <select #opSel>
+                <option value="=">=</option>
+                <option value="like">like</option>
+                <option value="between">between</option>
+              </select>
+            </div>
+
+            <div class="field" [class.hidden]="opSel.value === 'between'">
+              <label>Valor</label>
+              <input
+                #val1
+                type="text"
+                placeholder="valor…"
+                [disabled]="opSel.value === 'between'" />
+            </div>
+
+            <div class="field" [class.hidden]="opSel.value !== 'between'">
+              <label>Desde</label>
+              <input
+                #valFrom
+                type="text"
+                placeholder="número o YYYY-MM-DD"
+                [disabled]="opSel.value !== 'between'" />
+            </div>
+
+            <div class="field" [class.hidden]="opSel.value !== 'between'">
+              <label>Hasta</label>
+              <input
+                #valTo
+                type="text"
+                placeholder="número o YYYY-MM-DD"
+                [disabled]="opSel.value !== 'between'" />
+            </div>
+
+            <div class="actions">
+              <button
+                class="btn"
+                (click)="onAddAttrClick(attrSel, opSel.value, val1, valFrom, valTo)">
+                Añadir
+              </button>
+            </div>
+          </div>
+
+          <div class="active-attrs" *ngIf="attrFilters().length">
+            <div class="attr-pill" *ngFor="let f of attrFilters(); index as i">
+              <code>
+                {{ f['name'] ? f['name'] : ('#' + f['id']) }}
+                &nbsp;{{ f['op'] || '=' }}&nbsp;
+                <ng-container [ngSwitch]="f['op']">
+                  <span *ngSwitchCase="'between'">
+                    {{ $any(f).from }} ~ {{ $any(f).to }}
+                  </span>
+                  <span *ngSwitchDefault>{{ $any(f).value }}</span>
+                </ng-container>
+              </code>
+              <button class="x" (click)="removeAttrFilter(i)" aria-label="Quitar filtro">
+                ×
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
-  
+      </section>
+    </div>
+
     <!-- Acciones de búsqueda y materialización -->
     <section class="panel actions-panel">
       <div class="left">
-        <button class="btn light" (click)="clearAllFilters()" [disabled]="busy()">Limpiar</button>
-        <button class="btn" (click)="search()" [disabled]="busy()">Buscar</button>
-        <span *ngIf="busy()" class="muted">Buscando…</span>
+        <button class="btn light" (click)="clearAllFilters()" [disabled]="busy()">
+          Limpiar
+        </button>
+        <button class="btn primary" (click)="search()" [disabled]="busy()">
+          Buscar
+        </button>
       </div>
-  
+
       <div class="right">
-        <!-- Guardar búsqueda -->
-        <div class="inline-form">
+        <!-- <div class="inline-form">
           <input #saveName type="text" placeholder="Nombre de búsqueda…" />
-          <button class="btn" (click)="saveSearch(saveName.value)" [disabled]="busy()">Guardar búsqueda</button>
-        </div>
-  
-        <!-- Smart collection -->
-        <div class="inline-form">
+          <button class="btn" (click)="saveSearch(saveName.value)" [disabled]="busy()">
+            Guardar búsqueda
+          </button>
+        </div> -->
+
+        <!-- <div class="inline-form">
           <input #smartName type="text" placeholder="Nombre colección (smart)…" />
           <select #sortKey>
             <option value="issue_year">issue_year</option>
@@ -231,9 +324,8 @@
             [disabled]="busy()">
             Crear SMART
           </button>
-        </div>
-  
-        <!-- Snapshot estática -->
+        </div> -->
+
         <div class="inline-form">
           <input #snapName type="text" placeholder="Nombre snapshot…" />
           <input #snapN type="number" min="1" [value]="snapshotLimit()" class="w-80" />
@@ -241,24 +333,31 @@
             class="btn"
             (click)="onSnapshotClick(snapName.value, snapN.value)"
             [disabled]="busy()">
-            Crear SNAPSHOT
+            Crear Coleccion
           </button>
         </div>
       </div>
     </section>
-  
+
     <!-- Resultados -->
     <section class="results">
-      <h2 class="panel-title">Resultados ({{ results().length }})</h2>
-  
+      <div class="results-header">
+        <h2 class="panel-title">Resultados</h2>
+        <span class="muted small">
+          {{ results().length }} pieza{{ results().length === 1 ? '' : 's' }} encontradas
+        </span>
+      </div>
+
       <div *ngIf="!results().length && !busy()" class="empty">
         <div>
           <div class="title">Sin resultados</div>
-          <div class="muted">Ajusta los filtros: prueba cambiar años, país, condición, tags o atributos.</div>
+          <div class="muted">
+            Ajusta los filtros: prueba cambiar años, país, condición, tags o atributos.
+          </div>
         </div>
         <button class="btn" (click)="search()">Reintentar</button>
       </div>
-  
+
       <div class="grid" *ngIf="results().length">
         <article class="card" *ngFor="let it of results()">
           <a class="overlay" [routerLink]="['/items', it.id]"></a>
@@ -278,4 +377,4 @@
       </div>
     </section>
   </div>
-  
+</div>

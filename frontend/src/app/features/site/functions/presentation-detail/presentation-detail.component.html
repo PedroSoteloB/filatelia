@@ -1,177 +1,215 @@
-   <div class="wrap" *ngIf="pres() as p">
-    <!-- Header / breadcrumbs -->
-    <header class="topbar">
-      <nav class="crumbs">
-        <a (click)="back()">← Presentaciones</a>
-        <span>/</span>
-        <span>#{{ p.id }}</span>
-      </nav>
-  
-      <div class="rhs">
-        <span class="muted">Col: {{ p.collection_id }}</span>
-        <span class="dot"></span>
-        <span class="muted">Actualizado: {{ p.updated_at | date:'short' }}</span>
+<div class="wrap" *ngIf="pres() as p">
+  <!-- Header / breadcrumbs -->
+  <header class="topbar">
+    <nav class="crumbs">
+      <a (click)="back()">← Presentaciones</a>
+      <span class="sep">/</span>
+      <span class="crumb-id">#{{ p.id }}</span>
+    </nav>
+
+    <div class="rhs">
+      <span class="muted">Col: {{ p.collection_id }}</span>
+      <span class="dot"></span>
+      <span class="muted">Actualizado: {{ p.updated_at | date:'short' }}</span>
+    </div>
+  </header>
+
+  <!-- estados -->
+  <div *ngIf="error()" class="status error">{{ error() }}</div>
+  <div *ngIf="loading()" class="status busy"><span class="dot"></span> Cargando…</div>
+
+  <!-- Hero -->
+  <section class="hero card">
+    <div class="cover" [class.placeholder]="!p.cover">
+      <img *ngIf="p.cover" [src]="p.cover" alt="Portada de la presentación" />
+      <div class="no-cover" *ngIf="!p.cover">Sin portada</div>
+
+      <div class="overlay">
+        <label class="btn ghost">
+          Cambiar portada
+          <input type="file" accept="image/*" (change)="onCoverChange($event)" hidden />
+        </label>
+        <button class="btn ghost" (click)="clearCover()" [disabled]="!hasCover()">
+          Quitar
+        </button>
       </div>
-    </header>
-  
-    <!-- estados -->
-    <div *ngIf="error()" class="status error">{{ error() }}</div>
-    <div *ngIf="loading()" class="status busy"><span class="dot"></span> Cargando…</div>
-  
-    <!-- Hero -->
-    <section class="hero card">
-      <div class="cover" [class.placeholder]="!p.cover">
-        <img *ngIf="p.cover" [src]="p.cover" alt="cover" />
-        <div class="no-cover" *ngIf="!p.cover">Sin portada</div>
-        <div class="overlay">
-          <label class="btn ghost">
-            Cambiar portada
-            <input type="file" accept="image/*" (change)="onCoverChange($event)" hidden />
-          </label>
-          <button class="btn ghost" (click)="clearCover()" [disabled]="!hasCover()">Quitar</button>
+    </div>
+
+    <div class="meta">
+      <form [formGroup]="editForm" (ngSubmit)="saveMeta()">
+        <input
+          class="title"
+          type="text"
+          formControlName="title"
+          placeholder="Título de la presentación"
+          [readonly]="saving()" />
+
+        <textarea
+          class="desc"
+          rows="3"
+          formControlName="description"
+          placeholder="Descripción de la colección / objetivo de la presentación…">
+        </textarea>
+
+        <div class="actions">
+          <button class="btn primary" type="submit" [disabled]="saving() || editForm.invalid">
+            Guardar cambios
+          </button>
+          <span class="saving" *ngIf="saving()">Guardando…</span>
         </div>
-      </div>
-  
-      <div class="meta">
-        <form [formGroup]="editForm" (ngSubmit)="saveMeta()">
-          <input class="title" type="text" formControlName="title" [readonly]="saving()" />
-          <textarea
-            class="desc"
-            rows="3"
-            formControlName="description"
-            placeholder="Descripción…"
-          ></textarea>
-          <div class="actions">
-            <button class="btn primary" type="submit" [disabled]="saving() || editForm.invalid">
-              Guardar
-            </button>
-            <span class="saving" *ngIf="saving()">Guardando…</span>
-          </div>
-        </form>
-      </div>
-    </section>
-  
-    <!-- Assets header -->
-    <section class="assets-head">
+      </form>
+    </div>
+  </section>
+
+  <!-- Assets header -->
+  <section class="assets-head">
+    <div>
       <h2>Recursos ({{ assets().length }})</h2>
-      <div class="adder">
-        <!-- ❗️signals + ngModel -->
-        <select [ngModel]="newKind()" (ngModelChange)="newKind.set($event)" name="kind">
-          <option value="image">Imagen</option>
-          <option value="video">Video</option>
-          <option value="ppt">PPT</option>
-          <option value="link">Link</option>
-          <option value="text">Texto</option>
-        </select>
-  
-        <ng-container [ngSwitch]="newKind()">
-          <div *ngSwitchCase="'image'">
-            <input id="asset-file" type="file" accept="image/*" (change)="onFileChange($event)" />
-          </div>
-          <div *ngSwitchCase="'video'">
-            <input id="asset-file" type="file" accept="video/*" (change)="onFileChange($event)" />
-          </div>
-          <div *ngSwitchCase="'ppt'">
-            <input
-              id="asset-file"
-              type="file"
-              accept=".ppt,.pptx,.pdf"
-              (change)="onFileChange($event)"
-            />
-          </div>
-          <div *ngSwitchCase="'link'">
-            <input
-              type="url"
-              placeholder="https://…"
-              [ngModel]="newUrl()"
-              (ngModelChange)="newUrl.set($event)"
-              name="assetUrl"
-            />
-          </div>
-          <div *ngSwitchCase="'text'">
-            <input
-              type="text"
-              placeholder="Nota / pie de foto…"
-              [ngModel]="newText()"
-              (ngModelChange)="newText.set($event)"
-              name="assetText"
-            />
-          </div>
-        </ng-container>
-  
-        <button class="btn" (click)="addAsset()" [disabled]="saving()">Agregar</button>
+      <p class="assets-hint">
+        Adjunta imágenes, videos, PPTs, links o notas que complementen esta presentación.
+      </p>
+    </div>
+
+    <div class="adder">
+      <!-- tipo -->
+      <select
+        class="inp kind"
+        [ngModel]="newKind()"
+        (ngModelChange)="newKind.set($event)"
+        name="kind">
+        <option value="image">Imagen</option>
+        <option value="video">Video</option>
+        <option value="ppt">PPT</option>
+        <option value="link">Link</option>
+        <option value="text">Texto</option>
+      </select>
+
+      <!-- input según tipo -->
+      <ng-container [ngSwitch]="newKind()">
+        <div *ngSwitchCase="'image'">
+          <input
+            id="asset-file"
+            class="inp"
+            type="file"
+            accept="image/*"
+            (change)="onFileChange($event)" />
+        </div>
+
+        <div *ngSwitchCase="'video'">
+          <input
+            id="asset-file"
+            class="inp"
+            type="file"
+            accept="video/*"
+            (change)="onFileChange($event)" />
+        </div>
+
+        <div *ngSwitchCase="'ppt'">
+          <input
+            id="asset-file"
+            class="inp"
+            type="file"
+            accept=".ppt,.pptx,.pdf"
+            (change)="onFileChange($event)" />
+        </div>
+
+        <div *ngSwitchCase="'link'">
+          <input
+            class="inp"
+            type="url"
+            placeholder="https://…"
+            [ngModel]="newUrl()"
+            (ngModelChange)="newUrl.set($event)"
+            name="assetUrl" />
+        </div>
+
+        <div *ngSwitchCase="'text'">
+          <input
+            class="inp"
+            type="text"
+            placeholder="Nota / pie de foto…"
+            [ngModel]="newText()"
+            (ngModelChange)="newText.set($event)"
+            name="assetText" />
+        </div>
+      </ng-container>
+
+      <button class="btn" (click)="addAsset()" [disabled]="saving()">
+        Agregar recurso
+      </button>
+    </div>
+  </section>
+
+  <!-- Assets grid -->
+  <section class="assets-grid" *ngIf="assets().length; else emptyAssets">
+    <article class="asset card" *ngFor="let a of assets()">
+      <div class="thumb" [class.placeholder]="!isMedia(a)">
+        <img *ngIf="a.kind === 'image' && a.filePath" [src]="a.filePath" alt="Imagen" />
+        <video *ngIf="a.kind === 'video' && a.filePath" [src]="a.filePath" controls></video>
+
+        <div class="ext" *ngIf="a.kind === 'ppt'">PPT</div>
+
+        <a
+          class="link"
+          *ngIf="a.kind === 'link' && a.url"
+          [href]="a.url"
+          target="_blank"
+          rel="noopener">
+          Abrir enlace
+        </a>
+
+        <div class="text" *ngIf="a.kind === 'text'">
+          {{ a.metaJson?.caption || '(texto)' }}
+        </div>
+
+        <span class="badge">{{ kindIcon(a) }} {{ a.kind }}</span>
       </div>
-    </section>
-  
-    <!-- Assets grid -->
-    <section class="assets-grid" *ngIf="assets().length; else emptyAssets">
-      <article class="asset card" *ngFor="let a of assets()">
-        <div class="thumb" [class.placeholder]="!isMedia(a)">
-          <img *ngIf="a.kind === 'image' && a.filePath" [src]="a.filePath" alt="img" />
-          <video *ngIf="a.kind === 'video' && a.filePath" [src]="a.filePath" controls></video>
-          <div class="ext" *ngIf="a.kind === 'ppt'">PPT</div>
-          <a
-            class="link"
-            *ngIf="a.kind === 'link' && a.url"
-            [href]="a.url"
-            target="_blank"
-            rel="noopener"
-          >
-            Abrir enlace
+
+      <div class="ainfo">
+        <div class="row">
+          <span class="muted">#{{ a.id }}</span>
+          <span class="dot"></span>
+          <span class="muted">{{ a.createdAt | date: 'short' }}</span>
+
+          <button class="btn tiny danger right" (click)="deleteAsset(a)" [disabled]="saving()">
+            Eliminar
+          </button>
+        </div>
+
+        <div class="row small" *ngIf="a.filePath">
+          Archivo local:
+          <code>{{ a.filePath }}</code>
+        </div>
+
+        <div class="row small" *ngIf="a.url">
+          URL técnica:
+          <a [href]="a.url" target="_blank" rel="noopener">{{ a.url }}</a>
+        </div>
+
+        <div
+          class="row small"
+          *ngIf="a.kind === 'ppt' && a.metaJson?.edit_path as editUrl">
+          Abrir / descargar en Presenton:
+          <a [href]="editUrl" target="_blank" rel="noopener">
+            Abrir en Presenton
           </a>
-          <div class="text" *ngIf="a.kind === 'text'">
-            {{ a.metaJson?.caption || '(texto)' }}
-          </div>
-          <span class="badge">{{ kindIcon(a) }} {{ a.kind }}</span>
         </div>
-  
-        <div class="ainfo">
-          <div class="row">
-            <span class="muted">#{{ a.id }}</span>
-            <span class="dot"></span>
-            <span class="muted">{{ a.createdAt | date: 'short' }}</span>
-            <button class="btn danger right" (click)="deleteAsset(a)" [disabled]="saving()">
-              Eliminar
-            </button>
-          </div>
-  
-          <!-- Archivo local -->
-          <div class="row small" *ngIf="a.filePath">
-            Archivo local:
-            <code>{{ a.filePath }}</code>
-          </div>
-  
-          <!-- URL S3 (puede dar AccessDenied, pero la dejamos como dato técnico) -->
-          <div class="row small" *ngIf="a.url">
-            URL (S3 / descarga técnica):
-            <a [href]="a.url" target="_blank" rel="noopener">{{ a.url }}</a>
-          </div>
-  
-          <!-- 🔹 Enlace principal: abrir/descargar en Presenton -->
-          <div
-            class="row small"
-            *ngIf="a.kind === 'ppt' && a.metaJson?.edit_path as editUrl"
-          >
-            Abrir / descargar en Presenton:
-            <a [href]="editUrl" target="_blank" rel="noopener">
-              Abrir en Presenton
-            </a>
-          </div>
-        </div>
-      </article>
-    </section>
-  
-    <ng-template #emptyAssets>
-      <div class="empty">
-        <div class="title">Aún no hay recursos</div>
-        <div class="muted">Agrega imágenes, PPTs, links o notas para esta presentación.</div>
       </div>
-    </ng-template>
-  </div>
-  
-  <!-- Fallback si no hay pres (por error) -->
-  <div class="wrap" *ngIf="!pres() && !loading()">
-    <div class="status error">No se encontró la presentación.</div>
-    <button class="btn" (click)="back()">Volver</button>
-  </div>
-  
+    </article>
+  </section>
+
+  <ng-template #emptyAssets>
+    <div class="empty">
+      <div class="title">Aún no hay recursos</div>
+      <div class="muted">
+        Agrega imágenes, PPTs, links o notas para enriquecer esta presentación.
+      </div>
+    </div>
+  </ng-template>
+</div>
+
+<!-- Fallback si no hay pres (por error) -->
+<div class="wrap" *ngIf="!pres() && !loading()">
+  <div class="status error">No se encontró la presentación.</div>
+  <button class="btn light" (click)="back()">Volver</button>
+</div>

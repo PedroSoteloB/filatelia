@@ -1,186 +1,175 @@
 <div class="item-details-page">
-  <a routerLink="/items/mine" class="back-link">
-    ← Volver al listado
-  </a>
+  <div class="details-inner">
+    <a routerLink="/items/mine" class="back-link">
+      ← Volver al listado
+    </a>
 
-  <ng-container *ngIf="busy(); else contentTpl">
-    <div class="loading">Cargando detalles…</div>
-  </ng-container>
-
-  <ng-template #contentTpl>
-    <ng-container *ngIf="!error(); else errorTpl">
-      <ng-container *ngIf="item() as it">
-
-        <!-- CARD principal -->
-        <div class="details-card">
-
-          <!-- Header: título + acciones -->
-          <header class="details-header">
-            <div class="title-block">
-              <h1>{{ it.title || 'Sin título' }}</h1>
-              <p class="subtitle" *ngIf="it.country || it.issueYear">
-                <span *ngIf="it.country">{{ it.country | titlecase }}</span>
-                <span *ngIf="it.country && it.issueYear"> • </span>
-                <span *ngIf="it.issueYear">{{ it.issueYear }}</span>
-              </p>
-            </div>
-
-            <div class="header-actions">
-              <button type="button" class="btn sm" (click)="goEdit(it.id)">
-                Editar
-              </button>
-              <button
-                type="button"
-                class="btn sm danger"
-                (click)="confirmDelete(it.id)"
-              >
-                Eliminar
-              </button>
-            </div>
-          </header>
-
-          <!-- Grid principal: imagen + info -->
-          <div class="grid">
-
-            <!-- Columna imagen -->
-            <div class="image-column">
-              <div class="image-box">
-                <img
-                  *ngIf="it.cover; else noCover"
-                  [src]="it.cover!"
-                  [alt]="it.title || 'Pieza filatélica'"
-                />
-                <ng-template #noCover>
-                  <div class="no-cover">Sin imagen</div>
-                </ng-template>
-              </div>
-
-              <!-- Tira de miniaturas -->
-              <!-- <div class="thumb-strip" *ngIf="it.images?.length">
-                <button
-                  type="button"
-                  class="thumb"
-                  *ngFor="let img of it.images"
-                  (click)="setActiveImage(img)"
-                >
-                  <img *ngIf="img.file" [src]="img.file" alt="Miniatura" />
-                </button>
-              </div> -->
-            </div>
-
-            <!-- Info -->
-            <div class="info">
-              <!-- Metadatos -->
-              <dl>
-                <div>
-                  <dt>País</dt>
-                  <dd>{{ it.country ? (it.country | titlecase) : '—' }}</dd>
-                </div>
-
-                <div>
-                  <dt>Año de emisión</dt>
-                  <dd>{{ it.issueYear || '—' }}</dd>
-                </div>
-
-                <div>
-                  <dt>Condición</dt>
-                  <dd>{{ it.conditionCode || '—' }}</dd>
-                </div>
-
-                <div>
-                  <dt>Catálogo</dt>
-                  <dd>{{ it.catalogCode || '—' }}</dd>
-                </div>
-
-                <div>
-                  <dt>Valor facial</dt>
-                  <dd>
-                    <ng-container
-                      *ngIf="it.faceValue !== null && it.faceValue !== undefined; else dash"
-                    >
-                      {{ it.faceValue }}
-                      <span *ngIf="it.currency">({{ it.currency }})</span>
-                    </ng-container>
-                    <ng-template #dash>—</ng-template>
-                  </dd>
-                </div>
-
-                <div>
-                  <dt>Fecha de adquisición</dt>
-                  <dd>
-                    {{
-                      it.acquisitionDate
-                        ? (it.acquisitionDate | date:'dd/MM/yyyy':'UTC')
-                        : '—'
-                    }}
-                  </dd>
-                </div>
-
-                <div>
-                  <dt>Visibilidad</dt>
-                  <dd class="capitalize">
-                    {{
-                      it.visibility === 'public'
-                        ? 'Público'
-                        : it.visibility === 'private'
-                          ? 'Privado'
-                          : '—'
-                    }}
-                  </dd>
-                </div>
-
-                <div *ngIf="it.createdAt || it.updatedAt">
-                  <dt>Trazabilidad</dt>
-                  <dd>
-                    <div *ngIf="it.createdAt">
-                      Creado:
-                      {{ it.createdAt | date:'dd/MM/yyyy HH:mm':'UTC' }}
-                    </div>
-                    <div *ngIf="it.updatedAt">
-                      Actualizado:
-                      {{ it.updatedAt | date:'dd/MM/yyyy HH:mm':'UTC' }}
-                    </div>
-                  </dd>
-                </div>
-              </dl>
-
-              <!-- Descripción -->
-              <div *ngIf="it.description" class="prose">
-                <h2>Descripción</h2>
-                <p>{{ it.description }}</p>
-              </div>
-
-              <!-- Tags -->
-              <div *ngIf="it.tags?.length">
-                <h3 class="tags-title">Tags</h3>
-                <div class="tags-list">
-                  <span *ngFor="let t of it.tags">#{{ t.name }}</span>
-                </div>
-              </div>
-
-              <!-- Atributos -->
-              <div *ngIf="it.attributes?.length">
-                <h3 class="attrs-title">Atributos adicionales</h3>
-                <div class="attrs-grid">
-                  <div class="attr-box" *ngFor="let a of it.attributes">
-                    <div class="attr-type">{{ a.attrType }}</div>
-                    <div class="attr-name">{{ a.name }}</div>
-                    <div class="attr-value">{{ a.value ?? '—' }}</div>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-          <!-- /grid -->
-        </div>
-        <!-- /details-card -->
-
-      </ng-container>
+    <ng-container *ngIf="busy(); else contentTpl">
+      <div class="loading">Cargando detalles…</div>
     </ng-container>
 
-    <ng-template #errorTpl>
-      <div class="error-box">{{ error() }}</div>
+    <ng-template #contentTpl>
+      <ng-container *ngIf="!error(); else errorTpl">
+        <ng-container *ngIf="item() as it">
+
+          <!-- CARD PRINCIPAL -->
+          <section class="details-card">
+
+            <!-- Encabezado -->
+            <header class="details-header">
+              <div class="title-block">
+                <span class="eyebrow">Ficha filatélica</span>
+                <h1>{{ it.title || 'Sin título' }}</h1>
+                <p class="subtitle" *ngIf="it.country || it.issueYear">
+                  <span *ngIf="it.country">{{ it.country | titlecase }}</span>
+                  <span *ngIf="it.country && it.issueYear"> • </span>
+                  <span *ngIf="it.issueYear">{{ it.issueYear }}</span>
+                </p>
+              </div>
+
+              <div class="header-meta" *ngIf="it.createdAt || it.updatedAt">
+                <div *ngIf="it.createdAt">
+                  <span class="meta-label">Creado</span>
+                  <span class="meta-value">
+                    {{ it.createdAt | date:'dd/MM/yyyy HH:mm':'UTC' }}
+                  </span>
+                </div>
+                <div *ngIf="it.updatedAt">
+                  <span class="meta-label">Actualizado</span>
+                  <span class="meta-value">
+                    {{ it.updatedAt | date:'dd/MM/yyyy HH:mm':'UTC' }}
+                  </span>
+                </div>
+              </div>
+            </header>
+
+            <!-- Layout 2 columnas -->
+            <div class="details-layout">
+              <!-- Columna izquierda: imagen -->
+              <aside class="left-column">
+                <div class="image-card">
+                  <div class="image-inner">
+                    <img
+                      *ngIf="it.cover; else noCover"
+                      [src]="it.cover!"
+                      [alt]="it.title || 'Pieza filatélica'"
+                    />
+                    <ng-template #noCover>
+                      <div class="no-cover">Sin imagen</div>
+                    </ng-template>
+                  </div>
+
+                  <div class="image-caption">
+                    <span class="badge">
+                      {{ it.country ? (it.country | titlecase) : 'País no definido' }}
+                    </span>
+                    <span class="badge" *ngIf="it.issueYear">
+                      Año {{ it.issueYear }}
+                    </span>
+                    <span class="badge soft" *ngIf="it.visibility">
+                      {{ it.visibility === 'public' ? 'Público' : 'Privado' }}
+                    </span>
+                  </div>
+                </div>
+              </aside>
+
+              <!-- Columna derecha: información -->
+              <section class="right-column">
+
+                <!-- Card de metadatos -->
+                <section class="section-card">
+                  <h2 class="section-title">Datos principales</h2>
+                  <dl class="meta-grid">
+                    <div>
+                      <dt>País</dt>
+                      <dd>{{ it.country ? (it.country | titlecase) : '—' }}</dd>
+                    </div>
+
+                    <div>
+                      <dt>Año de emisión</dt>
+                      <dd>{{ it.issueYear || '—' }}</dd>
+                    </div>
+
+                    <div>
+                      <dt>Condición</dt>
+                      <dd>{{ it.conditionCode || '—' }}</dd>
+                    </div>
+
+                    <div>
+                      <dt>Código de catálogo</dt>
+                      <dd>{{ it.catalogCode || '—' }}</dd>
+                    </div>
+
+                    <div>
+                      <dt>Valor facial</dt>
+                      <dd>
+                        <ng-container
+                          *ngIf="it.faceValue !== null && it.faceValue !== undefined; else dash"
+                        >
+                          {{ it.faceValue }}
+                          <span *ngIf="it.currency">({{ it.currency }})</span>
+                        </ng-container>
+                        <ng-template #dash>—</ng-template>
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt>Fecha de adquisición</dt>
+                      <dd>
+                        {{
+                          it.acquisitionDate
+                            ? (it.acquisitionDate | date:'dd/MM/yyyy':'UTC')
+                            : '—'
+                        }}
+                      </dd>
+                    </div>
+                  </dl>
+                </section>
+
+                <!-- Card descripción -->
+                <section class="section-card" *ngIf="it.description">
+                  <h2 class="section-title">Descripción</h2>
+                  <p class="description-text">
+                    {{ it.description }}
+                  </p>
+                </section>
+
+                <!-- Card tags -->
+                <section class="section-card" *ngIf="it.tags?.length">
+                  <h2 class="section-title">Tags</h2>
+                  <div class="tags-list">
+                    <span class="tag-pill" *ngFor="let t of it.tags">
+                      #{{ t.name }}
+                    </span>
+                  </div>
+                </section>
+
+                <!-- Card atributos -->
+                <section class="section-card" *ngIf="it.attributes?.length">
+                  <h2 class="section-title">Atributos adicionales</h2>
+                  <div class="attrs-grid">
+                    <article class="attr-box" *ngFor="let a of it.attributes">
+                      <div class="attr-header">
+                        <span class="attr-chip">{{ a.attrType || 'Texto' }}</span>
+                        <span class="attr-name">{{ a.name }}</span>
+                      </div>
+                      <p class="attr-value">
+                        {{ a.value ?? '—' }}
+                      </p>
+                    </article>
+                  </div>
+                </section>
+
+              </section>
+            </div>
+          </section>
+
+        </ng-container>
+      </ng-container>
+
+      <ng-template #errorTpl>
+        <div class="error-box">{{ error() }}</div>
+      </ng-template>
     </ng-template>
-  </ng-template>
+  </div>
 </div>

@@ -23,10 +23,10 @@
     <!-- Versión autenticada -->
     <ng-container *ngIf="isAuth; else anon">
       <button class="btn" (click)="goUpload()">Nueva pieza</button>
-      <button class="btn" (click)="goMyItems()">Mis items</button>
+      <button class="btn" (click)="goMyItems()">Mis ítems</button>
       <button class="btn" (click)="goSearch()">Búsqueda</button>
       <button class="btn" (click)="goCollections()">Mis colecciones</button>
-      <button class="btn" (click)="goPresentation()">Mis Presentaciones</button>
+      <button class="btn" (click)="goPresentation()">Mis presentaciones</button>
       <button class="btn light" (click)="logout()">Cerrar sesión</button>
     </ng-container>
 
@@ -38,89 +38,142 @@
 </header>
 
 <div class="wrap">
-    <div class="top-bar">
-      <h1>Presentaciones</h1>
-      <div class="spacer"></div>
-      <button class="btn" (click)="toggleCreate()">
-        {{ showCreate() ? 'Cancelar' : 'Nueva presentación' }}
-      </button>
+  <!-- HEADER DE PÁGINA -->
+  <header class="page-header">
+    <div>
+      <h2 class="page-title">Mis presentaciones</h2>
+      <p class="page-subtitle">
+        Gestiona las presentaciones generadas a partir de tus colecciones.
+      </p>
     </div>
-  
-    <!-- estado -->
-    <div *ngIf="error()" class="status error">{{ error() }}</div>
-    <div *ngIf="loading()" class="status busy">Cargando…</div>
-  
-    <!-- Formulario de creación -->
-    <section class="card form" *ngIf="showCreate()">
-      <h2>Crear presentación</h2>
-  
-      <form [formGroup]="createForm" (ngSubmit)="submitCreate()">
-        <div class="row">
-          <label>Collection ID</label>
-          <input class="inp" type="number" formControlName="collection_id" placeholder="ID de colección" />
-          <div class="hint" *ngIf="createForm.controls.collection_id.touched && createForm.controls.collection_id.invalid">
-            Requerido
-          </div>
+
+    <button class="btn primary" (click)="toggleCreate()">
+      {{ showCreate() ? 'Cancelar' : 'Nueva presentación' }}
+    </button>
+  </header>
+
+  <!-- ESTADOS -->
+  <div *ngIf="error()" class="status error">{{ error() }}</div>
+  <div *ngIf="loading()" class="status busy">Cargando…</div>
+
+  <!-- FORMULARIO DE CREACIÓN -->
+  <section class="card form" *ngIf="showCreate()">
+    <h3>Crear presentación</h3>
+    <p class="form-hint">
+      Usa una colección existente como base y añade una portada opcional para tu PPT.
+    </p>
+
+    <form [formGroup]="createForm" (ngSubmit)="submitCreate()">
+      <div class="row">
+        <label>Collection ID</label>
+        <input
+          class="inp"
+          type="number"
+          formControlName="collection_id"
+          placeholder="ID de colección (ej. 12)" />
+        <div
+          class="hint"
+          *ngIf="createForm.controls.collection_id.touched && createForm.controls.collection_id.invalid">
+          Campo requerido.
         </div>
-  
-        <div class="row">
-          <label>Título</label>
-          <input class="inp" type="text" formControlName="title" placeholder="Ej. Perú 1900–1950 (Selección)" />
-          <div class="hint" *ngIf="createForm.controls.title.touched && createForm.controls.title.invalid">
-            Requerido (máx. 180)
-          </div>
+      </div>
+
+      <div class="row">
+        <label>Título</label>
+        <input
+          class="inp"
+          type="text"
+          formControlName="title"
+          placeholder="Ej. Perú 1900–1950 (Selección)" />
+        <div
+          class="hint"
+          *ngIf="createForm.controls.title.touched && createForm.controls.title.invalid">
+          Requerido (máx. 180 caracteres).
         </div>
-  
-        <div class="row">
-          <label>Descripción (opcional)</label>
-          <textarea class="inp" rows="3" formControlName="description" placeholder="Texto breve…"></textarea>
+      </div>
+
+      <div class="row">
+        <label>Descripción (opcional)</label>
+        <textarea
+          class="inp"
+          rows="3"
+          formControlName="description"
+          placeholder="Texto breve para contextualizar la colección en la presentación…">
+        </textarea>
+      </div>
+
+      <div class="row">
+        <label>Portada (opcional)</label>
+        <input
+          class="inp"
+          type="file"
+          accept="image/*"
+          (change)="onCoverChange($event)" />
+        <div class="hint">
+          Imagen en formato JPG/PNG; se usará como portada en la presentación.
         </div>
-  
-        <div class="row">
-          <label>Portada (opcional)</label>
-          <input class="inp" type="file" accept="image/*" (change)="onCoverChange($event)" />
-        </div>
-  
-        <div class="actions">
-          <button class="btn primary" type="submit" [disabled]="loading()">Crear</button>
-          <button class="btn light" type="button" (click)="toggleCreate()">Cancelar</button>
-        </div>
-      </form>
-    </section>
-  
-    <!-- lista -->
-    <section *ngIf="items().length" class="grid">
-      <article class="card" *ngFor="let p of items(); trackBy: trackById">
-        <a [routerLink]="['/presentations', p.id]" class="thumb" [class.placeholder]="!p.cover">
-          <img *ngIf="p.cover" [src]="p.cover" alt="cover" />
-          <span *ngIf="!p.cover">Sin portada</span>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn primary" type="submit" [disabled]="loading()">Crear presentación</button>
+        <button class="btn light" type="button" (click)="toggleCreate()">Cancelar</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- LISTA DE PRESENTACIONES -->
+  <section *ngIf="items().length" class="presentations-grid">
+    <article class="presentation-card" *ngFor="let p of items(); trackBy: trackById">
+      <a
+        [routerLink]="['/presentations', p.id]"
+        class="thumb"
+        [class.placeholder]="!p.cover">
+        <img *ngIf="p.cover" [src]="p.cover" alt="Portada de presentación" />
+        <span *ngIf="!p.cover">Sin portada</span>
+      </a>
+
+      <div class="body">
+        <a class="title" [routerLink]="['/presentations', p.id]">
+          {{ p.title }}
         </a>
-        <div class="body">
-          <a class="title" [routerLink]="['/presentations', p.id]">{{ p.title }}</a>
-          <div class="meta">
-            <span>#{{ p.id }}</span>
-            <span>• Col: {{ p.collection_id }}</span>
-            <span>• {{ p.updated_at | date:'short' }}</span>
-          </div>
-          <p class="desc" *ngIf="p.description">{{ p.description }}</p>
-          <div class="actions">
-            <a class="btn tiny" [routerLink]="['/presentations', p.id]">Ver</a>
-          </div>
+
+        <div class="meta">
+          <span>#{{ p.id }}</span>
+          <span>• Col: {{ p.collection_id }}</span>
+          <span>• {{ p.updated_at | date:'short' }}</span>
         </div>
-      </article>
-    </section>
-  
-    <!-- vacío -->
-    <section *ngIf="!loading() && !items().length" class="empty">
-      <div class="title-empty">Aún no tienes presentaciones</div>
-      <div class="muted">Crea una nueva para empezar.</div>
-    </section>
-  
-    <!-- paginación -->
-    <div class="pager" *ngIf="items().length || offset>0">
-      <button class="btn" (click)="load('prev')" [disabled]="offset===0">← Anterior</button>
-      <span class="muted">offset {{ offset }}</span>
-      <button class="btn" (click)="load('next')" [disabled]="!hasMore()">Siguiente →</button>
+
+        <p class="desc" *ngIf="p.description">
+          {{ p.description }}
+        </p>
+
+        <div class="card-actions">
+          <a class="btn tiny light" [routerLink]="['/presentations', p.id]">Ver detalle</a>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- VACÍO -->
+  <section *ngIf="!loading() && !items().length" class="empty">
+    <div class="title-empty">Aún no tienes presentaciones</div>
+    <div class="muted">
+      Crea una nueva a partir de una colección para empezar a generar diapositivas.
     </div>
+  </section>
+
+  <!-- PAGINACIÓN -->
+  <div class="pager" *ngIf="items().length || offset > 0">
+    <button class="btn light" (click)="load('prev')" [disabled]="offset === 0">
+      ← Anterior
+    </button>
+
+    <span class="muted">
+      Offset <b>{{ offset }}</b>
+    </span>
+
+    <button class="btn light" (click)="load('next')" [disabled]="!hasMore()">
+      Siguiente →
+    </button>
   </div>
-  
+</div>

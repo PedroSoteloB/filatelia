@@ -1,32 +1,81 @@
 <div class="wrap">
+  <!-- TOP BAR -->
   <div class="top-bar">
     <button class="btn light" (click)="goBack()">← Volver</button>
-    <div class="title">Colección #{{ collectionId() }}</div>
+
+    <div class="top-info">
+      <div class="title">Colección #{{ collectionId() }}</div>
+      <div class="subtitle">Refina, selecciona y define la portada de este grupo de piezas.</div>
+    </div>
+
     <div class="spacer"></div>
   </div>
 
   <!-- PANEL DE SUB-BÚSQUEDA -->
   <section class="subsearch">
-    <div class="row">
-      <input class="inp" placeholder="Buscar (q)" [(ngModel)]="form.q" />
-      <input class="inp" placeholder="País (country)" [(ngModel)]="form.country" />
-      <input class="inp" type="number" placeholder="Año desde" [(ngModel)]="form.yearFrom" />
-      <input class="inp" type="number" placeholder="Año hasta" [(ngModel)]="form.yearTo" />
+    <header class="subsearch-head">
+      <div class="pill">Sub-búsqueda dentro de la colección</div>
+      <p class="hint">
+        Ajusta estos filtros para reducir temporalmente los ítems (no modifica la colección base).
+      </p>
+    </header>
+
+    <div class="row row-1">
+      <div class="field">
+        <label>Texto libre</label>
+        <input class="inp" placeholder="Título, descripción, catálogo…" [(ngModel)]="form.q" />
+      </div>
+
+      <div class="field">
+        <label>País</label>
+        <input class="inp" placeholder="Country" [(ngModel)]="form.country" />
+      </div>
+
+      <div class="field">
+        <label>Año desde</label>
+        <input class="inp" type="number" placeholder="Ej. 1900" [(ngModel)]="form.yearFrom" />
+      </div>
+
+      <div class="field">
+        <label>Año hasta</label>
+        <input class="inp" type="number" placeholder="Ej. 1950" [(ngModel)]="form.yearTo" />
+      </div>
     </div>
-    <div class="row">
-      <input class="inp" placeholder="Tags (coma-separados)" [(ngModel)]="tagsComma" />
-      <select class="inp" [(ngModel)]="form.tagsMode">
-        <option value="OR">Tags: OR</option>
-        <option value="AND">Tags: AND</option>
-      </select>
-      <button class="btn" (click)="runSubSearch()">Sub-buscar (reduce 50→25)</button>
-      <button class="btn light" (click)="resetSubSearch()">Limpiar filtros</button>
-      <button class="btn ghost" (click)="reloadBase()">Ver todo (colección)</button>
+
+    <div class="row row-2">
+      <div class="field">
+        <label>Tags</label>
+        <input
+          class="inp"
+          placeholder="Temática, color… (separados por coma)"
+          [(ngModel)]="tagsComma" />
+      </div>
+
+      <div class="field narrow">
+        <label>Modo</label>
+        <select class="inp" [(ngModel)]="form.tagsMode">
+          <option value="OR">Tags: OR</option>
+          <option value="AND">Tags: AND</option>
+        </select>
+      </div>
+
+      <div class="field btns">
+        <button class="btn" (click)="runSubSearch()">Aplicar sub-búsqueda</button>
+        <button class="btn light" (click)="resetSubSearch()">Limpiar filtros</button>
+        <button class="btn ghost" (click)="reloadBase()">Ver todo (colección)</button>
+      </div>
     </div>
-    <div class="row">
-      <textarea class="inp full" rows="3"
-        placeholder='Attrs JSON (opcional) p.ej. [{"name":"color","op":"like","value":"azul"}]'
-        [(ngModel)]="attrsJson"></textarea>
+
+    <div class="row row-3">
+      <div class="field full">
+        <label>Atributos avanzados (JSON opcional)</label>
+        <textarea
+          class="inp"
+          rows="3"
+          placeholder='Ej.: [{"name":"color","op":"like","value":"azul"}]'
+          [(ngModel)]="attrsJson">
+        </textarea>
+      </div>
     </div>
   </section>
 
@@ -34,16 +83,20 @@
   <div *ngIf="error()" class="status error">{{ error() }}</div>
   <div *ngIf="busy()" class="status busy">Cargando…</div>
 
-  <!-- HISTORIA OPCIONAL (con recuadro y full width) -->
+  <!-- HISTORIA OPCIONAL -->
   <section class="history-panel" *ngIf="items().length">
-    <div class="row">
-      <div class="history-label"><strong>Historia (opcional)</strong></div>
-    </div>
+    <header class="history-head">
+      <div class="pill soft">Historia de la colección (opcional)</div>
+      <p class="hint">
+        Describe el hilo narrativo de esta selección: país, época, temática, motivo del snapshot, etc.
+      </p>
+    </header>
+
     <div class="row">
       <textarea
-        class="inp full"
+        class="inp"
         rows="3"
-        placeholder="Escribe aquí la historia de esta colección (opcional)…"
+        placeholder="Escribe aquí la historia o contexto curatorial de esta colección…"
         [(ngModel)]="historyNote">
       </textarea>
     </div>
@@ -51,23 +104,40 @@
 
   <!-- BARRA DE SELECCIÓN -->
   <section class="select-bar" *ngIf="items().length">
-    <div>Resultados: <b>{{ items().length }}</b></div>
-    <div>Seleccionados: <b>{{ selectedIds.size }}</b> (recom.: 10–15)</div>
+    <div class="chips">
+      <span class="chip">
+        Resultados: <b>{{ items().length }}</b>
+      </span>
+      <span class="chip" [class.chip-ok]="selectedIds.size >= 10 && selectedIds.size <= 15">
+        Seleccionados: <b>{{ selectedIds.size }}</b> <span class="hint-mini">(ideal 10–15)</span>
+      </span>
+    </div>
+
     <div class="spacer"></div>
-    <button class="btn" [disabled]="selectedIds.size===0 || busy()" (click)="createSnapshot(true)">
-      Crear Snapshot
+
+    <button
+      class="btn primary"
+      [disabled]="selectedIds.size === 0 || busy()"
+      (click)="createSnapshot(true)">
+      Crear Presentacion con seleccionados
     </button>
   </section>
 
   <!-- VACÍO -->
   <section *ngIf="!items().length && !busy()" class="empty">
     <div class="title-empty">Colección vacía</div>
-    <div class="muted">No hay piezas que coincidan con la búsqueda actual.</div>
+    <div class="muted">
+      No hay piezas que coincidan con los filtros actuales. Prueba ampliando la búsqueda.
+    </div>
   </section>
 
-  <!-- GRID -->
+  <!-- GRID DE PIEZAS -->
   <section class="grid" *ngIf="items().length">
-    <article class="card" *ngFor="let it of items()">
+    <article
+      class="card"
+      *ngFor="let it of items()"
+      [class.selected]="selectedIds.has(it.id)">
+      <!-- Checkbox de selección -->
       <label class="sel">
         <input
           type="checkbox"
@@ -75,21 +145,28 @@
           (change)="toggleSelect(it.id, ($any($event.target)).checked)" />
       </label>
 
+      <!-- Imagen -->
       <div class="thumb" [class.placeholder]="!it.cover" (click)="goItemDetail(it.id)">
         <img *ngIf="it.cover" [src]="it.cover" alt="" />
         <span *ngIf="!it.cover">Sin imagen</span>
       </div>
 
+      <!-- Información -->
       <div class="body" (click)="goItemDetail(it.id)">
         <div class="stamp-title" [title]="it.title">{{ it.title }}</div>
-        <div class="meta">{{ buildMeta(it) }}</div>
+
+        <div class="meta">
+          {{ buildMeta(it) }}
+        </div>
       </div>
 
+      <!-- Botón de portada -->
       <button
-        class="btn tiny"
+        class="btn tiny cover-btn"
         (click)="setCover(it.id); $event.stopPropagation()"
-        [class.primary]="coverCandidateId===it.id">
-        Usar como portada
+        [class.primary]="coverCandidateId === it.id">
+        <span *ngIf="coverCandidateId === it.id">Portada seleccionada</span>
+        <span *ngIf="coverCandidateId !== it.id">Usar como portada</span>
       </button>
     </article>
   </section>

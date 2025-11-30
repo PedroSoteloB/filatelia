@@ -12,6 +12,7 @@
       <circle cx="60" cy="52" r="24" fill="#85586F"></circle>
       <path d="M30 82h60" stroke="#85586F" stroke-width="6" stroke-linecap="round" />
     </svg>
+
     <div class="title">
       <h1>Filatelia</h1>
       <p>Catálogo personal de sellos</p>
@@ -24,10 +25,10 @@
     <!-- Versión autenticada -->
     <ng-container *ngIf="isAuth; else anon">
       <button class="btn" (click)="goUpload()">Nueva pieza</button>
-      <button class="btn" (click)="goMyItems()">Mis items</button>
+      <button class="btn" (click)="goMyItems()">Mis ítems</button>
       <button class="btn" (click)="goSearch()">Búsqueda</button>
       <button class="btn" (click)="goCollections()">Mis colecciones</button>
-      <button class="btn" (click)="goPresentation()">Mis Presentaciones</button>
+      <button class="btn" (click)="goPresentation()">Mis presentaciones</button>
       <button class="btn light" (click)="logout()">Cerrar sesión</button>
     </ng-container>
 
@@ -37,108 +38,151 @@
     </ng-template>
   </nav>
 </header>
-<div class="wrap">
-    <h1 class="page-title">Mis colecciones</h1>
-  
+
+<main class="collections-page">
+  <div class="wrap">
+
+    <!-- Header de página -->
+    <header class="page-header">
+      <div>
+        <h1 class="page-title">Mis colecciones</h1>
+        <p class="page-subtitle">
+          Agrupa tus piezas filatélicas en colecciones temáticas o snapshots estáticos.
+        </p>
+      </div>
+
+      <div class="page-header-actions" *ngIf="isAuth">
+        <button class="btn primary" (click)="goSearch()">
+          Crear desde búsqueda
+        </button>
+      </div>
+    </header>
+
     <!-- Estado de error -->
-    <div *ngIf="error()" class="status error">{{ error() }}</div>
-  
+    <div *ngIf="error()" class="status error">
+      {{ error() }}
+    </div>
+
     <!-- Estado de carga -->
-    <div *ngIf="busy()" class="status busy">Cargando…</div>
-  
+    <div *ngIf="busy()" class="status busy">
+      Cargando colecciones…
+    </div>
+
     <!-- Resumen general -->
-    <section class="summary-panel">
+    <section class="summary-panel" *ngIf="collections().length">
       <div class="stat">
         <div class="num">{{ collections().length }}</div>
-        <div class="label">Total</div>
+        <div class="label">Colecciones totales</div>
       </div>
-      <div class="stat">
+
+      <!-- <div class="stat">
         <div class="num">{{ smartCount() }}</div>
-        <div class="label">Smart</div>
+        <div class="label">Smart (dinámicas)</div>
       </div>
+
       <div class="stat">
         <div class="num">{{ staticCount() }}</div>
-        <div class="label">Snapshot estática</div>
-      </div>
+        <div class="label">Snapshots (estáticas)</div>
+      </div> -->
     </section>
-  
+
     <!-- Vacío -->
     <section *ngIf="!collections().length && !busy()" class="empty">
-      <div class="title">No tienes colecciones aún</div>
-      <div class="muted">Crea una SMART o SNAPSHOT desde la búsqueda temática.</div>
+      <h2>No tienes colecciones aún</h2>
+      <p class="muted">
+        Crea una colección desde la búsqueda temática y guarda tus selecciones favoritas.
+      </p>
+      <button class="btn primary" (click)="goSearch()">
+        Crear mi primera colección
+      </button>
     </section>
-  
+
     <!-- Lista -->
-    <section class="grid" *ngIf="collections().length">
-      <article class="card" *ngFor="let c of collections()">
-        <div class="card-head">
-          <div class="left">
-            <div class="name" [title]="c.name">{{ c.name }}</div>
-  
-            <div
-              class="type-badge"
-              [class.smart]="c.type === 'smart'"
-              [class.static]="c.type === 'static'">
-              <ng-container *ngIf="c.type === 'smart'">SMART</ng-container>
-              <ng-container *ngIf="c.type === 'static'">SNAPSHOT</ng-container>
-            </div>
-          </div>
-  
-          <div class="right actions">
-            <a class="btn light" [routerLink]="buildDetailLink(c)">Ver</a>
-            <button
-              class="btn danger light"
-              (click)="deleteCollection(c)"
-              [disabled]="busy()">
-              Eliminar
-            </button>
-          </div>
-        </div>
-  
-        <div class="card-body">
-          <div class="row main-row">
-            <div class="col">
-              <div class="label small muted">Descripción</div>
-              <div class="value desc">
-                {{ c.description || '—' }}
-              </div>
-            </div>
-  
-            <div class="col" *ngIf="c.type === 'smart'">
-              <div class="label small muted">Filtro</div>
-              <div class="value filter">
-                {{ previewFilter(c) || '—' }}
-              </div>
-            </div>
-  
-            <div class="col" *ngIf="c.type === 'static'">
-              <div class="label small muted">Contenido</div>
-              <div class="value filter">
-                Lista fija de ítems ↔ ver detalle
-              </div>
-            </div>
-          </div>
-  
-          <div class="row meta-row">
-            <div class="meta">
-              <span class="muted small">Orden:</span>
-              <span class="code small">
-                {{ c.sort_key || 'issue_year' }} / {{ c.sort_dir || 'asc' }}
-              </span>
-            </div>
-  
-            <div class="meta">
-              <span class="muted small">Creado:</span>
-              <span class="small">{{ fmtDate(c.created_at) }}</span>
-            </div>
-  
-            <div class="meta">
-              <span class="muted small">Actualizado:</span>
-              <span class="small">{{ fmtDate(c.updated_at) }}</span>
-            </div>
-          </div>
-        </div>
-      </article>
-    </section>
+    <section class="collections-grid" *ngIf="collections().length">
+  <article class="collection-card" *ngFor="let c of collections()">
+  <div class="card-head">
+    <div class="left">
+      <div class="name" [title]="c.name">{{ c.name }}</div>
+
+      <div
+        class="type-badge"
+        [class.smart]="c.type === 'smart'"
+        [class.static]="c.type === 'static'">
+        <ng-container *ngIf="c.type === 'smart'">SMART DINÁMICA</ng-container>
+        <ng-container *ngIf="c.type === 'static'">SNAPSHOT ESTÁTICA</ng-container>
+      </div>
+    </div>
+
+    <div class="right actions">
+      <a class="btn tiny light" [routerLink]="buildDetailLink(c)">Ver detalle</a>
+      <button
+        class="btn tiny danger"
+        (click)="deleteCollection(c)"
+        [disabled]="busy()">
+        Eliminar
+      </button>
+    </div>
   </div>
-  
+
+  <div class="card-body">
+    <!-- micro-texto arriba, cambia según tipo -->
+    <div class="tagline" *ngIf="c.type === 'smart'">
+      <span class="pill pill-smart">Se actualiza automáticamente según tus filtros.</span>
+    </div>
+    <div class="tagline" *ngIf="c.type === 'static'">
+      <span class="pill pill-static">Foto fija de una búsqueda guardada.</span>
+    </div>
+
+    <!-- bloque de info principal -->
+    <dl class="info">
+      <div class="info-block">
+        <dt>Descripción</dt>
+        <dd>
+          {{ c.description || 'Snapshot estático de resultados (IDs referenciados).' }}
+        </dd>
+      </div>
+
+      <div class="info-block" *ngIf="c.type === 'smart'">
+        <dt>Filtro</dt>
+        <dd class="mono">
+          {{ previewFilter(c) || 'Sin filtros visibles – revisa el detalle.' }}
+        </dd>
+      </div>
+
+      <div class="info-block" *ngIf="c.type === 'static'">
+        <dt>Contenido</dt>
+        <dd class="pill-box">
+          <span class="strong">Lista fija de ítems.</span>
+          <span class="hint">
+            Abre <b>“Ver detalle”</b> para revisar todas las piezas incluidas.
+          </span>
+        </dd>
+      </div>
+    </dl>
+
+    <!-- meta inferior -->
+    <div class="meta-row">
+      <div class="meta">
+        <span class="muted small">Orden:</span>
+        <span class="code small">
+          {{ c.sort_key || 'issue_year' }} / {{ c.sort_dir || 'asc' }}
+        </span>
+      </div>
+
+      <div class="meta">
+        <span class="muted small">Creado:</span>
+        <span class="small">{{ fmtDate(c.created_at) }}</span>
+      </div>
+
+      <div class="meta">
+        <span class="muted small">Actualizado:</span>
+        <span class="small">{{ fmtDate(c.updated_at) }}</span>
+      </div>
+    </div>
+  </div>
+</article>
+
+    </section>
+
+  </div>
+</main>
