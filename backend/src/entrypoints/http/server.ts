@@ -843,9 +843,10 @@ function authGuard(req: FastifyRequest, reply: FastifyReply, done: HookHandlerDo
 //   }
 // });
 // ================== CREAR ITEM ==================
+
 app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
-    const ownerId = ensureAuth(req); // debería devolverte el userId (number)
+    const ownerId = ensureAuth(req); // userId
 
     const ct = String((req.headers['content-type'] || '')).toLowerCase();
     const isMultipart = ct.startsWith('multipart/form-data');
@@ -863,59 +864,99 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       const maxImages = 12;
 
       for await (const p of parts) {
-        // Campo de texto "metadata"
+        // Campo "metadata" (JSON)
         if (p?.type === 'field' && p.fieldname === 'metadata') {
           try {
-            meta = JSON.parse(p.value);
+            meta = JSON.parse(String(p.value ?? '{}'));
           } catch {
-            return reply.code(400).send({ message: 'metadata inválido (no es JSON)' });
+            return reply.code(400).send({ message: 'metadata inválido (JSON)' });
           }
           continue;
         }
 
-        // Archivos de imagen
+        // Archivos
         if (p?.type === 'file') {
-          if (!allowed.has(p.mimetype)) continue;
-          if (files.length >= maxImages) continue;
-
-          const chunks: Buffer[] = [];
-          for await (const ch of p.file) {
-            chunks.push(ch);
+          if (files.length >= maxImages) {
+            await p.file?.resume?.();
+            continue;
           }
-
-          files.push({
-            buffer: Buffer.concat(chunks),
-            filename: p.filename,
-            mime: p.mimetype,
-          });
+          const buf = await p.toBuffer();
+          const filename = String(p.filename ?? 'image');
+          const mime = String(p.mimetype ?? '');
+          if (!buf?.length) continue;
+          if (!allowed.has(mime)) {
+            return reply.code(400).send({
+              message: 'Formato no soportado (JPG/PNG/WEBP/GIF)',
+            });
+          }
+          files.push({ buffer: buf, filename, mime });
+          continue;
         }
       }
     } else {
-      // modo application/json
-      meta = req.body;
+      // application/json
+      meta = req.body || null;
     }
 
-    if (!meta) {
-      return reply.code(400).send({ message: 'metadata requerido' });
+    if (!meta || !meta.title || !String(meta.title).trim()) {
+      return reply.code(400).send({ message: 'metadata.title requerido' });
     }
 
-    // Campos básicos desde meta
-    const {
-      title,
-      description,
-      country,
-      year,              // se mapeará a issue_year
-      face_value,
-      condition,         // se mapeará a condition_code
-      catalog_code,
-      currency,
-      acquisition_date,
-      visibility,
-      tags = [],
-      attributes = [],
-    } = meta;
+    // Permitir crear sin imágenes si está habilitado
+    const allowNoImages =
+      process.env.ALLOW_ITEMS_WITHOUT_IMAGES === '1' ||
+      meta?.allowNoImages === true ||
+      String(req.query?.allowNoImages || '').toLowerCase() === 'true';
 
-    // 1) INSERT EN philatelic_items CON OUTPUT INSERTED.id
+    if (!files.length && !allowNoImages) {
+      return reply.code(400).send({ message: 'al menos una imagen requerida' });
+    }
+
+    // --------- MAPEO CAMPOS AL ESQUEMA SQL SERVER ---------
+    // Front viejo: issueYear, catalogCode, faceValue, acquisitionDate, condition
+    // Nuevo / snake_case: issue_year, catalog_code, face_value, acquisition_date, condition_code
+
+    const title = String(meta.title).trim();
+    const description = meta.description || null;
+    const country = meta.country || null;
+
+    const issueYear =
+      meta.issue_year ??
+      meta.issueYear ??
+      meta.year ??
+      null;
+
+    const conditionCode =
+      meta.condition_code ??
+      meta.condition ??
+      null;
+
+    const catalogCode =
+      meta.catalog_code ??
+      meta.catalogCode ??
+      null;
+
+    const faceValue =
+      meta.face_value ??
+      meta.faceValue ??
+      null;
+
+    const currency = meta.currency || null;
+
+    const acquisitionDate =
+      meta.acquisition_date ??
+      meta.acquisitionDate ??
+      null; // 'YYYY-MM-DD' o null
+
+    const visibility =
+      meta.visibility && String(meta.visibility).trim()
+        ? String(meta.visibility).trim()
+        : 'public';
+
+    const tags = Array.isArray(meta.tags) ? meta.tags : [];
+    const attributes = Array.isArray(meta.attributes) ? meta.attributes : [];
+
+    // --------- INSERT EN philatelic_items + OBTENER ID ---------
     const [rows]: any = await db.execute(
       `
       INSERT INTO philatelic_items (
@@ -924,47 +965,53 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         description,
         country,
         issue_year,
-        face_value,
         condition_code,
         catalog_code,
+        face_value,
         currency,
         acquisition_date,
         visibility,
         created_at,
         updated_at
       )
-      OUTPUT INSERTED.id
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME())
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME());
+
+      SELECT CAST(SCOPE_IDENTITY() AS bigint) AS id;
       `,
       [
         ownerId,
-        title || null,
-        description || null,
-        country || null,
-        year ?? null,                   // -> issue_year
-        face_value ?? null,
-        condition || null,              // -> condition_code
-        catalog_code || null,
+        title,
+        description,
+        country,
+        issueYear ?? null,
+        conditionCode || null,
+        catalogCode || null,
+        faceValue ?? null,
         currency || null,
-        acquisition_date || null,
-        visibility || 'private',        // o el valor por defecto que uses
+        acquisitionDate || null,
+        visibility,
       ]
     );
 
-    const itemRow = rows && rows[0];
-    if (!itemRow || !itemRow.id) {
+    // rows debería ser el recordset del SELECT final
+    const itemRow =
+      (Array.isArray(rows) && rows[0]) ||
+      (rows && rows.recordset && rows.recordset[0]) ||
+      rows;
+
+    const rawId = itemRow?.id;
+    const itemId = rawId != null ? Number(rawId) : NaN;
+
+    if (!itemRow || !rawId || !Number.isFinite(itemId)) {
       throw new Error('No se pudo obtener el id insertado de philatelic_items');
     }
 
-    const itemId = itemRow.id;
-
-    // 2) TAGS (si tienes tabla tags + item_tags)
+    // --------- TAGS ---------
     if (Array.isArray(tags) && tags.length > 0) {
       for (const t of tags) {
         const name = String(t || '').trim();
         if (!name) continue;
 
-        // crea/obtén tag
         const [tagRows]: any = await db.execute(
           `
           MERGE tags AS target
@@ -980,10 +1027,12 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           [name, ownerId]
         );
 
-        const tagRow = tagRows && tagRows[0];
-        if (!tagRow || !tagRow.id) continue;
-
-        const tagId = tagRow.id;
+        const tagRow =
+          (Array.isArray(tagRows) && tagRows[0]) ||
+          (tagRows && tagRows.recordset && tagRows.recordset[0]) ||
+          tagRows;
+        const tagId = tagRow?.id;
+        if (!tagId) continue;
 
         await db.execute(
           `
@@ -995,7 +1044,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       }
     }
 
-    // 3) ATTRIBUTES (si usas tabla item_attributes / attribute_definitions)
+    // --------- ATTRIBUTES ---------
     if (Array.isArray(attributes) && attributes.length > 0) {
       for (const attr of attributes) {
         const defId = attr?.definition_id;
@@ -1023,12 +1072,25 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       }
     }
 
-    // 4) IMÁGENES (si tienes item_images)
+    // --------- IMÁGENES ---------
     if (files.length > 0) {
-      // aquí solo pongo un stub; tú ya tienes la lógica de guardar en disco/Blob
-      for (const f of files) {
-        // EJEMPLO: guarda path en item_images
-        const fakePath = `/uploads/items/${itemId}/${f.filename}`;
+      const fs = require('fs');
+      const path = require('path');
+      const base =
+        process.env.FILES_BASE_PATH ||
+        path.join(process.cwd(), 'uploads');
+
+      if (!fs.existsSync(base)) {
+        fs.mkdirSync(base, { recursive: true });
+      }
+
+      for (const [i, f] of files.entries()) {
+        const safeName = `${itemId}-${Date.now()}-${i}-${f.filename}`.replace(
+          /[^\w.\-]+/g,
+          '_'
+        );
+        const fullPath = path.join(base, safeName);
+        fs.writeFileSync(fullPath, f.buffer);
 
         await db.execute(
           `
@@ -1040,12 +1102,12 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           )
           VALUES (?, ?, ?, SYSUTCDATETIME())
           `,
-          [itemId, fakePath, f.mime]
+          [itemId, fullPath, f.mime]
         );
       }
     }
 
-    // Respuesta final
+    // --------- RESPUESTA ---------
     reply.code(201).send({
       id: itemId,
       message: 'item_creado',
@@ -1057,7 +1119,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       .send({ message: 'internal_error', detail: String(e?.message || '') });
   }
 });
-
 
 
 // GET /me/items
