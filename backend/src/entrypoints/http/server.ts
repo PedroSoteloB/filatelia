@@ -957,8 +957,8 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         ? String(meta.visibility).trim()
         : 'public';
 
-    // meta.attributes = ya viene armado desde el front con definition_id
-    const attributes = Array.isArray(meta.attributes) ? meta.attributes : [];
+    // meta.attributes: por si el front ya manda definition_id / attribute_id
+    let attributes: any[] = Array.isArray(meta.attributes) ? meta.attributes.slice() : [];
 
     // --------- INSERT EN philatelic_items ---------
     const [result]: any = await db.execute(
@@ -1004,34 +1004,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       );
     }
 
-    // --------- ATTRIBUTES (usa item_attributes: item_id, attribute_id, value_*) ---------
-    if (Array.isArray(attributes) && attributes.length > 0) {
-      for (const attr of attributes) {
-        const defId = attr?.definition_id ?? attr?.attribute_id;
-        if (!defId) continue;
-
-        await db.execute(
-          `
-          INSERT INTO item_attributes (
-            item_id,
-            attribute_id,
-            value_text,
-            value_number,
-            value_date
-          )
-          VALUES (?, ?, ?, ?, ?);
-          `,
-          [
-            itemId,
-            defId,
-            attr.value_text ?? null,
-            attr.value_number ?? null,
-            attr.value_date ?? null,
-          ]
-        );
-      }
-    }
-
     // --------- IMÁGENES (item_images: item_id, file_path, is_primary) ---------
     if (files.length > 0) {
       const fs   = require('fs');
@@ -1067,7 +1039,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     }
 
     // ============================================================
-    //  TAGS  (adaptado de tu versión MySQL)
+    //  TAGS
     // ============================================================
     if (Array.isArray(meta?.tags) && meta.tags.length) {
       const tagNames: string[] = meta.tags
@@ -1077,10 +1049,12 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       const tagIds: number[] = [];
 
       for (const name of tagNames) {
+        let tagId: number | null = null;
+
         // 1) ¿ya existe la tag?
         const [rowsExist]: any = await db.execute(
           `
-          SELECT TOP (1) id
+          SELECT TOP (1) *
             FROM tags
            WHERE owner_user_id = ?
              AND name = ?;
@@ -1089,17 +1063,50 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         );
 
         if (Array.isArray(rowsExist) && rowsExist.length) {
-          tagIds.push(Number(rowsExist[0].id));
-        } else {
-          // 2) crear tag nueva
-          const [insTag]: any = await db.execute(
+          const row = rowsExist[0];
+          tagId = Number(
+            row.id ??
+            row.tag_id ??
+            row.TAG_ID ??
+            row.ID ??
+            null
+          );
+        }
+
+        // 2) si no existía, crearla y volver a leerla
+        if (!tagId) {
+          await db.execute(
             `
             INSERT INTO tags (name, owner_user_id)
             VALUES (?, ?);
             `,
             [name, ownerId]
           );
-          tagIds.push(Number(insTag.insertId));
+
+          const [rowsNew]: any = await db.execute(
+            `
+            SELECT TOP (1) *
+              FROM tags
+             WHERE owner_user_id = ?
+               AND name = ?;
+            `,
+            [ownerId, name]
+          );
+
+          if (Array.isArray(rowsNew) && rowsNew.length) {
+            const r = rowsNew[0];
+            tagId = Number(
+              r.id ??
+              r.tag_id ??
+              r.TAG_ID ??
+              r.ID ??
+              null
+            );
+          }
+        }
+
+        if (tagId) {
+          tagIds.push(tagId);
         }
       }
 
@@ -1123,8 +1130,8 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     }
 
     // ============================================================
-    //  CATEGORIES (crea attribute_definitions + item_attributes)
-    //  => mantiene el comportamiento de tu código MySQL antiguo
+    //  CATEGORIES → attribute_definitions + luego item_attributes
+    //  (como en tu código MySQL, pero unificado)
     // ============================================================
     if (Array.isArray(meta?.categories) && meta.categories.length) {
       for (const c of meta.categories) {
@@ -1137,7 +1144,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
         const [rowsDef]: any = await db.execute(
           `
-          SELECT TOP (1) id
+          SELECT TOP (1) *
             FROM attribute_definitions
            WHERE owner_user_id = ?
              AND name = ?;
@@ -1146,25 +1153,55 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         );
 
         if (Array.isArray(rowsDef) && rowsDef.length) {
-          attrId = Number(rowsDef[0].id);
-        } else {
+          const row = rowsDef[0];
+          attrId = Number(
+            row.id ??
+            row.attribute_id ??
+            row.ATTRIBUTE_ID ??
+            row.ID ??
+            null
+          );
+        }
+
+        if (!attrId) {
           const aTypeAllowed = ['text', 'number', 'date', 'list'];
           const aType = aTypeAllowed.includes(String(c.attrType))
             ? String(c.attrType)
             : 'text';
 
-          const [insDef]: any = await db.execute(
+          await db.execute(
             `
             INSERT INTO attribute_definitions (
               owner_user_id,
               name,
-              attr_type
+              attr_type,
+              created_at
             )
-            VALUES (?, ?, ?);
+            VALUES (?, ?, ?, SYSUTCDATETIME());
             `,
             [ownerId, attrName, aType]
           );
-          attrId = Number(insDef.insertId);
+
+          const [rowsNewDef]: any = await db.execute(
+            `
+            SELECT TOP (1) *
+              FROM attribute_definitions
+             WHERE owner_user_id = ?
+               AND name = ?;
+            `,
+            [ownerId, attrName]
+          );
+
+          if (Array.isArray(rowsNewDef) && rowsNewDef.length) {
+            const r = rowsNewDef[0];
+            attrId = Number(
+              r.id ??
+              r.attribute_id ??
+              r.ATTRIBUTE_ID ??
+              r.ID ??
+              null
+            );
+          }
         }
 
         if (!attrId) continue;
@@ -1184,19 +1221,36 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         const vDate =
           c.attrType === 'date' && v
             ? v
-            : null; // se asume 'YYYY-MM-DD' ya viene del front
+            : null; // se asume 'YYYY-MM-DD'
 
-        // 3) limpiar valor previo del mismo atributo para este item
+        // 3) añadimos un "attribute" normalizado a la lista
+        attributes.push({
+          attribute_id: attrId,
+          value_text: vText ?? null,
+          value_number: vNum ?? null,
+          value_date: vDate ?? null,
+        });
+      }
+    }
+
+    // ============================================================
+    //  INSERT FINAL EN item_attributes (con todo lo acumulado)
+    // ============================================================
+    if (Array.isArray(attributes) && attributes.length > 0) {
+      for (const attr of attributes) {
+        const defId = attr?.definition_id ?? attr?.attribute_id;
+        if (!defId) continue;
+
+        // borramos valor anterior de ese atributo para ese item (como en tu MySQL)
         await db.execute(
           `
           DELETE FROM item_attributes
            WHERE item_id = ?
              AND attribute_id = ?;
           `,
-          [itemId, attrId]
+          [itemId, defId]
         );
 
-        // 4) insertar valor
         await db.execute(
           `
           INSERT INTO item_attributes (
@@ -1208,7 +1262,13 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           )
           VALUES (?, ?, ?, ?, ?);
           `,
-          [itemId, attrId, vText ?? null, vNum ?? null, vDate ?? null]
+          [
+            itemId,
+            defId,
+            attr.value_text ?? null,
+            attr.value_number ?? null,
+            attr.value_date ?? null,
+          ]
         );
       }
     }
