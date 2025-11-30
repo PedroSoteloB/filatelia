@@ -912,7 +912,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     const visibility = 'public';
 
     // ========== INSERT PRINCIPAL (SQL SERVER) ==========
-    // 1) Insert normal
     await db.execute(
       `INSERT INTO dbo.philatelic_items
          (owner_user_id, title, description, country, issue_year, condition_code,
@@ -933,11 +932,12 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       ]
     );
 
-    // 2) Recuperar el último id de ese usuario
+    // Recuperar el último id de ese usuario
     const [idRows]: any = await db.execute(
-      `SELECT MAX(id) AS id
+      `SELECT TOP (1) id
          FROM dbo.philatelic_items
-        WHERE owner_user_id = ?`,
+        WHERE owner_user_id = ?
+        ORDER BY id DESC`,
       [ownerId]
     );
 
@@ -983,22 +983,31 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         if (ex.length) {
           tagId = Number(ex[0].id);
         } else {
-          const [insTag]: any = await db.execute(
-            `INSERT INTO dbo.tags (name, owner_user_id)
-             OUTPUT INSERTED.id
-             VALUES (?,?)`,
+          // INSERT simple
+          await db.execute(
+            'INSERT INTO dbo.tags (name, owner_user_id) VALUES (?,?)',
             [name, ownerId]
           );
-          tagId = Number(insTag[0].id);
+          // y luego SELECT del último id para ese owner+name
+          const [rowsTag]: any = await db.execute(
+            `SELECT TOP (1) id
+               FROM dbo.tags
+              WHERE owner_user_id = ? AND name = ?
+              ORDER BY id DESC`,
+            [ownerId, name]
+          );
+          tagId = Number(rowsTag?.[0]?.id);
         }
 
-        tagIds.push(tagId);
+        if (tagId) {
+          tagIds.push(tagId);
+        }
       }
 
       for (const tid of Array.from(new Set(tagIds))) {
         await db.execute(
           `IF NOT EXISTS (SELECT 1 FROM dbo.item_tags WHERE item_id = ? AND tag_id = ?)
-             INSERT INTO dbo.item_tags (item_id, tag_id) VALUES (?, ?)` ,
+             INSERT INTO dbo.item_tags (item_id, tag_id) VALUES (?, ?)`,
           [itemId, tid, itemId, tid]
         );
       }
@@ -1026,15 +1035,24 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
             ? String(c.attrType)
             : 'text';
 
-          const [insA]: any = await db.execute(
+          // INSERT simple
+          await db.execute(
             `INSERT INTO dbo.attribute_definitions
                (owner_user_id, name, attr_type, created_at)
-             OUTPUT INSERTED.id
              VALUES (?,?,?, SYSUTCDATETIME())`,
             [ownerId, attrName, aType]
           );
 
-          attrId = Number(insA[0].id);
+          // y luego SELECT del último id para ese owner+name
+          const [rowsAttr]: any = await db.execute(
+            `SELECT TOP (1) id
+               FROM dbo.attribute_definitions
+              WHERE owner_user_id = ? AND name = ?
+              ORDER BY id DESC`,
+            [ownerId, attrName]
+          );
+
+          attrId = Number(rowsAttr?.[0]?.id);
         }
 
         if (!attrId) continue;
