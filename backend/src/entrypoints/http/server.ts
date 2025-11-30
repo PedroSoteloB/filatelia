@@ -1068,7 +1068,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       }
     }
 
-    // --------- IMÁGENES (SIN CAMBIOS) ---------
+    // --------- IMÁGENES (AJUSTADO A TU ESQUEMA: file_path + is_primary) ---------
     if (files.length > 0) {
       const fs   = require('fs');
       const path = require('path');
@@ -1092,13 +1092,13 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           `
           INSERT INTO item_images (
             item_id,
-            image_path,
-            mime_type,
+            file_path,
+            is_primary,
             created_at
           )
           VALUES (?, ?, ?, SYSUTCDATETIME());
           `,
-          [itemId, fullPath, f.mime]
+          [itemId, fullPath, i === 0 ? 1 : 0]
         );
       }
     }
@@ -1115,6 +1115,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       .send({ message: 'internal_error', detail: String(e?.message || '') });
   }
 });
+
 
 
 
