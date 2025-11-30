@@ -996,16 +996,16 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       );
     }
 
-    // --------- TAGS (SIN MERGE, ESTILO MySQL) ---------
+    // --------- TAGS (SIN created_at, usando tag_id AS id) ---------
     if (Array.isArray(tags) && tags.length > 0) {
       for (const t of tags) {
         const name = String(t || '').trim();
         if (!name) continue;
 
-        // 1) Buscar tag existente
+        // 1) Buscar tag existente (PK es tag_id)
         const [tagRows]: any = await db.execute(
           `
-          SELECT TOP 1 id
+          SELECT TOP 1 tag_id AS id
           FROM tags
           WHERE owner_user_id = ? AND name = ?
           `,
@@ -1017,11 +1017,11 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         if (Array.isArray(tagRows) && tagRows.length > 0) {
           tagId = Number(tagRows[0].id);
         } else {
-          // 2) Insertar si no existe
+          // 2) Insertar si no existe (sin created_at porque tu tabla no lo tiene)
           const [insTag]: any = await db.execute(
             `
-            INSERT INTO tags (name, owner_user_id, created_at)
-            VALUES (?, ?, SYSUTCDATETIME());
+            INSERT INTO tags (name, owner_user_id)
+            VALUES (?, ?);
             `,
             [name, ownerId]
           );
@@ -1040,17 +1040,17 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       }
     }
 
-    // --------- ATTRIBUTES ---------
+    // --------- ATTRIBUTES (usa columna attribute_id) ---------
     if (Array.isArray(attributes) && attributes.length > 0) {
       for (const attr of attributes) {
-        const defId = attr?.definition_id;
+        const defId = attr?.definition_id; // id de attribute_definitions
         if (!defId) continue;
 
         await db.execute(
           `
           INSERT INTO item_attributes (
             item_id,
-            attribute_definition_id,
+            attribute_id,
             value_text,
             value_number,
             value_date
