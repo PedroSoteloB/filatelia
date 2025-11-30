@@ -846,7 +846,7 @@ function authGuard(req: FastifyRequest, reply: FastifyReply, done: HookHandlerDo
 
 app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
-    const ownerId = ensureAuth(req); // userId
+    const ownerId = ensureAuth(req); // userId autenticado
 
     const ct = String((req.headers['content-type'] || '')).toLowerCase();
     const isMultipart = ct.startsWith('multipart/form-data');
@@ -864,7 +864,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       const maxImages = 12;
 
       for await (const p of parts) {
-        // Campo "metadata" (JSON)
+        // ---- campo "metadata" (JSON) ----
         if (p?.type === 'field' && p.fieldname === 'metadata') {
           try {
             meta = JSON.parse(String(p.value ?? '{}'));
@@ -874,7 +874,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           continue;
         }
 
-        // Archivos
+        // ---- archivos (imágenes) ----
         if (p?.type === 'file') {
           if (files.length >= maxImages) {
             await p.file?.resume?.();
@@ -885,16 +885,16 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           const mime = String(p.mimetype ?? '');
           if (!buf?.length) continue;
           if (!allowed.has(mime)) {
-            return reply.code(400).send({
-              message: 'Formato no soportado (JPG/PNG/WEBP/GIF)',
-            });
+            return reply
+              .code(400)
+              .send({ message: 'Formato no soportado (JPG/PNG/WEBP/GIF)' });
           }
           files.push({ buffer: buf, filename, mime });
           continue;
         }
       }
     } else {
-      // application/json
+      // ----- modo application/json -----
       meta = req.body || null;
     }
 
@@ -952,7 +952,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     const tags       = Array.isArray(meta.tags) ? meta.tags : [];
     const attributes = Array.isArray(meta.attributes) ? meta.attributes : [];
 
-    // --------- INSERT EN philatelic_items ---------
+    // --------- INSERT EN philatelic_items (usa created_at / updated_at) ---------
     const [result]: any = await db.execute(
       `
       INSERT INTO philatelic_items (
@@ -996,16 +996,16 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       );
     }
 
-    // --------- TAGS (SIN created_at, usando tag_id AS id) ---------
+    // --------- TAGS (usa columnas de dbo.tags de tu captura) ---------
     if (Array.isArray(tags) && tags.length > 0) {
       for (const t of tags) {
         const name = String(t || '').trim();
         if (!name) continue;
 
-        // 1) Buscar tag existente (PK es tag_id)
+        // 1) Buscar tag existente
         const [tagRows]: any = await db.execute(
           `
-          SELECT TOP 1 tag_id AS id
+          SELECT TOP 1 id
           FROM tags
           WHERE owner_user_id = ? AND name = ?
           `,
@@ -1017,7 +1017,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         if (Array.isArray(tagRows) && tagRows.length > 0) {
           tagId = Number(tagRows[0].id);
         } else {
-          // 2) Insertar si no existe (sin created_at porque tu tabla no lo tiene)
+          // 2) Insertar si no existe (SIN created_at, porque esa columna no existe)
           const [insTag]: any = await db.execute(
             `
             INSERT INTO tags (name, owner_user_id)
@@ -1030,6 +1030,9 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
         if (!Number.isFinite(tagId)) continue;
 
+        // 👇 OJO: aquí asumo que la columna en dbo.item_tags se llama "tag_id".
+        // Si en tu SSMS ves otro nombre (por ejemplo "tag_ref_id"),
+        // cambia "tag_id" por el nombre real.
         await db.execute(
           `
           INSERT INTO item_tags (item_id, tag_id)
@@ -1040,10 +1043,10 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       }
     }
 
-    // --------- ATTRIBUTES (usa columna attribute_id) ---------
+    // --------- ATTRIBUTES (usa item_attributes: item_id, attribute_id, value_*) ---------
     if (Array.isArray(attributes) && attributes.length > 0) {
       for (const attr of attributes) {
-        const defId = attr?.definition_id; // id de attribute_definitions
+        const defId = attr?.definition_id;
         if (!defId) continue;
 
         await db.execute(
@@ -1068,7 +1071,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       }
     }
 
-    // --------- IMÁGENES (file_path + is_primary, SIN created_at) ---------
+    // --------- IMÁGENES (file_path + is_primary) ---------
     if (files.length > 0) {
       const fs   = require('fs');
       const path = require('path');
