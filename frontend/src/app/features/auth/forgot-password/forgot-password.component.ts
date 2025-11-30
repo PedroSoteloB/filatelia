@@ -68,7 +68,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 
 // 👇 IMPORTA environment (si la ruta falla, usa Ctrl+. sobre "environment")
-import { environment } from '../../../core/environments/environment';
+import { environment } from '../../../core/environments/environment.prod';
 
 // Base del backend (Azure)
 const API_BASE = environment.apiBaseUrl;

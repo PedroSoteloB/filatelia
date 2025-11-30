@@ -63,7 +63,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 // 👇 IMPORTA environment (si la ruta no coincide, usa Ctrl+. sobre "environment")
-import { environment } from '../../../core/environments/environment';
+import { environment } from '../../../core/environments/environment.prod';
 
 const API_BASE = environment.apiBaseUrl;
 
