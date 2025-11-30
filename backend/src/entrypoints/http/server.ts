@@ -890,7 +890,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         }
       }
     } else {
-      // JSON plano
       meta = req.body || null;
     }
 
@@ -912,10 +911,12 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
     // ========== INSERT PRINCIPAL ==========
     const [rIns]: any = await db.execute(
-      `INSERT INTO philatelic_items
+      `INSERT INTO dbo.philatelic_items
          (owner_user_id, title, description, country, issue_year, condition_code,
           catalog_code, face_value, currency, acquisition_date, visibility)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?);
+       SELECT CAST(SCOPE_IDENTITY() AS bigint) AS id;`
+      ,
       [
         ownerId,
         String(meta.title).trim(),
@@ -931,7 +932,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       ]
     );
 
-    const itemId: number = Number(rIns.insertId);
+    const itemId: number = Number(rIns[0].id);
 
     // ========== IMÁGENES ==========
     if (files.length) {
@@ -945,7 +946,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         const fullPath = path.join(base, safeName);
         fs.writeFileSync(fullPath, f.buffer);
         await db.execute(
-          'INSERT INTO item_images (item_id, file_path, is_primary) VALUES (?,?,?)',
+          'INSERT INTO dbo.item_images (item_id, file_path, is_primary) VALUES (?,?,?)',
           [itemId, fullPath, i === 0 ? 1 : 0]
         );
       }
@@ -960,28 +961,32 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       const tagIds: number[] = [];
 
       for (const name of tagNames) {
-        // SQL Server: TOP 1
         const [ex]: any = await db.execute(
-          'SELECT TOP 1 id FROM tags WHERE owner_user_id = ? AND name = ?',
+          'SELECT TOP (1) [id] FROM dbo.[tags] WHERE owner_user_id = ? AND name = ?',
           [ownerId, name]
         );
 
+        let tagId: number;
+
         if (ex.length) {
-          tagIds.push(Number(ex[0].id));
+          tagId = Number(ex[0].id);
         } else {
           const [insTag]: any = await db.execute(
-            'INSERT INTO tags (name, owner_user_id) VALUES (?,?)',
+            `INSERT INTO dbo.[tags] (name, owner_user_id)
+             VALUES (?,?);
+             SELECT CAST(SCOPE_IDENTITY() AS int) AS id;`,
             [name, ownerId]
           );
-          tagIds.push(Number(insTag.insertId));
+          tagId = Number(insTag[0].id);
         }
+
+        tagIds.push(tagId);
       }
 
-      // Evitar duplicados en item_tags
       for (const tid of Array.from(new Set(tagIds))) {
         await db.execute(
-          `IF NOT EXISTS (SELECT 1 FROM item_tags WHERE item_id = ? AND tag_id = ?)
-             INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)`,
+          `IF NOT EXISTS (SELECT 1 FROM dbo.item_tags WHERE item_id = ? AND tag_id = ?)
+             INSERT INTO dbo.item_tags (item_id, tag_id) VALUES (?, ?)`,
           [itemId, tid, itemId, tid]
         );
       }
@@ -995,11 +1000,11 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         const attrName = String(c.name).trim();
         if (!attrName) continue;
 
-        // buscar / crear definición
         let attrId: number | null = null;
 
+        // 1) buscar definición por owner + name
         const [exA]: any = await db.execute(
-          'SELECT TOP 1 id FROM attribute_definitions WHERE owner_user_id = ? AND name = ?',
+          'SELECT TOP (1) [id] FROM dbo.attribute_definitions WHERE owner_user_id = ? AND name = ?',
           [ownerId, attrName]
         );
 
@@ -1011,55 +1016,59 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
             : 'text';
 
           const [insA]: any = await db.execute(
-            `INSERT INTO attribute_definitions (owner_user_id, name, attr_type, created_at)
-             VALUES (?,?,?, SYSUTCDATETIME())`,
+            `INSERT INTO dbo.attribute_definitions
+               (owner_user_id, name, attr_type, created_at)
+             VALUES (?,?,?, SYSUTCDATETIME());
+             SELECT CAST(SCOPE_IDENTITY() AS int) AS id;`,
             [ownerId, attrName, aType]
           );
-          attrId = Number(insA.insertId);
+
+          attrId = Number(insA[0].id);
         }
 
         if (!attrId) continue;
 
-        // decidir value_*
         const v = c.value;
+        const attrType = String(c.attrType);
+
         const vText =
-          c.attrType === 'text' || c.attrType === 'list'
+          attrType === 'text' || attrType === 'list'
             ? (typeof v === 'string' ? v : v != null ? String(v) : null)
             : null;
+
         const vNum =
-          c.attrType === 'number'
+          attrType === 'number'
             ? (typeof v === 'number'
                 ? v
                 : Number.isFinite(Number(v))
                   ? Number(v)
                   : null)
             : null;
+
         const vDate =
-          c.attrType === 'date' && v
-            ? String(v)
+          attrType === 'date' && v
+            ? String(v)   // "YYYY-MM-DD"
             : null;
 
-        // limpiar cualquier valor anterior de ese atributo para ese item
         await db.execute(
-          'DELETE FROM item_attributes WHERE item_id = ? AND attribute_id = ?',
+          'DELETE FROM dbo.item_attributes WHERE item_id = ? AND attribute_id = ?',
           [itemId, attrId]
         );
 
         await db.execute(
-          `INSERT INTO item_attributes (item_id, attribute_id, value_text, value_number, value_date)
+          `INSERT INTO dbo.item_attributes
+             (item_id, attribute_id, value_text, value_number, value_date)
            VALUES (?,?,?,?,?)`,
           [itemId, attrId, vText ?? null, vNum ?? null, vDate ?? null]
         );
       }
     }
 
-    // ========== RESPUESTA ==========
     reply.send({ id: itemId });
   } catch (e: any) {
     if (e?.message === 'UNAUTHORIZED') {
       return reply.code(401).send({ message: 'unauthorized' });
     }
-    // 👇 aquí verás el mensaje real del SQL Server en logs
     req.log?.error(e);
     reply.code(500).send({ message: e?.message || 'internal_error' });
   }
