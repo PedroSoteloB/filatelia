@@ -13,25 +13,63 @@
 
         <!-- CARD principal -->
         <div class="details-card">
+
+          <!-- Header: título + acciones -->
+          <header class="details-header">
+            <div class="title-block">
+              <h1>{{ it.title || 'Sin título' }}</h1>
+              <p class="subtitle" *ngIf="it.country || it.issueYear">
+                <span *ngIf="it.country">{{ it.country | titlecase }}</span>
+                <span *ngIf="it.country && it.issueYear"> • </span>
+                <span *ngIf="it.issueYear">{{ it.issueYear }}</span>
+              </p>
+            </div>
+
+            <div class="header-actions">
+              <button type="button" class="btn sm" (click)="goEdit(it.id)">
+                Editar
+              </button>
+              <button
+                type="button"
+                class="btn sm danger"
+                (click)="confirmDelete(it.id)"
+              >
+                Eliminar
+              </button>
+            </div>
+          </header>
+
           <!-- Grid principal: imagen + info -->
           <div class="grid">
 
-            <!-- Imagen -->
-            <div class="image-box">
-              <img
-                *ngIf="it.cover; else noCover"
-                [src]="it.cover!"
-                [alt]="it.title || 'Pieza filatélica'"
-              />
-              <ng-template #noCover>
-                <div class="no-cover">Sin imagen</div>
-              </ng-template>
+            <!-- Columna imagen -->
+            <div class="image-column">
+              <div class="image-box">
+                <img
+                  *ngIf="it.cover; else noCover"
+                  [src]="it.cover!"
+                  [alt]="it.title || 'Pieza filatélica'"
+                />
+                <ng-template #noCover>
+                  <div class="no-cover">Sin imagen</div>
+                </ng-template>
+              </div>
+
+              <!-- Tira de miniaturas -->
+              <!-- <div class="thumb-strip" *ngIf="it.images?.length">
+                <button
+                  type="button"
+                  class="thumb"
+                  *ngFor="let img of it.images"
+                  (click)="setActiveImage(img)"
+                >
+                  <img *ngIf="img.file" [src]="img.file" alt="Miniatura" />
+                </button>
+              </div> -->
             </div>
 
             <!-- Info -->
             <div class="info">
-              <h1>{{ it.title || 'Sin título' }}</h1>
-
               <!-- Metadatos -->
               <dl>
                 <div>

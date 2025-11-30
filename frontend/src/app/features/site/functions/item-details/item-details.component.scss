@@ -267,3 +267,36 @@ dd {
   outline-offset: 2px;
   border-radius: 6px;
 }
+
+/* ===== Botones genéricos ===== */
+.btn {
+  appearance: none;
+  border: none;
+  outline: none;
+  cursor: pointer;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+
+  padding: 0.6rem 1.2rem;
+  border-radius: 999px;
+
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+
+  color: #fff;
+  /* color base por si falla el gradiente */
+  background: #b08968;
+  /* gradiente clásico, sin color-mix */
+  background: linear-gradient(135deg, #b08968, #85586f);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16);
+
+  transition:
+    transform 120ms ease-out,
+    box-shadow 120ms ease-out,
+    filter 120ms ease-out,
+    background 160ms ease-out;
+}
