@@ -279,7 +279,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 // 👇 importa environment (ajusta la ruta con Ctrl+. si no coincide)
-import { environment } from '../../../core/environments/environment';
+import { environment } from '../../../core/environments/environment.prod';
 
 const API_BASE = environment.apiBaseUrl;
 

@@ -65,7 +65,7 @@ import { Router, RouterLink } from '@angular/router';
 import { PLATFORM_ID } from '@angular/core';
 
 // 👇 IMPORTA environment (ajusta la ruta si no coincide)
-import { environment } from '../../../../core/environments/environment';
+import { environment } from '../../../../core/environments/environment.prod';
 
 const API_BASE = environment.apiBaseUrl;
 
