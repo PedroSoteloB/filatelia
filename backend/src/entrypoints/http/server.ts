@@ -1219,7 +1219,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
             ? v
             : null; // se asume 'YYYY-MM-DD'
 
-        // 3) borrar valor previo y crear item_attributes DIRECTAMENTE
+        // 3) borrar valor previo de ese atributo para ese item
         await db.execute(
           `
           DELETE FROM item_attributes
@@ -1229,8 +1229,17 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           [itemId, attrId]
         );
 
+        // 4) insertar en item_attributes usando CTE
         await db.execute(
           `
+          WITH data AS (
+            SELECT
+              CAST(? AS BIGINT)        AS item_id,
+              CAST(? AS INT)           AS attribute_id,
+              CAST(? AS NVARCHAR(MAX)) AS value_text,
+              CAST(? AS DECIMAL(18,6)) AS value_number,
+              CAST(? AS DATE)          AS value_date
+          )
           INSERT INTO item_attributes (
             item_id,
             attribute_id,
@@ -1238,15 +1247,15 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
             value_number,
             value_date
           )
-          VALUES (?, ?, ?, ?, ?);
+          SELECT
+            item_id,
+            attribute_id,
+            value_text,
+            value_number,
+            value_date
+          FROM data;
           `,
-          [
-            itemId,
-            attrId,
-            vText ?? null,
-            vNum ?? null,
-            vDate ?? null,
-          ]
+          [itemId, attrId, vText ?? null, vNum ?? null, vDate ?? null]
         );
       }
     }
@@ -1263,7 +1272,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       .send({ message: 'internal_error', detail: String(e?.message || '') });
   }
 });
-
 
 
 
