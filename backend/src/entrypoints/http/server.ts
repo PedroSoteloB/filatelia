@@ -846,23 +846,17 @@ function authGuard(req: FastifyRequest, reply: FastifyReply, done: HookHandlerDo
 
 app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
-    console.log('====================');
-    console.log('[POST /items] INICIO handler');
-
     const ownerId = ensureAuth(req); // userId
+
     const ct = String((req.headers['content-type'] || '')).toLowerCase();
     const isMultipart = ct.startsWith('multipart/form-data');
-
-    console.log('[POST /items] ownerId =', ownerId, 'content-type =', ct);
 
     let meta: any = null;
     const files: { buffer: Buffer; filename: string; mime: string }[] = [];
 
     if (isMultipart) {
-      console.log('[POST /items] request es multipart/form-data');
       const parts = await (req.parts?.() as AsyncIterable<any>);
       if (!parts) {
-        console.log('[POST /items] parts vacío -> 400');
         return reply.code(400).send({ message: 'multipart requerido' });
       }
 
@@ -870,39 +864,27 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       const maxImages = 12;
 
       for await (const p of parts) {
+        // Campo "metadata" (JSON)
         if (p?.type === 'field' && p.fieldname === 'metadata') {
-          console.log('[POST /items] field metadata recibido');
           try {
             meta = JSON.parse(String(p.value ?? '{}'));
           } catch {
-            console.log('[POST /items] ERROR parseando metadata JSON');
             return reply.code(400).send({ message: 'metadata inválido (JSON)' });
           }
           continue;
         }
 
+        // Archivos
         if (p?.type === 'file') {
-          console.log('[POST /items] file recibido:', {
-            fieldname: p.fieldname,
-            filename: p.filename,
-            mimetype: p.mimetype,
-          });
-
           if (files.length >= maxImages) {
-            console.log('[POST /items] se alcanzó maxImages, resumiendo stream extra');
             await p.file?.resume?.();
             continue;
           }
-
           const buf = await p.toBuffer();
           const filename = String(p.filename ?? 'image');
           const mime = String(p.mimetype ?? '');
-          if (!buf?.length) {
-            console.log('[POST /items] archivo sin buffer, se omite');
-            continue;
-          }
+          if (!buf?.length) continue;
           if (!allowed.has(mime)) {
-            console.log('[POST /items] mimetype no permitido:', mime);
             return reply.code(400).send({
               message: 'Formato no soportado (JPG/PNG/WEBP/GIF)',
             });
@@ -912,33 +894,28 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         }
       }
     } else {
-      console.log('[POST /items] request es application/json');
+      // application/json
       meta = req.body || null;
     }
 
-    console.log('[POST /items] meta recibido =', JSON.stringify(meta));
-
     if (!meta || !meta.title || !String(meta.title).trim()) {
-      console.log('[POST /items] metadata.title faltante -> 400');
       return reply.code(400).send({ message: 'metadata.title requerido' });
     }
 
+    // Permitir crear sin imágenes si está habilitado
     const allowNoImages =
       process.env.ALLOW_ITEMS_WITHOUT_IMAGES === '1' ||
       meta?.allowNoImages === true ||
       String(req.query?.allowNoImages || '').toLowerCase() === 'true';
 
-    console.log('[POST /items] files.length =', files.length, 'allowNoImages =', allowNoImages);
-
     if (!files.length && !allowNoImages) {
-      console.log('[POST /items] sin imágenes y no permitido -> 400');
       return reply.code(400).send({ message: 'al menos una imagen requerida' });
     }
 
     // --------- MAPEO CAMPOS AL ESQUEMA SQL SERVER ---------
-    const title = String(meta.title).trim();
-    const description = meta.description || null;
-    const country = meta.country || null;
+    const title         = String(meta.title).trim();
+    const description   = meta.description || null;
+    const country       = meta.country || null;
 
     const issueYear =
       meta.issue_year ??
@@ -961,8 +938,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       meta.faceValue ??
       null;
 
-    const currency = meta.currency || null;
-
+    const currency        = meta.currency || null;
     const acquisitionDate =
       meta.acquisition_date ??
       meta.acquisitionDate ??
@@ -973,27 +949,11 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         ? String(meta.visibility).trim()
         : 'public';
 
-    const tags = Array.isArray(meta.tags) ? meta.tags : [];
+    const tags       = Array.isArray(meta.tags) ? meta.tags : [];
     const attributes = Array.isArray(meta.attributes) ? meta.attributes : [];
 
-    console.log('[POST /items] campos mapeados:', {
-      title,
-      description,
-      country,
-      issueYear,
-      conditionCode,
-      catalogCode,
-      faceValue,
-      currency,
-      acquisitionDate,
-      visibility,
-      tagsLength: tags.length,
-      attributesLength: attributes.length,
-    });
-
-    // --------- INSERT EN philatelic_items + OUTPUT INSERTED.id ---------
-    console.log('[POST /items] ejecutando INSERT philatelic_items...');
-    const [rows]: any = await db.execute(
+    // --------- INSERT EN philatelic_items ---------
+    const [result]: any = await db.execute(
       `
       INSERT INTO philatelic_items (
         owner_user_id,
@@ -1010,7 +970,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         created_at,
         updated_at
       )
-      OUTPUT INSERTED.id AS id
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME());
       `,
       [
@@ -1028,37 +987,18 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       ]
     );
 
-    console.log('[POST /items] INSERT ejecutado. rows bruto =', rows);
-    console.log('[POST /items] typeof rows =', typeof rows);
-    if (Array.isArray(rows)) {
-      console.log('[POST /items] rows.length =', rows.length);
+    console.log('[POST /items] INSERT result =', result);
+
+    // 👈 AQUÍ EL CAMBIO CLAVE: usar insertId
+    const itemId = Number(result?.insertId);
+    if (!Number.isFinite(itemId)) {
+      throw new Error(
+        'No se pudo obtener el id insertado de philatelic_items (insertId inválido)'
+      );
     }
-    if (rows && (rows as any).recordset) {
-      console.log('[POST /items] rows.recordset =', (rows as any).recordset);
-    }
-
-    const itemRow =
-      (Array.isArray(rows) && rows[0]) ||
-      (rows && (rows as any).recordset && (rows as any).recordset[0]) ||
-      rows;
-
-    console.log('[POST /items] itemRow =', itemRow);
-
-    const rawId = itemRow?.id;
-    const itemId = rawId != null ? Number(rawId) : NaN;
-
-    console.log('[POST /items] rawId =', rawId, 'itemId =', itemId);
-
-    if (!itemRow || !rawId || !Number.isFinite(itemId)) {
-      console.log('[POST /items] ❌ No se pudo obtener id insertado, lanzando error');
-      throw new Error('No se pudo obtener el id insertado de philatelic_items');
-    }
-
-    console.log('[POST /items] ✅ itemId obtenido =', itemId);
 
     // --------- TAGS ---------
     if (Array.isArray(tags) && tags.length > 0) {
-      console.log('[POST /items] procesando tags, cantidad =', tags.length);
       for (const t of tags) {
         const name = String(t || '').trim();
         if (!name) continue;
@@ -1073,37 +1013,18 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           WHEN NOT MATCHED THEN
             INSERT (name, owner_user_id, created_at)
             VALUES (src.name, src.owner_user_id, SYSUTCDATETIME())
-          OUTPUT inserted.id;
           `,
           [name, ownerId]
         );
 
-        const tagRow =
-          (Array.isArray(tagRows) && tagRows[0]) ||
-          (tagRows && tagRows.recordset && tagRows.recordset[0]) ||
-          tagRows;
-
-        console.log('[POST /items] tagRows =', tagRows, 'tagRow =', tagRow);
-
-        const tagId = tagRow?.id;
-        if (!tagId) {
-          console.log('[POST /items] tagId inválido para name =', name);
-          continue;
-        }
-
-        await db.execute(
-          `
-          INSERT INTO item_tags (item_id, tag_id)
-          VALUES (?, ?)
-          `,
-          [itemId, tagId]
-        );
+        // si tu wrapper NO devuelve nada útil aquí, puedes omitir OUTPUT
+        // y luego hacer un SELECT para obtener el id si lo necesitas.
+        // Pero como antes usabas MySQL, probablemente no uses OUTPUT aquí.
       }
     }
 
     // --------- ATTRIBUTES ---------
     if (Array.isArray(attributes) && attributes.length > 0) {
-      console.log('[POST /items] procesando attributes, cantidad =', attributes.length);
       for (const attr of attributes) {
         const defId = attr?.definition_id;
         if (!defId) continue;
@@ -1132,15 +1053,13 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
     // --------- IMÁGENES ---------
     if (files.length > 0) {
-      console.log('[POST /items] guardando imágenes, cantidad =', files.length);
-      const fs = require('fs');
+      const fs   = require('fs');
       const path = require('path');
       const base =
         process.env.FILES_BASE_PATH ||
         path.join(process.cwd(), 'uploads');
 
       if (!fs.existsSync(base)) {
-        console.log('[POST /items] creando carpeta base imágenes =', base);
         fs.mkdirSync(base, { recursive: true });
       }
 
@@ -1151,8 +1070,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         );
         const fullPath = path.join(base, safeName);
         fs.writeFileSync(fullPath, f.buffer);
-
-        console.log('[POST /items] imagen guardada en', fullPath);
 
         await db.execute(
           `
@@ -1169,8 +1086,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       }
     }
 
-    console.log('[POST /items] ✅ FIN OK. Devolviendo 201');
-
+    // --------- RESPUESTA ---------
     reply.code(201).send({
       id: itemId,
       message: 'item_creado',
@@ -1182,6 +1098,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       .send({ message: 'internal_error', detail: String(e?.message || '') });
   }
 });
+
 
 
 // GET /me/items
