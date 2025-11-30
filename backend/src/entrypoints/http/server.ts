@@ -912,12 +912,11 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     const visibility = 'public';
 
     // ========== INSERT PRINCIPAL (SQL SERVER) ==========
-    // usamos OUTPUT INSERTED.id para obtener el PK
-    const [rIns]: any = await db.execute(
+    // 1) Insert normal
+    await db.execute(
       `INSERT INTO dbo.philatelic_items
          (owner_user_id, title, description, country, issue_year, condition_code,
           catalog_code, face_value, currency, acquisition_date, visibility)
-       OUTPUT INSERTED.id
        VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       [
         ownerId,
@@ -934,10 +933,18 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       ]
     );
 
-    if (!Array.isArray(rIns) || !rIns.length || rIns[0].id == null) {
+    // 2) Recuperar el último id de ese usuario
+    const [idRows]: any = await db.execute(
+      `SELECT MAX(id) AS id
+         FROM dbo.philatelic_items
+        WHERE owner_user_id = ?`,
+      [ownerId]
+    );
+
+    const itemId: number = Number(idRows?.[0]?.id);
+    if (!itemId || !Number.isFinite(itemId)) {
       throw new Error('no_item_id_returned');
     }
-    const itemId: number = Number(rIns[0].id);
 
     // ========== IMÁGENES ==========
     if (files.length) {
@@ -991,7 +998,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       for (const tid of Array.from(new Set(tagIds))) {
         await db.execute(
           `IF NOT EXISTS (SELECT 1 FROM dbo.item_tags WHERE item_id = ? AND tag_id = ?)
-             INSERT INTO dbo.item_tags (item_id, tag_id) VALUES (?, ?)`,
+             INSERT INTO dbo.item_tags (item_id, tag_id) VALUES (?, ?)` ,
           [itemId, tid, itemId, tid]
         );
       }
@@ -1051,8 +1058,8 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
         const vDate =
           attrType === 'date' && v
-            ? String(v)
-            : null; // "YYYY-MM-DD"
+            ? String(v)        // "YYYY-MM-DD"
+            : null;
 
         await db.execute(
           'DELETE FROM dbo.item_attributes WHERE item_id = ? AND attribute_id = ?',
