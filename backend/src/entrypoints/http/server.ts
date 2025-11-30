@@ -1096,11 +1096,24 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     // ========== RESPUESTA ==========
     reply.send({ id: itemId });
   } catch (e: any) {
+    // 🔐 sigue igual
     if (e?.message === 'UNAUTHORIZED') {
       return reply.code(401).send({ message: 'unauthorized' });
     }
-    req.log?.error(e);
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+
+    // 👇 DEBUG FUERTE PARA VER EL ERROR REAL DE SQL SERVER
+    console.error('ERROR /items >>>', e);
+
+    const sqlMsg =
+      (e as any)?.originalError?.info?.message ||   // mssql driver
+      (e as any)?.originalError?.message ||
+      e?.message ||
+      'internal_error';
+
+    reply.code(500).send({
+      message: sqlMsg,
+      raw: String(e?.stack || e)
+    });
   }
 });
 
