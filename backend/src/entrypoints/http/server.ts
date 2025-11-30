@@ -909,14 +909,14 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
     const visibility = 'public';
 
-    // ========== INSERT PRINCIPAL ==========
-    const [rIns]: any = await db.execute(
+    // ========== INSERT PRINCIPAL (SQL SERVER) ==========
+    // Usamos OUTPUT INSERTED.id para obtener el ID recién creado
+    const [itemRows]: any = await db.execute(
       `INSERT INTO dbo.philatelic_items
          (owner_user_id, title, description, country, issue_year, condition_code,
           catalog_code, face_value, currency, acquisition_date, visibility)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?);
-       SELECT CAST(SCOPE_IDENTITY() AS bigint) AS id;`
-      ,
+       OUTPUT INSERTED.id AS id
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       [
         ownerId,
         String(meta.title).trim(),
@@ -932,7 +932,11 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       ]
     );
 
-    const itemId: number = Number(rIns[0].id);
+    if (!itemRows || !itemRows[0] || itemRows[0].id == null) {
+      throw new Error('no_item_id_returned');
+    }
+
+    const itemId: number = Number(itemRows[0].id);
 
     // ========== IMÁGENES ==========
     if (files.length) {
@@ -971,13 +975,13 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         if (ex.length) {
           tagId = Number(ex[0].id);
         } else {
-          const [insTag]: any = await db.execute(
+          const [tagRows]: any = await db.execute(
             `INSERT INTO dbo.[tags] (name, owner_user_id)
-             VALUES (?,?);
-             SELECT CAST(SCOPE_IDENTITY() AS int) AS id;`,
+             OUTPUT INSERTED.id AS id
+             VALUES (?,?)`,
             [name, ownerId]
           );
-          tagId = Number(insTag[0].id);
+          tagId = Number(tagRows[0].id);
         }
 
         tagIds.push(tagId);
@@ -1002,7 +1006,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
         let attrId: number | null = null;
 
-        // 1) buscar definición por owner + name
+        // 1) buscar definición existente
         const [exA]: any = await db.execute(
           'SELECT TOP (1) [id] FROM dbo.attribute_definitions WHERE owner_user_id = ? AND name = ?',
           [ownerId, attrName]
@@ -1015,15 +1019,15 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
             ? String(c.attrType)
             : 'text';
 
-          const [insA]: any = await db.execute(
+          const [attrRows]: any = await db.execute(
             `INSERT INTO dbo.attribute_definitions
                (owner_user_id, name, attr_type, created_at)
-             VALUES (?,?,?, SYSUTCDATETIME());
-             SELECT CAST(SCOPE_IDENTITY() AS int) AS id;`,
+             OUTPUT INSERTED.id AS id
+             VALUES (?,?,?, SYSUTCDATETIME())`,
             [ownerId, attrName, aType]
           );
 
-          attrId = Number(insA[0].id);
+          attrId = Number(attrRows[0].id);
         }
 
         if (!attrId) continue;
@@ -1047,7 +1051,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
         const vDate =
           attrType === 'date' && v
-            ? String(v)   // "YYYY-MM-DD"
+            ? String(v) // "YYYY-MM-DD"
             : null;
 
         await db.execute(
@@ -1064,6 +1068,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       }
     }
 
+    // ========== RESPUESTA ==========
     reply.send({ id: itemId });
   } catch (e: any) {
     if (e?.message === 'UNAUTHORIZED') {
@@ -1073,6 +1078,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });
+
 
 
 // GET /me/items
