@@ -913,9 +913,9 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     }
 
     // --------- MAPEO CAMPOS AL ESQUEMA SQL SERVER ---------
-    const title         = String(meta.title).trim();
-    const description   = meta.description || null;
-    const country       = meta.country || null;
+    const title       = String(meta.title).trim();
+    const description = meta.description || null;
+    const country     = meta.country || null;
 
     const issueYear =
       meta.issue_year ??
@@ -989,7 +989,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
     console.log('[POST /items] INSERT result =', result);
 
-    // 👈 AQUÍ EL CAMBIO CLAVE: usar insertId
     const itemId = Number(result?.insertId);
     if (!Number.isFinite(itemId)) {
       throw new Error(
@@ -997,29 +996,47 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       );
     }
 
-    // --------- TAGS ---------
+    // --------- TAGS (SIN MERGE, ESTILO MySQL) ---------
     if (Array.isArray(tags) && tags.length > 0) {
       for (const t of tags) {
         const name = String(t || '').trim();
         if (!name) continue;
 
+        // 1) Buscar tag existente
         const [tagRows]: any = await db.execute(
           `
-          MERGE tags AS target
-          USING (SELECT ? AS name, ? AS owner_user_id) AS src
-          ON target.name = src.name AND target.owner_user_id = src.owner_user_id
-          WHEN MATCHED THEN
-            UPDATE SET name = target.name
-          WHEN NOT MATCHED THEN
-            INSERT (name, owner_user_id, created_at)
-            VALUES (src.name, src.owner_user_id, SYSUTCDATETIME())
+          SELECT TOP 1 id
+          FROM tags
+          WHERE owner_user_id = ? AND name = ?
           `,
-          [name, ownerId]
+          [ownerId, name]
         );
 
-        // si tu wrapper NO devuelve nada útil aquí, puedes omitir OUTPUT
-        // y luego hacer un SELECT para obtener el id si lo necesitas.
-        // Pero como antes usabas MySQL, probablemente no uses OUTPUT aquí.
+        let tagId: number | null = null;
+
+        if (Array.isArray(tagRows) && tagRows.length > 0) {
+          tagId = Number(tagRows[0].id);
+        } else {
+          // 2) Insertar si no existe
+          const [insTag]: any = await db.execute(
+            `
+            INSERT INTO tags (name, owner_user_id, created_at)
+            VALUES (?, ?, SYSUTCDATETIME());
+            `,
+            [name, ownerId]
+          );
+          tagId = Number(insTag?.insertId);
+        }
+
+        if (!Number.isFinite(tagId)) continue;
+
+        await db.execute(
+          `
+          INSERT INTO item_tags (item_id, tag_id)
+          VALUES (?, ?);
+          `,
+          [itemId, tagId]
+        );
       }
     }
 
@@ -1038,7 +1055,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
             value_number,
             value_date
           )
-          VALUES (?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?);
           `,
           [
             itemId,
@@ -1051,7 +1068,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       }
     }
 
-    // --------- IMÁGENES ---------
+    // --------- IMÁGENES (SIN CAMBIOS) ---------
     if (files.length > 0) {
       const fs   = require('fs');
       const path = require('path');
@@ -1079,7 +1096,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
             mime_type,
             created_at
           )
-          VALUES (?, ?, ?, SYSUTCDATETIME())
+          VALUES (?, ?, ?, SYSUTCDATETIME());
           `,
           [itemId, fullPath, f.mime]
         );
@@ -1098,6 +1115,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       .send({ message: 'internal_error', detail: String(e?.message || '') });
   }
 });
+
 
 
 
