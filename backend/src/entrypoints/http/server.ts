@@ -957,8 +957,8 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         ? String(meta.visibility).trim()
         : 'public';
 
+    // meta.attributes = ya viene armado desde el front con definition_id
     const attributes = Array.isArray(meta.attributes) ? meta.attributes : [];
-    // OJO: de momento ignoramos meta.tags para no romper por item_tags
 
     // --------- INSERT EN philatelic_items ---------
     const [result]: any = await db.execute(
@@ -1066,9 +1066,152 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       }
     }
 
-    // --------- TAGS: PENDIENTE ---------
-    // TODO: cuando tengamos claro el esquema de dbo.item_tags en SQL Server,
-    // reactivamos aquí el guardado de tags sin usar columnas que no existan.
+    // ============================================================
+    //  TAGS  (adaptado de tu versión MySQL)
+    // ============================================================
+    if (Array.isArray(meta?.tags) && meta.tags.length) {
+      const tagNames: string[] = meta.tags
+        .map((t: any) => String(t ?? '').trim())
+        .filter(Boolean);
+
+      const tagIds: number[] = [];
+
+      for (const name of tagNames) {
+        // 1) ¿ya existe la tag?
+        const [rowsExist]: any = await db.execute(
+          `
+          SELECT TOP (1) id
+            FROM tags
+           WHERE owner_user_id = ?
+             AND name = ?;
+          `,
+          [ownerId, name]
+        );
+
+        if (Array.isArray(rowsExist) && rowsExist.length) {
+          tagIds.push(Number(rowsExist[0].id));
+        } else {
+          // 2) crear tag nueva
+          const [insTag]: any = await db.execute(
+            `
+            INSERT INTO tags (name, owner_user_id)
+            VALUES (?, ?);
+            `,
+            [name, ownerId]
+          );
+          tagIds.push(Number(insTag.insertId));
+        }
+      }
+
+      // 3) Enlazar item <-> tag (evitando duplicados)
+      const uniqueIds = Array.from(new Set(tagIds));
+      for (const tid of uniqueIds) {
+        await db.execute(
+          `
+          INSERT INTO item_tags (item_id, tag_id)
+          SELECT ?, ?
+          WHERE NOT EXISTS (
+            SELECT 1
+              FROM item_tags
+             WHERE item_id = ?
+               AND tag_id = ?
+          );
+          `,
+          [itemId, tid, itemId, tid]
+        );
+      }
+    }
+
+    // ============================================================
+    //  CATEGORIES (crea attribute_definitions + item_attributes)
+    //  => mantiene el comportamiento de tu código MySQL antiguo
+    // ============================================================
+    if (Array.isArray(meta?.categories) && meta.categories.length) {
+      for (const c of meta.categories) {
+        if (!c || !c.name) continue;
+        const attrName = String(c.name).trim();
+        if (!attrName) continue;
+
+        // 1) obtener/crear definición en attribute_definitions
+        let attrId: number | null = null;
+
+        const [rowsDef]: any = await db.execute(
+          `
+          SELECT TOP (1) id
+            FROM attribute_definitions
+           WHERE owner_user_id = ?
+             AND name = ?;
+          `,
+          [ownerId, attrName]
+        );
+
+        if (Array.isArray(rowsDef) && rowsDef.length) {
+          attrId = Number(rowsDef[0].id);
+        } else {
+          const aTypeAllowed = ['text', 'number', 'date', 'list'];
+          const aType = aTypeAllowed.includes(String(c.attrType))
+            ? String(c.attrType)
+            : 'text';
+
+          const [insDef]: any = await db.execute(
+            `
+            INSERT INTO attribute_definitions (
+              owner_user_id,
+              name,
+              attr_type
+            )
+            VALUES (?, ?, ?);
+            `,
+            [ownerId, attrName, aType]
+          );
+          attrId = Number(insDef.insertId);
+        }
+
+        if (!attrId) continue;
+
+        // 2) decidir value_text / value_number / value_date
+        const v = c.value;
+        const vText =
+          typeof v === 'string'
+            ? v
+            : (v !== null && v !== undefined ? String(v) : null);
+        const vNum =
+          typeof v === 'number'
+            ? v
+            : Number.isFinite(Number(v))
+              ? Number(v)
+              : null;
+        const vDate =
+          c.attrType === 'date' && v
+            ? v
+            : null; // se asume 'YYYY-MM-DD' ya viene del front
+
+        // 3) limpiar valor previo del mismo atributo para este item
+        await db.execute(
+          `
+          DELETE FROM item_attributes
+           WHERE item_id = ?
+             AND attribute_id = ?;
+          `,
+          [itemId, attrId]
+        );
+
+        // 4) insertar valor
+        await db.execute(
+          `
+          INSERT INTO item_attributes (
+            item_id,
+            attribute_id,
+            value_text,
+            value_number,
+            value_date
+          )
+          VALUES (?, ?, ?, ?, ?);
+          `,
+          [itemId, attrId, vText ?? null, vNum ?? null, vDate ?? null]
+        );
+      }
+    }
 
     // --------- RESPUESTA ---------
     reply.code(201).send({
@@ -1082,7 +1225,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       .send({ message: 'internal_error', detail: String(e?.message || '') });
   }
 });
-
 
 
 
