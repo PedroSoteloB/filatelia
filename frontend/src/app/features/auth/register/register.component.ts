@@ -24,35 +24,49 @@ export class RegisterComponent {
 
   constructor(private router: Router) {}
 
-  async submit() {
+  async submit(): Promise<void> {
     this.msg = '';
 
-    // Validaciones
-    if (!this.name.trim()) return (this.msg = 'Ingresa tu nombre.');
-    if (!this.email.trim()) return (this.msg = 'Ingresa tu email.');
-    if (!this.password) return (this.msg = 'Ingresa una contraseña.');
-    if (this.password.length < 8)
-      return (this.msg = 'La contraseña debe tener al menos 8 caracteres.');
-    if (this.password !== this.confirmPassword)
-      return (this.msg = 'Las contraseñas no coinciden.');
+    // Validaciones (SIN retornar expresiones)
+    if (!this.name.trim()) {
+      this.msg = 'Ingresa tu nombre.';
+      return;
+    }
+
+    if (!this.email.trim()) {
+      this.msg = 'Ingresa tu email.';
+      return;
+    }
+
+    if (!this.password) {
+      this.msg = 'Ingresa una contraseña.';
+      return;
+    }
+
+    if (this.password.length < 8) {
+      this.msg = 'La contraseña debe tener al menos 8 caracteres.';
+      return;
+    }
+
+    if (this.password !== this.confirmPassword) {
+      this.msg = 'Las contraseñas no coinciden.';
+      return;
+    }
 
     this.loading = true;
 
     try {
-      // 🔥 LLAMADA REAL AL BACKEND
       const res = await fetch('/auth/register', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: this.email,
           password: this.password,
-          displayName: this.name, // 👈 IMPORTANTE
+          displayName: this.name,
         }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      const data: any = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         this.msg = data?.message || `Error ${res.status}`;
