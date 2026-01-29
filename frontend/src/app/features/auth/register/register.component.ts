@@ -1,8 +1,12 @@
 import { Component } from '@angular/core';
-import { Router } from '@angular/router';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { RouterModule, Router } from '@angular/router';
 
 @Component({
   selector: 'app-register',
+  standalone: true,
+  imports: [CommonModule, FormsModule, RouterModule],
   templateUrl: './register.component.html',
   styleUrls: ['./register.component.scss'],
 })
@@ -51,10 +55,7 @@ export class RegisterComponent {
     this.loading = true;
 
     try {
-      // ✅ Aquí luego conectas al backend:
-      // await this.authService.register({ name: this.name, email: this.email, password: this.password });
-
-      // Simulación de éxito (para que la vista funcione ya)
+      // aquí luego conectas con /auth/register
       await new Promise((r) => setTimeout(r, 700));
 
       this.msg = '✅ Cuenta creada. Ahora inicia sesión.';
