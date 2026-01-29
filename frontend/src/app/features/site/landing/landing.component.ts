@@ -276,6 +276,10 @@ export class LandingComponent implements OnInit {
     this.router.navigate(['/login'], { queryParams: { returnUrl } });
   }
 
+  goRegister() {
+    this.router.navigate(['/register']);
+  }
+  
   // Helper: si no hay sesión, manda a login preservando destino
   private navigateOrLogin(targetUrl: string) {
     if (!this.isAuth) { this.goLogin(targetUrl); return; }

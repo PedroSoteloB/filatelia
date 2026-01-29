@@ -59,10 +59,14 @@
         <em>pública</em>.
       </p>
 
-      <div class="cta">
+      <!-- <div class="cta">
         <button class="btn primary" (click)="scrollToCatalog()">Ver catálogo</button>
         <button class="btn ghost" *ngIf="!isAuth" (click)="goLogin()">Crear cuenta gratuita</button>
-      </div>
+      </div> -->
+      <button class="btn ghost" *ngIf="!isAuth" (click)="goRegister()">
+        Crear cuenta gratuita
+      </button>
+      
     </section>
 
     <!-- Lado visual decorativo -->

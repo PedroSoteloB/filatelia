@@ -3817,6 +3817,67 @@ async function representativeThumbs(
   return byTags.length ? byTags : fallback;
 }
 
+// ------------------- auth: register -------------------
+app.post('/auth/register', async (req: any, reply: any) => {
+  try {
+    const { email, password, displayName } = req.body || {};
+    if (!email || !password) {
+      return reply.code(400).send({ message: 'email y password requeridos' });
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanName  = displayName ? String(displayName).trim() : null;
+
+    // 1) Validar que no exista
+    const [exists]: any = await db.execute(
+      `SELECT TOP 1 id
+         FROM users
+        WHERE email = ?`,
+      [cleanEmail]
+    );
+    if (exists?.length) {
+      return reply.code(409).send({ message: 'email_ya_registrado' });
+    }
+
+    // 2) Crear user
+    const hash = await bcrypt.hash(String(password), 10);
+
+    const [result]: any = await db.execute(
+      `INSERT INTO users (email, password_hash, display_name, is_active)
+       VALUES (?,?,?,1)`,
+      [cleanEmail, hash, cleanName || cleanEmail]
+    );
+
+    const userId = Number(result?.insertId);
+
+    // 3) (Opcional) asignar rol "user" si existe en tu tabla roles
+    try {
+      const [roleRows]: any = await db.execute(
+        'SELECT TOP 1 id FROM roles WHERE name = ?',
+        ['user']
+      );
+      if (roleRows?.length && Number.isFinite(userId)) {
+        await db.execute(
+          'INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)',
+          [userId, roleRows[0].id]
+        );
+      }
+    } catch {
+      // si no tienes roles/user_roles, no pasa nada
+    }
+
+    // 4) Responder (sin token; tú ya tienes /auth/login)
+    return reply.code(201).send({
+      ok: true,
+      user: { id: userId, email: cleanEmail, displayName: cleanName || cleanEmail }
+    });
+  } catch (e: any) {
+    return reply.code(500).send({ message: e?.message || 'internal_error' });
+  }
+});
+
+
+
 // =================== PRESENTATIONS: generate-ppt (SQL adaptado) ===================
 app.post(
   "/presentations/:id/generate-ppt",

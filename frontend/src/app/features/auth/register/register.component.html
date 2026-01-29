@@ -1,0 +1,135 @@
+<div class="auth-wrap">
+    <div class="paper-bg" aria-hidden="true"></div>
+  
+    <div class="card stamp-edge">
+      <div class="brand">
+        <svg class="stamp" viewBox="0 0 120 120" aria-hidden="true">
+          <defs>
+            <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#b08968" />
+              <stop offset="100%" stop-color="#7f5539" />
+            </linearGradient>
+          </defs>
+          <rect
+            x="8"
+            y="8"
+            width="104"
+            height="104"
+            rx="18"
+            fill="url(#g1)"
+            opacity="0.25"
+          ></rect>
+          <circle cx="60" cy="50" r="23" fill="#85586F"></circle>
+          <path
+            d="M32 82h56"
+            stroke="#85586F"
+            stroke-width="6"
+            stroke-linecap="round"
+          />
+        </svg>
+  
+        <div class="title">
+          <span class="eyebrow">Catálogo personal</span>
+          <h1>Filatelia</h1>
+          <p>Tu espacio para organizar sellos</p>
+        </div>
+      </div>
+  
+      <form (ngSubmit)="submit()" novalidate>
+        <header class="form-head">
+          <h2>Crear cuenta</h2>
+          <p>Regístrate para guardar tu colección y acceder desde cualquier lugar.</p>
+        </header>
+  
+        <label class="field">
+          <span>Nombre</span>
+          <input
+            [(ngModel)]="name"
+            name="name"
+            type="text"
+            placeholder="Tu nombre"
+            required
+          />
+        </label>
+  
+        <label class="field">
+          <span>Email</span>
+          <input
+            [(ngModel)]="email"
+            name="email"
+            type="email"
+            placeholder="tú@correo.com"
+            required
+          />
+        </label>
+  
+        <label class="field">
+          <span>Contraseña</span>
+          <div class="password">
+            <input
+              [(ngModel)]="password"
+              name="password"
+              [type]="showPassword ? 'text' : 'password'"
+              type="password"
+              placeholder="••••••••"
+              required
+            />
+            <button
+              type="button"
+              class="toggle"
+              (click)="showPassword = !showPassword"
+              [attr.aria-pressed]="showPassword"
+            >
+              {{ showPassword ? 'Ocultar' : 'Ver' }}
+            </button>
+          </div>
+        </label>
+  
+        <label class="field">
+          <span>Confirmar contraseña</span>
+          <div class="password">
+            <input
+              [(ngModel)]="confirmPassword"
+              name="confirmPassword"
+              [type]="showConfirm ? 'text' : 'password'"
+              placeholder="••••••••"
+              required
+            />
+            <button
+              type="button"
+              class="toggle"
+              (click)="showConfirm = !showConfirm"
+              [attr.aria-pressed]="showConfirm"
+            >
+              {{ showConfirm ? 'Ocultar' : 'Ver' }}
+            </button>
+          </div>
+        </label>
+  
+        <button class="submit" [disabled]="loading" type="submit">
+          <span *ngIf="!loading">Crear cuenta</span>
+          <span *ngIf="loading">Creando…</span>
+        </button>
+  
+        <p
+          class="message"
+          [class.ok]="msg.includes('✅')"
+          [class.error]="msg && !msg.includes('✅')"
+        >
+          {{ msg }}
+        </p>
+  
+        <div class="alt">
+          <span>¿Ya tienes cuenta?</span>
+          <a class="link" routerLink="/login">Inicia sesión</a>
+        </div>
+      </form>
+  
+      <footer class="footnote">
+        <span>✉️ Hecho con cariño filatélico</span>
+        <span>•</span>
+        <span>v0.1 MVP</span>
+      </footer>
+    </div>
+  </div>
+  
