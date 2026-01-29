@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule, Router } from '@angular/router';
+import { environment } from '../../../core/environments/environment.prod';
 
 @Component({
   selector: 'app-register',
@@ -27,7 +28,6 @@ export class RegisterComponent {
   async submit(): Promise<void> {
     this.msg = '';
 
-    // Validaciones (SIN retornar expresiones)
     if (!this.name.trim()) {
       this.msg = 'Ingresa tu nombre.';
       return;
@@ -56,7 +56,7 @@ export class RegisterComponent {
     this.loading = true;
 
     try {
-      const res = await fetch('/auth/register', {
+      const res = await fetch(`${environment.apiBaseUrl}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
