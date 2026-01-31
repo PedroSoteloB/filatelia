@@ -14,9 +14,9 @@
         <path d="M32 82h56" stroke="#85586F" stroke-width="6" stroke-linecap="round" />
       </svg>
       <div class="title">
-        <span class="eyebrow">Catálogo digital</span>
+        <span class="eyebrow">Catálogo personal</span>
         <h1>Filatelia</h1>
-        <p>Tu inventario moderno de sellos postales</p>
+        <p>Tu archivo digital privado de sellos postales</p>
       </div>
     </div>
 
@@ -44,29 +44,26 @@
 <main class="hero">
   <div class="hero-inner container">
     <section class="panel">
-      <span class="badge">Pensado para coleccionistas</span>
-      <h2>Bienvenido al mundo de la filatelia digital</h2>
+      <span class="badge">Pensado para coleccionistas del Perú</span>
+      <h2>Tu colección filatélica, ordenada y solo tuya</h2>
+
       <p>
-        La <strong>filatelia</strong> es el estudio y coleccionismo de sellos postales y piezas
-        relacionadas: matasellos, sobres de primer día, enteros postales, viñetas, tarjetas máximas
-        y más. Aquí puedes catalogar tus piezas, registrar metadatos (país, año, condición, código
-        de catálogo…), añadir imágenes y decidir si cada una es <em>pública</em> o <em>privada</em>.
+        <strong>Filatelia</strong> es un catálogo digital <strong>personal</strong> pensado para
+        coleccionistas que desean mantener su colección organizada, documentada y accesible
+        desde cualquier dispositivo. Aquí puedes registrar sellos postales, sobres, matasellos y
+        otras piezas filatélicas, añadiendo información clave como país, año de emisión, estado de
+        conservación, valor facial y notas propias.
       </p>
 
       <p class="muted">
-        Sube imágenes de tus sellos y organiza tu colección. Filtra por país, año o condición y
-        encuentra rápidamente lo que buscas. Comparte con la comunidad lo que quieras con visibilidad
-        <em>pública</em>.
+        Todo tu inventario es <strong>privado por defecto</strong>. Filatelia está diseñada como una
+        herramienta personal para llevar un control serio y ordenado de tu material filatélico, sin
+        necesidad de compartirlo con la comunidad ni con terceros.
       </p>
 
-      <!-- <div class="cta">
-        <button class="btn primary" (click)="scrollToCatalog()">Ver catálogo</button>
-        <button class="btn ghost" *ngIf="!isAuth" (click)="goLogin()">Crear cuenta gratuita</button>
-      </div> -->
       <button class="btn ghost" *ngIf="!isAuth" (click)="goRegister()">
         Crear cuenta gratuita
       </button>
-      
     </section>
 
     <!-- Lado visual decorativo -->
@@ -114,28 +111,37 @@
   <div class="container">
     <h3>¿Por qué usar Filatelia?</h3>
     <p class="section-subtitle">
-      Un espacio diseñado para coleccionistas que quieren orden, detalle y una presentación elegante.
+      Un espacio personal diseñado para coleccionistas que quieren orden, detalle y una presentación elegante.
     </p>
     <div class="feat-grid">
       <article class="feat">
         <div class="feat-ico">📚</div>
         <h4>Tu catálogo, ordenado</h4>
-        <p>Clasifica sellos por país, año, condición y código de catálogo. Encuentra todo en segundos.</p>
+        <p>Clasifica tus piezas por país, año, condición y código de catálogo. Encuentra todo en segundos.</p>
       </article>
+
       <article class="feat">
         <div class="feat-ico">🖼️</div>
         <h4>Imágenes cuidadas</h4>
         <p>Sube múltiples fotos por pieza. Elige una portada y guarda el detalle que la hace única.</p>
       </article>
+
       <article class="feat">
-        <div class="feat-ico">🌐</div>
-        <h4>Comparte con la comunidad</h4>
-        <p>Marca como <em>público</em> lo que desees mostrar. Inspira y aprende de otros coleccionistas.</p>
+        <div class="feat-ico">🗂️</div>
+        <h4>Inventario personal</h4>
+        <p>
+          Lleva un registro claro de tu colección como si fuera un cuaderno filatélico, pero digital,
+          ordenado y siempre disponible.
+        </p>
       </article>
+
       <article class="feat">
         <div class="feat-ico">🔒</div>
-        <h4>Privacidad cuando quieras</h4>
-        <p>Controla la visibilidad pieza por pieza. Lo privado es solo tuyo.</p>
+        <h4>Privacidad total</h4>
+        <p>
+          Tu colección es solo tuya. Nadie ve tus piezas, datos o imágenes.
+          Filatelia no es una red social, es tu archivo personal.
+        </p>
       </article>
     </div>
   </div>
@@ -148,7 +154,7 @@
   <div class="container">
     <h3>¿Cómo funciona?</h3>
     <p class="section-subtitle">
-      En tres pasos sencillos puedes pasar de fotos sueltas a un catálogo profesional.
+      En tres pasos sencillos puedes pasar de fotos sueltas a un catálogo personal bien organizado.
     </p>
     <ol class="steps">
       <li>
@@ -156,19 +162,25 @@
         <h4>Sube tus imágenes</h4>
         <p>Arrastra o selecciona varias fotos de cada sello, sobre FDC u otro material filatélico.</p>
       </li>
+
       <li>
         <div class="step-num">2</div>
         <h4>Completa metadatos</h4>
         <p>País, año, condición, código de catálogo, valor facial… ¡todo queda guardado!</p>
       </li>
+
       <li>
         <div class="step-num">3</div>
-        <h4>Elige visibilidad</h4>
-        <p>Privado para tu inventario, o público para compartir y recibir feedback.</p>
+        <h4>Consulta y gestiona</h4>
+        <p>
+          Accede a tu colección cuando quieras, filtra por país, año o estado,
+          y mantén un control claro de tu inventario filatélico personal.
+        </p>
       </li>
     </ol>
+
     <div class="how-cta">
-      <button class="btn primary" *ngIf="!isAuth" (click)="goLogin()">Crear cuenta</button>
+      <button class="btn primary" *ngIf="!isAuth" (click)="goRegister()">Crear cuenta</button>
       <button class="btn primary" *ngIf="isAuth" (click)="goUpload()">Subir mi primera pieza</button>
     </div>
   </div>
@@ -207,7 +219,7 @@
     <div class="t-grid">
       <figure class="t-card">
         <blockquote>
-          “Por fin tengo mi inventario al día y puedo compartir lo mejor de mi colección.”
+          “Por fin tengo mi inventario al día y puedo encontrar cada pieza sin perder tiempo.”
         </blockquote>
         <figcaption>— Marta R., Lima</figcaption>
       </figure>
@@ -215,13 +227,13 @@
         <blockquote>
           “Busco por país y año en segundos. Antes era un caos de fotos sueltas.”
         </blockquote>
-        <figcaption>— Diego P., Madrid</figcaption>
+        <figcaption>— Diego P., Arequipa</figcaption>
       </figure>
       <figure class="t-card">
         <blockquote>
-          “Me encantó decidir qué piezas hago públicas. Perfecto para exhibir.”
+          “Me encanta tenerlo todo privado y ordenado. Es como mi cuaderno filatélico, pero digital.”
         </blockquote>
-        <figcaption>— Ana K., Buenos Aires</figcaption>
+        <figcaption>— Ana K., Cusco</figcaption>
       </figure>
     </div>
   </div>
@@ -235,13 +247,28 @@
     <h3>Preguntas frecuentes</h3>
     <div class="faq-list">
       <details>
-        <summary>¿Tengo que iniciar sesión para ver el catálogo?</summary>
-        <p>No. El catálogo público se puede explorar sin iniciar sesión. Para ver tu inventario privado o subir piezas sí necesitas cuenta.</p>
+        <summary>¿Filatelia es una red social?</summary>
+        <p>
+          No. Filatelia es un catálogo personal privado. Está pensada como una herramienta de organización e inventario,
+          no como una plataforma social.
+        </p>
       </details>
+
       <details>
-        <summary>¿Puedo cambiar la visibilidad después?</summary>
-        <p>Sí. Puedes alternar entre <em>pública</em> y <em>privada</em> cuando quieras.</p>
+        <summary>¿Está pensada para coleccionistas del Perú?</summary>
+        <p>
+          Sí. Filatelia nace pensando en coleccionistas peruanos y su necesidad de llevar un registro personal ordenado
+          de su material filatélico.
+        </p>
       </details>
+
+      <details>
+        <summary>¿Tengo que iniciar sesión para usar mi catálogo?</summary>
+        <p>
+          Sí. Tu inventario es personal y privado, por eso necesitas una cuenta para registrar, ver y gestionar tus piezas.
+        </p>
+      </details>
+
       <details>
         <summary>¿Cuántas imágenes puedo subir por pieza?</summary>
         <p>Hasta 12 imágenes por pieza (JPG, PNG, WEBP y GIF).</p>
@@ -259,7 +286,7 @@
       <div class="logo-mini">✉️</div>
       <div>
         <strong>Filatelia</strong>
-        <p class="muted">Catálogo personal de sellos</p>
+        <p class="muted">Catálogo personal privado de sellos postales</p>
       </div>
     </div>
 
@@ -269,6 +296,7 @@
       <a *ngIf="isAuth" (click)="goCollections()">Mis colecciones</a>
       <a *ngIf="isAuth" (click)="goPresentation()">Mis presentaciones</a>
       <a *ngIf="!isAuth" (click)="goLogin()">Iniciar sesión</a>
+      <a *ngIf="!isAuth" (click)="goRegister()">Crear cuenta</a>
     </nav>
 
     <div class="f-social">
@@ -277,7 +305,8 @@
       <a href="#" aria-label="YouTube" title="YouTube">▶️</a>
     </div>
   </div>
+
   <div class="f-copy">
-    © {{ currentYear }} Filatelia — Hecho con cariño para coleccionistas.
+    © {{ currentYear }} Filatelia — Hecho con cariño para coleccionistas del Perú.
   </div>
 </footer>
