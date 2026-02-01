@@ -1571,9 +1571,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           base,
           `${itemId}-${Date.now()}-${i}-${f.filename}`.replace(/[^\w.\-]+/g, '_')
         );
-
         fs.writeFileSync(filePath, f.buffer);
-
         await db.execute(
           `
           INSERT INTO item_images (item_id, file_path, is_primary)
