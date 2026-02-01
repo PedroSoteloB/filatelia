@@ -603,4 +603,18 @@ private toTitleCase(s: string): string {
     .join(' ');
 }
 
+attrNameError(): string {
+  const raw = this.attrNameDraft();
+  const prettyName = this.toTitleCase(raw);
+  const key = this.normalizeKey(prettyName);
+
+  if (!raw || !raw.trim()) return 'Ingresa un nombre de atributo.';
+
+  const exists = this.attrs().some(a => this.normalizeKey(a.name) === key);
+  if (exists) return `Ya existe un atributo con el nombre "${prettyName}".`;
+
+  return '';
+}
+
+
 }
