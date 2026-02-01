@@ -616,5 +616,26 @@ attrNameError(): string {
   return '';
 }
 
+normalizeAttrNameDraft(): void {
+  const raw = this.attrNameDraft();
+  const prettyName = this.toTitleCase(raw);
+
+  // Si quieres que al salir del input se “auto-formatee”
+  if (prettyName !== raw) {
+    this.attrNameDraft.set(prettyName);
+  }
+}
+
+isAttrNameDuplicate(): boolean {
+  const raw = this.attrNameDraft();
+  const prettyName = this.toTitleCase(raw);
+  const key = this.normalizeKey(prettyName);
+
+  if (!key) return false;
+
+  return this.attrs().some(a => this.normalizeKey(a.name) === key);
+}
+
+
 
 }
