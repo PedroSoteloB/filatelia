@@ -180,7 +180,10 @@ export class UploadItemComponent implements OnInit {
   }
 
   // ===== Helpers =====
-  private normalizeTag(s: string) { return s.trim().replace(/\s+/g, ' '); }
+  private normalizeTag(s: string) {
+    return s.trim().replace(/\s+/g, ' ').toLowerCase(); // ✅ case-insensitive
+  }
+  
 
   private pushTags(raws: string[]) {
     const base = new Set(this.tags());
