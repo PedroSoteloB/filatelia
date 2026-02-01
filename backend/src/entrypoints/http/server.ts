@@ -1477,66 +1477,33 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
       for await (const p of parts) {
         if (p?.type === 'field' && p.fieldname === 'metadata') {
-          try {
-            meta = JSON.parse(String(p.value ?? '{}'));
-          } catch {
-            return reply.code(400).send({ message: 'metadata inválido (JSON)' });
-          }
+          meta = JSON.parse(String(p.value ?? '{}'));
           continue;
         }
 
         if (p?.type === 'file') {
-          if (files.length >= maxImages) {
-            await p.file?.resume?.();
-            continue;
-          }
           const buf = await p.toBuffer();
-          const filename = String(p.filename ?? 'image');
-          const mime = String(p.mimetype ?? '');
           if (!buf?.length) continue;
-          if (!allowed.has(mime)) {
-            return reply
-              .code(400)
-              .send({ message: 'Formato no soportado (JPG/PNG/WEBP/GIF)' });
+          if (!allowed.has(p.mimetype)) {
+            return reply.code(400).send({ message: 'Formato no soportado' });
           }
-          files.push({ buffer: buf, filename, mime });
+          files.push({
+            buffer: buf,
+            filename: p.filename,
+            mime: p.mimetype,
+          });
         }
       }
     } else {
-      meta = req.body || null;
+      meta = req.body;
     }
 
-    if (!meta || !meta.title || !String(meta.title).trim()) {
+    if (!meta?.title?.trim()) {
       return reply.code(400).send({ message: 'metadata.title requerido' });
     }
 
-    const allowNoImages =
-      process.env.ALLOW_ITEMS_WITHOUT_IMAGES === '1' ||
-      meta?.allowNoImages === true ||
-      String(req.query?.allowNoImages || '').toLowerCase() === 'true';
-
-    if (!files.length && !allowNoImages) {
-      return reply.code(400).send({ message: 'al menos una imagen requerida' });
-    }
-
-    const title = String(meta.title).trim();
-    const description = meta.description || null;
-    const country = meta.country || null;
-    const issueYear = meta.issue_year ?? meta.issueYear ?? meta.year ?? null;
-    const conditionCode = meta.condition_code ?? meta.condition ?? null;
-    const catalogCode = meta.catalog_code ?? meta.catalogCode ?? null;
-    const faceValue = meta.face_value ?? meta.faceValue ?? null;
-    const currency = meta.currency || null;
-    const acquisitionDate =
-      meta.acquisition_date ?? meta.acquisitionDate ?? null;
-
-    const visibility =
-      meta.visibility && String(meta.visibility).trim()
-        ? String(meta.visibility).trim()
-        : 'public';
-
-    // ===== INSERT =====
-    await db.execute(
+    // ================= INSERT + ID EN UNA SOLA QUERY =================
+    const [rows]: any = await db.execute(
       `
       INSERT INTO philatelic_items (
         owner_user_id,
@@ -1553,71 +1520,63 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         created_at,
         updated_at
       )
+      OUTPUT INSERTED.id
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME());
       `,
       [
         ownerId,
-        title,
-        description,
-        country,
-        issueYear ?? null,
-        conditionCode || null,
-        catalogCode || null,
-        faceValue ?? null,
-        currency || null,
-        acquisitionDate || null,
-        visibility,
+        meta.title.trim(),
+        meta.description || null,
+        meta.country || null,
+        meta.issueYear ?? null,
+        meta.condition ?? null,
+        meta.catalogCode ?? null,
+        meta.faceValue ?? null,
+        meta.currency ?? null,
+        meta.acquisitionDate ?? null,
+        meta.visibility || 'public',
       ]
     );
 
-    // ===== FIX REAL AQUÍ =====
-    const result: any = await db.execute(
-      `SELECT CAST(SCOPE_IDENTITY() AS BIGINT) AS id;`
-    );
-
-    const itemId = Number(result?.[0]?.[0]?.id);
+    const itemId = Number(rows?.[0]?.id);
     if (!Number.isFinite(itemId)) {
       throw new Error('No se pudo obtener el id insertado');
     }
-    // ========================
+    // =================================================================
 
-    if (files.length > 0) {
+    // ================= IMÁGENES =================
+    if (files.length) {
       const fs = require('fs');
       const path = require('path');
-      const base =
-        process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
+      const base = process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
 
-      if (!fs.existsSync(base)) {
-        fs.mkdirSync(base, { recursive: true });
-      }
+      if (!fs.existsSync(base)) fs.mkdirSync(base, { recursive: true });
 
       for (const [i, f] of files.entries()) {
-        const safeName = `${itemId}-${Date.now()}-${i}-${f.filename}`.replace(
-          /[^\w.\-]+/g,
-          '_'
+        const filePath = path.join(
+          base,
+          `${itemId}-${Date.now()}-${i}-${f.filename}`.replace(/[^\w.-]+/g, '_')
         );
-        const fullPath = path.join(base, safeName);
-        fs.writeFileSync(fullPath, f.buffer);
+
+        fs.writeFileSync(filePath, f.buffer);
 
         await db.execute(
           `
           INSERT INTO item_images (item_id, file_path, is_primary)
           VALUES (?, ?, ?);
           `,
-          [itemId, fullPath, i === 0 ? 1 : 0]
+          [itemId, filePath, i === 0 ? 1 : 0]
         );
       }
     }
 
-    reply.code(201).send({
-      id: itemId,
-      message: 'item_creado',
-    });
+    reply.code(201).send({ id: itemId, message: 'item_creado' });
   } catch (e: any) {
-    console.error('[POST /items] ERROR CATCH:', e);
-    reply
-      .code(500)
-      .send({ message: 'internal_error', detail: String(e?.message || '') });
+    console.error('[POST /items] ERROR:', e);
+    reply.code(500).send({
+      message: 'internal_error',
+      detail: String(e?.message || ''),
+    });
   }
 });
 
