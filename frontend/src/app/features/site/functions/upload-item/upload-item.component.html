@@ -62,11 +62,54 @@
               </small>
             </label>
 
-            <label class="field">
+            <!-- <label class="field">
               <span class="label">País</span>
               <input type="text" formControlName="country" />
+            </label> -->
+            <label class="field">
+              <span class="label">País / entidad postal</span>
+              <input
+                type="text"
+                formControlName="country"
+                placeholder="Perú, URSS, Alemania Federal…"
+                list="paises-entidades"
+              />
+              <datalist id="paises-entidades">
+                <!-- Países actuales -->
+                <option value="Perú"></option>
+                <option value="Argentina"></option>
+                <option value="Brasil"></option>
+                <option value="Chile"></option>
+                <option value="España"></option>
+                <option value="Francia"></option>
+                <option value="Alemania"></option>
+                <option value="Italia"></option>
+                <option value="Japón"></option>
+            
+                <!-- Estados históricos -->
+                <option value="Unión Soviética (URSS)"></option>
+                <option value="Alemania Federal (RFA)"></option>
+                <option value="Alemania Democrática (RDA)"></option>
+                <option value="Checoslovaquia"></option>
+                <option value="Yugoslavia"></option>
+                <option value="Imperio Austrohúngaro"></option>
+                <option value="Imperio Alemán"></option>
+            
+                <!-- Colonias / entidades -->
+                <option value="Colonias francesas"></option>
+                <option value="Colonias británicas"></option>
+                <option value="Indias Orientales Holandesas"></option>
+                <option value="África Occidental Francesa"></option>
+            
+                <!-- Perú histórico -->
+                <option value="Perú (Confederación Perú-Boliviana)"></option>
+              </datalist>
+            
+              <small class="hint">
+                Puedes ingresar países actuales, estados históricos, colonias o entidades postales.
+              </small>
             </label>
-
+            
             <!-- fila 2 -->
             <label class="field">
               <span class="label">Año de emisión</span>
@@ -79,15 +122,95 @@
             </label>
 
             <!-- fila 3 -->
-            <label class="field">
+            <!-- <label class="field">
               <span class="label">Código de catálogo</span>
               <input type="text" formControlName="catalogCode" placeholder="Scott/Edifil/Yvert…" />
-            </label>
-
+            </label> -->
             <label class="field">
+              <span class="label">Código de catálogo</span>
+              <input
+                type="text"
+                formControlName="catalogCode"
+                placeholder="Scott, Edifil, Yvert & Tellier…"
+                list="catalogos-filatelicos"
+              />
+              <datalist id="catalogos-filatelicos">
+                <!-- Catálogos internacionales -->
+                <option value="Scott"></option>
+                <option value="Yvert & Tellier"></option>
+                <option value="Michel"></option>
+                <option value="Stanley Gibbons"></option>
+                <option value="Zumstein"></option>
+                <option value="Sassone"></option>
+            
+                <!-- Catálogos por región / país -->
+                <option value="Edifil (España)"></option>
+                <option value="Facit (Países nórdicos)"></option>
+                <option value="NVPH (Países Bajos)"></option>
+                <option value="Unificato (Italia)"></option>
+                <option value="ACS (Australia)"></option>
+            
+                <!-- América Latina -->
+                <option value="Yvert América Latina"></option>
+                <option value="Scott América Latina"></option>
+                <option value="AFI (Argentina)"></option>
+                <option value="Catálogo Kneitschel (Chile)"></option>
+                <option value="RHM – Rolf Meyer (Brasil)"></option>
+            
+                <!-- Perú -->
+                <option value="Catálogo Especializado del Perú"></option>
+                <option value="Scott Perú"></option>
+                <option value="Yvert Perú"></option>
+            
+                <!-- Otros / referencia -->
+                <option value="Catálogo del Correo"></option>
+                <option value="Catálogo especializado propio"></option>
+              </datalist>
+            </label>
+            
+
+            <!-- <label class="field">
               <span class="label">Condición</span>
               <input type="text" formControlName="condition" placeholder="Mint, Usado, CTO, etc." />
+            </label> -->
+            <label class="field">
+              <span class="label">Estado de conservación (Condición)</span>
+              <input
+                type="text"
+                formControlName="condition"
+                placeholder="MNH, Usado, CTO, Fine, Very Fine…"
+                list="condiciones-filatelicas"
+              />
+              <datalist id="condiciones-filatelicas">
+                <!-- Condición postal -->
+                <option value="MNH (Mint sin charnela)"></option>
+                <option value="MH (Mint con charnela)"></option>
+                <option value="MNG (Mint sin goma)"></option>
+                <option value="Usado"></option>
+                <option value="CTO (Cancelado al origen)"></option>
+            
+                <!-- Estado físico / calidad -->
+                <option value="Fine (F)"></option>
+                <option value="Very Fine (VF)"></option>
+                <option value="Extremely Fine (XF)"></option>
+            
+                <!-- Otros estados -->
+                <option value="En sobre (Cover)"></option>
+                <option value="Fragmento"></option>
+                <option value="Sin circular"></option>
+                <option value="Prueba / Ensayo"></option>
+            
+                <!-- Defectos -->
+                <option value="Daños menores"></option>
+                <option value="Daños visibles"></option>
+              </datalist>
+            
+              <small class="hint">
+                Describe la condición postal y física de la pieza. Ej.: <em>MNH</em>, <em>Usado VF</em>, <em>CTO Fine</em>.
+                Puedes escribir libremente condiciones adicionales.
+              </small>
             </label>
+            
           </div>
         </section>
 
@@ -96,10 +219,61 @@
           <h3>Información de registro</h3>
 
           <div class="grid-2">
-            <label class="field">
+            <!-- <label class="field">
               <span class="label">Moneda</span>
               <input type="text" formControlName="currency" placeholder="PEN, USD, etc." />
+            </label> -->
+            <label class="field">
+              <span class="label">Moneda</span>
+              <input
+                type="text"
+                formControlName="currency"
+                placeholder="PEN, USD, EUR…"
+                list="monedas-oficiales"
+              />
+              <datalist id="monedas-oficiales">
+                <!-- América -->
+                <option value="PEN – Sol peruano"></option>
+                <option value="USD – Dólar estadounidense"></option>
+                <option value="CAD – Dólar canadiense"></option>
+                <option value="MXN – Peso mexicano"></option>
+                <option value="ARS – Peso argentino"></option>
+                <option value="BRL – Real brasileño"></option>
+                <option value="CLP – Peso chileno"></option>
+                <option value="COP – Peso colombiano"></option>
+            
+                <!-- Europa -->
+                <option value="EUR – Euro"></option>
+                <option value="GBP – Libra esterlina"></option>
+                <option value="CHF – Franco suizo"></option>
+                <option value="SEK – Corona sueca"></option>
+                <option value="NOK – Corona noruega"></option>
+                <option value="DKK – Corona danesa"></option>
+            
+                <!-- Asia -->
+                <option value="JPY – Yen japonés"></option>
+                <option value="CNY – Yuan chino"></option>
+                <option value="KRW – Won surcoreano"></option>
+                <option value="INR – Rupia india"></option>
+            
+                <!-- Oceanía -->
+                <option value="AUD – Dólar australiano"></option>
+                <option value="NZD – Dólar neozelandés"></option>
+            
+                <!-- África -->
+                <option value="ZAR – Rand sudafricano"></option>
+                <option value="EGP – Libra egipcia"></option>
+            
+                <!-- Otros -->
+                <option value="RUB – Rublo ruso"></option>
+                <option value="TRY – Lira turca"></option>
+              </datalist>
+            
+              <small class="hint">
+                Selecciona una moneda oficial (código ISO 4217).
+              </small>
             </label>
+            
 
             <label class="field">
               <span class="label">Fecha de adquisición</span>
