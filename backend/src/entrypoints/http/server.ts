@@ -844,6 +844,435 @@ function authGuard(req: FastifyRequest, reply: FastifyReply, done: HookHandlerDo
 // });
 // ================== CREAR ITEM ==================
 
+// app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req); // userId
+
+//     const ct = String((req.headers['content-type'] || '')).toLowerCase();
+//     const isMultipart = ct.startsWith('multipart/form-data');
+
+//     let meta: any = null;
+//     const files: { buffer: Buffer; filename: string; mime: string }[] = [];
+
+//     if (isMultipart) {
+//       // ----- multipart/form-data -----
+//       const parts = await (req.parts?.() as AsyncIterable<any>);
+//       if (!parts) {
+//         return reply.code(400).send({ message: 'multipart requerido' });
+//       }
+
+//       const allowed = new Set([
+//         'image/jpeg',
+//         'image/png',
+//         'image/webp',
+//         'image/gif',
+//       ]);
+//       const maxImages = 12;
+
+//       for await (const p of parts) {
+//         // campo "metadata" (JSON)
+//         if (p?.type === 'field' && p.fieldname === 'metadata') {
+//           try {
+//             meta = JSON.parse(String(p.value ?? '{}'));
+//           } catch {
+//             return reply
+//               .code(400)
+//               .send({ message: 'metadata inválido (JSON)' });
+//           }
+//           continue;
+//         }
+
+//         // archivos
+//         if (p?.type === 'file') {
+//           if (files.length >= maxImages) {
+//             await p.file?.resume?.();
+//             continue;
+//           }
+//           const buf = await p.toBuffer();
+//           const filename = String(p.filename ?? 'image');
+//           const mime = String(p.mimetype ?? '');
+//           if (!buf?.length) continue;
+//           if (!allowed.has(mime)) {
+//             return reply.code(400).send({
+//               message: 'Formato no soportado (JPG/PNG/WEBP/GIF)',
+//             });
+//           }
+//           files.push({ buffer: buf, filename, mime });
+//           continue;
+//         }
+//       }
+//     } else {
+//       // ----- application/json -----
+//       meta = req.body || null;
+//     }
+
+//     if (!meta || !meta.title || !String(meta.title).trim()) {
+//       return reply.code(400).send({ message: 'metadata.title requerido' });
+//     }
+
+//     // Permitir crear sin imágenes si está habilitado
+//     const allowNoImages =
+//       process.env.ALLOW_ITEMS_WITHOUT_IMAGES === '1' ||
+//       meta?.allowNoImages === true ||
+//       String(req.query?.allowNoImages || '').toLowerCase() === 'true';
+
+//     if (!files.length && !allowNoImages) {
+//       return reply.code(400).send({ message: 'al menos una imagen requerida' });
+//     }
+
+//     // --------- MAPEO CAMPOS philatelic_items ---------
+//     const title       = String(meta.title).trim();
+//     const description = meta.description || null;
+//     const country     = meta.country || null;
+
+//     const issueYear =
+//       meta.issue_year ??
+//       meta.issueYear ??
+//       meta.year ??
+//       null;
+
+//     const conditionCode =
+//       meta.condition_code ??
+//       meta.condition ??
+//       null;
+
+//     const catalogCode =
+//       meta.catalog_code ??
+//       meta.catalogCode ??
+//       null;
+
+//     const faceValue =
+//       meta.face_value ??
+//       meta.faceValue ??
+//       null;
+
+//     const currency        = meta.currency || null;
+//     const acquisitionDate =
+//       meta.acquisition_date ??
+//       meta.acquisitionDate ??
+//       null; // 'YYYY-MM-DD' o null
+
+//     const visibility =
+//       meta.visibility && String(meta.visibility).trim()
+//         ? String(meta.visibility).trim()
+//         : 'public';
+
+//     // --------- INSERT EN philatelic_items ---------
+//     const [result]: any = await db.execute(
+//       `
+//       INSERT INTO philatelic_items (
+//         owner_user_id,
+//         title,
+//         description,
+//         country,
+//         issue_year,
+//         condition_code,
+//         catalog_code,
+//         face_value,
+//         currency,
+//         acquisition_date,
+//         visibility,
+//         created_at,
+//         updated_at
+//       )
+//       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME());
+//       `,
+//       [
+//         ownerId,
+//         title,
+//         description,
+//         country,
+//         issueYear ?? null,
+//         conditionCode || null,
+//         catalogCode || null,
+//         faceValue ?? null,
+//         currency || null,
+//         acquisitionDate || null,
+//         visibility,
+//       ]
+//     );
+
+//     console.log('[POST /items] INSERT result =', result);
+
+//     const itemId = Number(result?.insertId);
+//     if (!Number.isFinite(itemId)) {
+//       throw new Error(
+//         'No se pudo obtener el id insertado de philatelic_items (insertId inválido)'
+//       );
+//     }
+
+//     // --------- IMÁGENES (item_images: item_id, file_path, is_primary) ---------
+//     if (files.length > 0) {
+//       const fs   = require('fs');
+//       const path = require('path');
+//       const base =
+//         process.env.FILES_BASE_PATH ||
+//         path.join(process.cwd(), 'uploads');
+
+//       if (!fs.existsSync(base)) {
+//         fs.mkdirSync(base, { recursive: true });
+//       }
+
+//       for (const [i, f] of files.entries()) {
+//         const safeName = `${itemId}-${Date.now()}-${i}-${f.filename}`.replace(
+//           /[^\w.\-]+/g,
+//           '_'
+//         );
+//         const fullPath = path.join(base, safeName);
+//         fs.writeFileSync(fullPath, f.buffer);
+
+//         await db.execute(
+//           `
+//           INSERT INTO item_images (
+//             item_id,
+//             file_path,
+//             is_primary
+//           )
+//           VALUES (?, ?, ?);
+//           `,
+//           [itemId, fullPath, i === 0 ? 1 : 0]
+//         );
+//       }
+//     }
+
+//     // ============================================================
+//     //  TAGS
+//     // ============================================================
+//     if (Array.isArray(meta?.tags) && meta.tags.length) {
+//       const tagNames: string[] = meta.tags
+//         .map((t: any) => String(t ?? '').trim())
+//         .filter(Boolean);
+
+//       const tagIds: number[] = [];
+
+//       for (const name of tagNames) {
+//         let tagId: number | null = null;
+
+//         // 1) ¿ya existe la tag?
+//         const [rowsExist]: any = await db.execute(
+//           `
+//           SELECT TOP (1) *
+//             FROM tags
+//            WHERE owner_user_id = ?
+//              AND name = ?;
+//           `,
+//           [ownerId, name]
+//         );
+
+//         if (Array.isArray(rowsExist) && rowsExist.length) {
+//           const row = rowsExist[0];
+//           tagId = Number(
+//             row.tag_id ??
+//             row.id ??
+//             row.TAG_ID ??
+//             row.ID ??
+//             null
+//           );
+//         }
+
+//         // 2) si no existía, crearla y volver a leerla
+//         if (!tagId) {
+//           await db.execute(
+//             `
+//             INSERT INTO tags (name, owner_user_id)
+//             VALUES (?, ?);
+//             `,
+//             [name, ownerId]
+//           );
+
+//           const [rowsNew]: any = await db.execute(
+//             `
+//             SELECT TOP (1) *
+//               FROM tags
+//              WHERE owner_user_id = ?
+//                AND name = ?;
+//             `,
+//             [ownerId, name]
+//           );
+
+//           if (Array.isArray(rowsNew) && rowsNew.length) {
+//             const r = rowsNew[0];
+//             tagId = Number(
+//               r.tag_id ??
+//               r.id ??
+//               r.TAG_ID ??
+//               r.ID ??
+//               null
+//             );
+//           }
+//         }
+
+//         if (tagId) {
+//           tagIds.push(tagId);
+//         }
+//       }
+
+//       // 3) Enlazar item <-> tag (evitando duplicados)
+//       const uniqueIds = Array.from(new Set(tagIds));
+//       for (const tid of uniqueIds) {
+//         await db.execute(
+//           `
+//           INSERT INTO item_tags (item_id, tag_id)
+//           SELECT ?, ?
+//           WHERE NOT EXISTS (
+//             SELECT 1
+//               FROM item_tags
+//              WHERE item_id = ?
+//                AND tag_id = ?
+//           );
+//           `,
+//           [itemId, tid, itemId, tid]
+//         );
+//       }
+//     }
+
+//     // ============================================================
+//     //  CATEGORIES → attribute_definitions + item_attributes
+//     // ============================================================
+//     if (Array.isArray(meta?.categories) && meta.categories.length) {
+//       for (const c of meta.categories) {
+//         if (!c || !c.name) continue;
+//         const attrName = String(c.name).trim();
+//         if (!attrName) continue;
+
+//         // 1) obtener/crear definición en attribute_definitions
+//         let attrId: number | null = null;
+
+//         const [rowsDef]: any = await db.execute(
+//           `
+//           SELECT TOP (1) *
+//             FROM attribute_definitions
+//            WHERE owner_user_id = ?
+//              AND name = ?;
+//           `,
+//           [ownerId, attrName]
+//         );
+
+//         if (Array.isArray(rowsDef) && rowsDef.length) {
+//           const row = rowsDef[0];
+//           attrId = Number(
+//             row.id ??
+//             row.attribute_id ??
+//             row.ATTRIBUTE_ID ??
+//             row.ID ??
+//             null
+//           );
+//         }
+
+//         if (!attrId) {
+//           const aTypeAllowed = ['text', 'number', 'date', 'list'];
+//           const aType = aTypeAllowed.includes(String(c.attrType))
+//             ? String(c.attrType)
+//             : 'text';
+
+//           await db.execute(
+//             `
+//             INSERT INTO attribute_definitions (
+//               owner_user_id,
+//               name,
+//               attr_type,
+//               created_at
+//             )
+//             VALUES (?, ?, ?, SYSUTCDATETIME());
+//             `,
+//             [ownerId, attrName, aType]
+//           );
+
+//           const [rowsNewDef]: any = await db.execute(
+//             `
+//             SELECT TOP (1) *
+//               FROM attribute_definitions
+//              WHERE owner_user_id = ?
+//                AND name = ?;
+//             `,
+//             [ownerId, attrName]
+//           );
+
+//           if (Array.isArray(rowsNewDef) && rowsNewDef.length) {
+//             const r = rowsNewDef[0];
+//             attrId = Number(
+//               r.id ??
+//               r.attribute_id ??
+//               r.ATTRIBUTE_ID ??
+//               r.ID ??
+//               null
+//             );
+//           }
+//         }
+
+//         if (!attrId) continue;
+
+//         // 2) decidir value_text / value_number / value_date
+//         const v = c.value;
+//         const vText =
+//           typeof v === 'string'
+//             ? v
+//             : (v !== null && v !== undefined ? String(v) : null);
+//         const vNum =
+//           typeof v === 'number'
+//             ? v
+//             : Number.isFinite(Number(v))
+//               ? Number(v)
+//               : null;
+//         const vDate =
+//           c.attrType === 'date' && v
+//             ? v
+//             : null; // se asume 'YYYY-MM-DD'
+
+//         // 3) borrar valor previo de ese atributo para ese item
+//         await db.execute(
+//           `
+//           DELETE FROM item_attributes
+//            WHERE item_id = ?
+//              AND attribute_id = ?;
+//           `,
+//           [itemId, attrId]
+//         );
+
+//         // 4) insertar en item_attributes usando CTE
+//         await db.execute(
+//           `
+//           WITH data AS (
+//             SELECT
+//               CAST(? AS BIGINT)        AS item_id,
+//               CAST(? AS INT)           AS attribute_id,
+//               CAST(? AS NVARCHAR(MAX)) AS value_text,
+//               CAST(? AS DECIMAL(18,6)) AS value_number,
+//               CAST(? AS DATE)          AS value_date
+//           )
+//           INSERT INTO item_attributes (
+//             item_id,
+//             attribute_id,
+//             value_text,
+//             value_number,
+//             value_date
+//           )
+//           SELECT
+//             item_id,
+//             attribute_id,
+//             value_text,
+//             value_number,
+//             value_date
+//           FROM data;
+//           `,
+//           [itemId, attrId, vText ?? null, vNum ?? null, vDate ?? null]
+//         );
+//       }
+//     }
+
+//     // --------- RESPUESTA ---------
+//     reply.code(201).send({
+//       id: itemId,
+//       message: 'item_creado',
+//     });
+//   } catch (e: any) {
+//     console.error('[POST /items] ERROR CATCH:', e);
+//     reply
+//       .code(500)
+//       .send({ message: 'internal_error', detail: String(e?.message || '') });
+//   }
+// });
+
 app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req); // userId
@@ -855,7 +1284,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     const files: { buffer: Buffer; filename: string; mime: string }[] = [];
 
     if (isMultipart) {
-      // ----- multipart/form-data -----
       const parts = await (req.parts?.() as AsyncIterable<any>);
       if (!parts) {
         return reply.code(400).send({ message: 'multipart requerido' });
@@ -870,19 +1298,15 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       const maxImages = 12;
 
       for await (const p of parts) {
-        // campo "metadata" (JSON)
         if (p?.type === 'field' && p.fieldname === 'metadata') {
           try {
             meta = JSON.parse(String(p.value ?? '{}'));
           } catch {
-            return reply
-              .code(400)
-              .send({ message: 'metadata inválido (JSON)' });
+            return reply.code(400).send({ message: 'metadata inválido (JSON)' });
           }
           continue;
         }
 
-        // archivos
         if (p?.type === 'file') {
           if (files.length >= maxImages) {
             await p.file?.resume?.();
@@ -893,16 +1317,14 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           const mime = String(p.mimetype ?? '');
           if (!buf?.length) continue;
           if (!allowed.has(mime)) {
-            return reply.code(400).send({
-              message: 'Formato no soportado (JPG/PNG/WEBP/GIF)',
-            });
+            return reply
+              .code(400)
+              .send({ message: 'Formato no soportado (JPG/PNG/WEBP/GIF)' });
           }
           files.push({ buffer: buf, filename, mime });
-          continue;
         }
       }
     } else {
-      // ----- application/json -----
       meta = req.body || null;
     }
 
@@ -910,7 +1332,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       return reply.code(400).send({ message: 'metadata.title requerido' });
     }
 
-    // Permitir crear sin imágenes si está habilitado
     const allowNoImages =
       process.env.ALLOW_ITEMS_WITHOUT_IMAGES === '1' ||
       meta?.allowNoImages === true ||
@@ -920,45 +1341,33 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       return reply.code(400).send({ message: 'al menos una imagen requerida' });
     }
 
-    // --------- MAPEO CAMPOS philatelic_items ---------
-    const title       = String(meta.title).trim();
+    const title = String(meta.title).trim();
     const description = meta.description || null;
-    const country     = meta.country || null;
+    const country = meta.country || null;
 
     const issueYear =
-      meta.issue_year ??
-      meta.issueYear ??
-      meta.year ??
-      null;
+      meta.issue_year ?? meta.issueYear ?? meta.year ?? null;
 
     const conditionCode =
-      meta.condition_code ??
-      meta.condition ??
-      null;
+      meta.condition_code ?? meta.condition ?? null;
 
     const catalogCode =
-      meta.catalog_code ??
-      meta.catalogCode ??
-      null;
+      meta.catalog_code ?? meta.catalogCode ?? null;
 
     const faceValue =
-      meta.face_value ??
-      meta.faceValue ??
-      null;
+      meta.face_value ?? meta.faceValue ?? null;
 
-    const currency        = meta.currency || null;
+    const currency = meta.currency || null;
     const acquisitionDate =
-      meta.acquisition_date ??
-      meta.acquisitionDate ??
-      null; // 'YYYY-MM-DD' o null
+      meta.acquisition_date ?? meta.acquisitionDate ?? null;
 
     const visibility =
       meta.visibility && String(meta.visibility).trim()
         ? String(meta.visibility).trim()
         : 'public';
 
-    // --------- INSERT EN philatelic_items ---------
-    const [result]: any = await db.execute(
+    // ================== ÚNICO CAMBIO REAL AQUÍ ==================
+    const [rows]: any = await db.execute(
       `
       INSERT INTO philatelic_items (
         owner_user_id,
@@ -975,6 +1384,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         created_at,
         updated_at
       )
+      OUTPUT INSERTED.id
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME());
       `,
       [
@@ -992,22 +1402,17 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       ]
     );
 
-    console.log('[POST /items] INSERT result =', result);
-
-    const itemId = Number(result?.insertId);
+    const itemId = Number(rows?.[0]?.id);
     if (!Number.isFinite(itemId)) {
-      throw new Error(
-        'No se pudo obtener el id insertado de philatelic_items (insertId inválido)'
-      );
+      throw new Error('No se pudo obtener el id insertado');
     }
+    // ============================================================
 
-    // --------- IMÁGENES (item_images: item_id, file_path, is_primary) ---------
     if (files.length > 0) {
-      const fs   = require('fs');
+      const fs = require('fs');
       const path = require('path');
       const base =
-        process.env.FILES_BASE_PATH ||
-        path.join(process.cwd(), 'uploads');
+        process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
 
       if (!fs.existsSync(base)) {
         fs.mkdirSync(base, { recursive: true });
@@ -1023,11 +1428,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
         await db.execute(
           `
-          INSERT INTO item_images (
-            item_id,
-            file_path,
-            is_primary
-          )
+          INSERT INTO item_images (item_id, file_path, is_primary)
           VALUES (?, ?, ?);
           `,
           [itemId, fullPath, i === 0 ? 1 : 0]
@@ -1035,232 +1436,54 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       }
     }
 
-    // ============================================================
-    //  TAGS
-    // ============================================================
     if (Array.isArray(meta?.tags) && meta.tags.length) {
-      const tagNames: string[] = meta.tags
+      const tagNames = meta.tags
         .map((t: any) => String(t ?? '').trim())
         .filter(Boolean);
-
-      const tagIds: number[] = [];
 
       for (const name of tagNames) {
         let tagId: number | null = null;
 
-        // 1) ¿ya existe la tag?
         const [rowsExist]: any = await db.execute(
-          `
-          SELECT TOP (1) *
-            FROM tags
-           WHERE owner_user_id = ?
-             AND name = ?;
-          `,
+          `SELECT TOP (1) * FROM tags WHERE owner_user_id = ? AND name = ?;`,
           [ownerId, name]
         );
 
-        if (Array.isArray(rowsExist) && rowsExist.length) {
-          const row = rowsExist[0];
-          tagId = Number(
-            row.tag_id ??
-            row.id ??
-            row.TAG_ID ??
-            row.ID ??
-            null
-          );
+        if (rowsExist?.length) {
+          tagId = Number(rowsExist[0].tag_id ?? rowsExist[0].id);
         }
 
-        // 2) si no existía, crearla y volver a leerla
         if (!tagId) {
           await db.execute(
-            `
-            INSERT INTO tags (name, owner_user_id)
-            VALUES (?, ?);
-            `,
+            `INSERT INTO tags (name, owner_user_id) VALUES (?, ?);`,
             [name, ownerId]
           );
 
           const [rowsNew]: any = await db.execute(
-            `
-            SELECT TOP (1) *
-              FROM tags
-             WHERE owner_user_id = ?
-               AND name = ?;
-            `,
+            `SELECT TOP (1) * FROM tags WHERE owner_user_id = ? AND name = ?;`,
             [ownerId, name]
           );
 
-          if (Array.isArray(rowsNew) && rowsNew.length) {
-            const r = rowsNew[0];
-            tagId = Number(
-              r.tag_id ??
-              r.id ??
-              r.TAG_ID ??
-              r.ID ??
-              null
-            );
+          if (rowsNew?.length) {
+            tagId = Number(rowsNew[0].tag_id ?? rowsNew[0].id);
           }
         }
 
         if (tagId) {
-          tagIds.push(tagId);
-        }
-      }
-
-      // 3) Enlazar item <-> tag (evitando duplicados)
-      const uniqueIds = Array.from(new Set(tagIds));
-      for (const tid of uniqueIds) {
-        await db.execute(
-          `
-          INSERT INTO item_tags (item_id, tag_id)
-          SELECT ?, ?
-          WHERE NOT EXISTS (
-            SELECT 1
-              FROM item_tags
-             WHERE item_id = ?
-               AND tag_id = ?
-          );
-          `,
-          [itemId, tid, itemId, tid]
-        );
-      }
-    }
-
-    // ============================================================
-    //  CATEGORIES → attribute_definitions + item_attributes
-    // ============================================================
-    if (Array.isArray(meta?.categories) && meta.categories.length) {
-      for (const c of meta.categories) {
-        if (!c || !c.name) continue;
-        const attrName = String(c.name).trim();
-        if (!attrName) continue;
-
-        // 1) obtener/crear definición en attribute_definitions
-        let attrId: number | null = null;
-
-        const [rowsDef]: any = await db.execute(
-          `
-          SELECT TOP (1) *
-            FROM attribute_definitions
-           WHERE owner_user_id = ?
-             AND name = ?;
-          `,
-          [ownerId, attrName]
-        );
-
-        if (Array.isArray(rowsDef) && rowsDef.length) {
-          const row = rowsDef[0];
-          attrId = Number(
-            row.id ??
-            row.attribute_id ??
-            row.ATTRIBUTE_ID ??
-            row.ID ??
-            null
-          );
-        }
-
-        if (!attrId) {
-          const aTypeAllowed = ['text', 'number', 'date', 'list'];
-          const aType = aTypeAllowed.includes(String(c.attrType))
-            ? String(c.attrType)
-            : 'text';
-
           await db.execute(
             `
-            INSERT INTO attribute_definitions (
-              owner_user_id,
-              name,
-              attr_type,
-              created_at
-            )
-            VALUES (?, ?, ?, SYSUTCDATETIME());
-            `,
-            [ownerId, attrName, aType]
-          );
-
-          const [rowsNewDef]: any = await db.execute(
-            `
-            SELECT TOP (1) *
-              FROM attribute_definitions
-             WHERE owner_user_id = ?
-               AND name = ?;
-            `,
-            [ownerId, attrName]
-          );
-
-          if (Array.isArray(rowsNewDef) && rowsNewDef.length) {
-            const r = rowsNewDef[0];
-            attrId = Number(
-              r.id ??
-              r.attribute_id ??
-              r.ATTRIBUTE_ID ??
-              r.ID ??
-              null
+            INSERT INTO item_tags (item_id, tag_id)
+            SELECT ?, ?
+            WHERE NOT EXISTS (
+              SELECT 1 FROM item_tags WHERE item_id = ? AND tag_id = ?
             );
-          }
+            `,
+            [itemId, tagId, itemId, tagId]
+          );
         }
-
-        if (!attrId) continue;
-
-        // 2) decidir value_text / value_number / value_date
-        const v = c.value;
-        const vText =
-          typeof v === 'string'
-            ? v
-            : (v !== null && v !== undefined ? String(v) : null);
-        const vNum =
-          typeof v === 'number'
-            ? v
-            : Number.isFinite(Number(v))
-              ? Number(v)
-              : null;
-        const vDate =
-          c.attrType === 'date' && v
-            ? v
-            : null; // se asume 'YYYY-MM-DD'
-
-        // 3) borrar valor previo de ese atributo para ese item
-        await db.execute(
-          `
-          DELETE FROM item_attributes
-           WHERE item_id = ?
-             AND attribute_id = ?;
-          `,
-          [itemId, attrId]
-        );
-
-        // 4) insertar en item_attributes usando CTE
-        await db.execute(
-          `
-          WITH data AS (
-            SELECT
-              CAST(? AS BIGINT)        AS item_id,
-              CAST(? AS INT)           AS attribute_id,
-              CAST(? AS NVARCHAR(MAX)) AS value_text,
-              CAST(? AS DECIMAL(18,6)) AS value_number,
-              CAST(? AS DATE)          AS value_date
-          )
-          INSERT INTO item_attributes (
-            item_id,
-            attribute_id,
-            value_text,
-            value_number,
-            value_date
-          )
-          SELECT
-            item_id,
-            attribute_id,
-            value_text,
-            value_number,
-            value_date
-          FROM data;
-          `,
-          [itemId, attrId, vText ?? null, vNum ?? null, vDate ?? null]
-        );
       }
     }
 
-    // --------- RESPUESTA ---------
     reply.code(201).send({
       id: itemId,
       message: 'item_creado',
@@ -1272,7 +1495,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       .send({ message: 'internal_error', detail: String(e?.message || '') });
   }
 });
-
 
 
 // GET /me/items
