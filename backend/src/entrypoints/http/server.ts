@@ -1273,6 +1273,184 @@ function authGuard(req: FastifyRequest, reply: FastifyReply, done: HookHandlerDo
 //   }
 // });
 
+// app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+
+//     const ct = String((req.headers['content-type'] || '')).toLowerCase();
+//     const isMultipart = ct.startsWith('multipart/form-data');
+
+//     let meta: any = null;
+//     const files: { buffer: Buffer; filename: string; mime: string }[] = [];
+
+//     if (isMultipart) {
+//       const parts = await (req.parts?.() as AsyncIterable<any>);
+//       if (!parts) {
+//         return reply.code(400).send({ message: 'multipart requerido' });
+//       }
+
+//       const allowed = new Set([
+//         'image/jpeg',
+//         'image/png',
+//         'image/webp',
+//         'image/gif',
+//       ]);
+//       const maxImages = 12;
+
+//       for await (const p of parts) {
+//         if (p?.type === 'field' && p.fieldname === 'metadata') {
+//           try {
+//             meta = JSON.parse(String(p.value ?? '{}'));
+//           } catch {
+//             return reply.code(400).send({ message: 'metadata inválido (JSON)' });
+//           }
+//           continue;
+//         }
+
+//         if (p?.type === 'file') {
+//           if (files.length >= maxImages) {
+//             await p.file?.resume?.();
+//             continue;
+//           }
+//           const buf = await p.toBuffer();
+//           const filename = String(p.filename ?? 'image');
+//           const mime = String(p.mimetype ?? '');
+//           if (!buf?.length) continue;
+//           if (!allowed.has(mime)) {
+//             return reply
+//               .code(400)
+//               .send({ message: 'Formato no soportado (JPG/PNG/WEBP/GIF)' });
+//           }
+//           files.push({ buffer: buf, filename, mime });
+//         }
+//       }
+//     } else {
+//       meta = req.body || null;
+//     }
+
+//     if (!meta || !meta.title || !String(meta.title).trim()) {
+//       return reply.code(400).send({ message: 'metadata.title requerido' });
+//     }
+
+//     const allowNoImages =
+//       process.env.ALLOW_ITEMS_WITHOUT_IMAGES === '1' ||
+//       meta?.allowNoImages === true ||
+//       String(req.query?.allowNoImages || '').toLowerCase() === 'true';
+
+//     if (!files.length && !allowNoImages) {
+//       return reply.code(400).send({ message: 'al menos una imagen requerida' });
+//     }
+
+//     const title = String(meta.title).trim();
+//     const description = meta.description || null;
+//     const country = meta.country || null;
+
+//     const issueYear =
+//       meta.issue_year ?? meta.issueYear ?? meta.year ?? null;
+
+//     const conditionCode =
+//       meta.condition_code ?? meta.condition ?? null;
+
+//     const catalogCode =
+//       meta.catalog_code ?? meta.catalogCode ?? null;
+
+//     const faceValue =
+//       meta.face_value ?? meta.faceValue ?? null;
+
+//     const currency = meta.currency || null;
+//     const acquisitionDate =
+//       meta.acquisition_date ?? meta.acquisitionDate ?? null;
+
+//     const visibility =
+//       meta.visibility && String(meta.visibility).trim()
+//         ? String(meta.visibility).trim()
+//         : 'public';
+
+//     // ================== FIX REAL AQUÍ ==================
+//     await db.execute(
+//       `
+//       INSERT INTO philatelic_items (
+//         owner_user_id,
+//         title,
+//         description,
+//         country,
+//         issue_year,
+//         condition_code,
+//         catalog_code,
+//         face_value,
+//         currency,
+//         acquisition_date,
+//         visibility,
+//         created_at,
+//         updated_at
+//       )
+//       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME());
+//       `,
+//       [
+//         ownerId,
+//         title,
+//         description,
+//         country,
+//         issueYear ?? null,
+//         conditionCode || null,
+//         catalogCode || null,
+//         faceValue ?? null,
+//         currency || null,
+//         acquisitionDate || null,
+//         visibility,
+//       ]
+//     );
+
+//     const [idRows]: any = await db.execute(
+//       `SELECT CAST(SCOPE_IDENTITY() AS BIGINT) AS id;`
+//     );
+
+//     const itemId = Number(idRows?.[0]?.id);
+//     if (!Number.isFinite(itemId)) {
+//       throw new Error('No se pudo obtener el id insertado');
+//     }
+//     // ===================================================
+
+//     if (files.length > 0) {
+//       const fs = require('fs');
+//       const path = require('path');
+//       const base =
+//         process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
+
+//       if (!fs.existsSync(base)) {
+//         fs.mkdirSync(base, { recursive: true });
+//       }
+
+//       for (const [i, f] of files.entries()) {
+//         const safeName = `${itemId}-${Date.now()}-${i}-${f.filename}`.replace(
+//           /[^\w.\-]+/g,
+//           '_'
+//         );
+//         const fullPath = path.join(base, safeName);
+//         fs.writeFileSync(fullPath, f.buffer);
+
+//         await db.execute(
+//           `
+//           INSERT INTO item_images (item_id, file_path, is_primary)
+//           VALUES (?, ?, ?);
+//           `,
+//           [itemId, fullPath, i === 0 ? 1 : 0]
+//         );
+//       }
+//     }
+
+//     reply.code(201).send({
+//       id: itemId,
+//       message: 'item_creado',
+//     });
+//   } catch (e: any) {
+//     console.error('[POST /items] ERROR CATCH:', e);
+//     reply
+//       .code(500)
+//       .send({ message: 'internal_error', detail: String(e?.message || '') });
+//   }
+// });
+
 app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -1344,19 +1522,10 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     const title = String(meta.title).trim();
     const description = meta.description || null;
     const country = meta.country || null;
-
-    const issueYear =
-      meta.issue_year ?? meta.issueYear ?? meta.year ?? null;
-
-    const conditionCode =
-      meta.condition_code ?? meta.condition ?? null;
-
-    const catalogCode =
-      meta.catalog_code ?? meta.catalogCode ?? null;
-
-    const faceValue =
-      meta.face_value ?? meta.faceValue ?? null;
-
+    const issueYear = meta.issue_year ?? meta.issueYear ?? meta.year ?? null;
+    const conditionCode = meta.condition_code ?? meta.condition ?? null;
+    const catalogCode = meta.catalog_code ?? meta.catalogCode ?? null;
+    const faceValue = meta.face_value ?? meta.faceValue ?? null;
     const currency = meta.currency || null;
     const acquisitionDate =
       meta.acquisition_date ?? meta.acquisitionDate ?? null;
@@ -1366,7 +1535,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         ? String(meta.visibility).trim()
         : 'public';
 
-    // ================== FIX REAL AQUÍ ==================
+    // ===== INSERT =====
     await db.execute(
       `
       INSERT INTO philatelic_items (
@@ -1401,15 +1570,16 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       ]
     );
 
-    const [idRows]: any = await db.execute(
+    // ===== FIX REAL AQUÍ =====
+    const result: any = await db.execute(
       `SELECT CAST(SCOPE_IDENTITY() AS BIGINT) AS id;`
     );
 
-    const itemId = Number(idRows?.[0]?.id);
+    const itemId = Number(result?.[0]?.[0]?.id);
     if (!Number.isFinite(itemId)) {
       throw new Error('No se pudo obtener el id insertado');
     }
-    // ===================================================
+    // ========================
 
     if (files.length > 0) {
       const fs = require('fs');
