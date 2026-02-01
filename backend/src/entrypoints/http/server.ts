@@ -1463,34 +1463,39 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
     if (isMultipart) {
       const parts = await (req.parts?.() as AsyncIterable<any>);
-      if (!parts) {
-        return reply.code(400).send({ message: 'multipart requerido' });
-      }
+      if (!parts) return reply.code(400).send({ message: 'multipart requerido' });
 
-      const allowed = new Set([
-        'image/jpeg',
-        'image/png',
-        'image/webp',
-        'image/gif',
-      ]);
+      const allowed = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
       const maxImages = 12;
 
       for await (const p of parts) {
         if (p?.type === 'field' && p.fieldname === 'metadata') {
-          meta = JSON.parse(String(p.value ?? '{}'));
+          try {
+            meta = JSON.parse(String(p.value ?? '{}'));
+          } catch {
+            return reply.code(400).send({ message: 'metadata inválido (JSON)' });
+          }
           continue;
         }
 
         if (p?.type === 'file') {
+          if (files.length >= maxImages) {
+            await p.file?.resume?.();
+            continue;
+          }
+
           const buf = await p.toBuffer();
           if (!buf?.length) continue;
-          if (!allowed.has(p.mimetype)) {
+
+          const mime = String(p.mimetype ?? '');
+          if (!allowed.has(mime)) {
             return reply.code(400).send({ message: 'Formato no soportado' });
           }
+
           files.push({
             buffer: buf,
-            filename: p.filename,
-            mime: p.mimetype,
+            filename: String(p.filename ?? 'image'),
+            mime,
           });
         }
       }
@@ -1502,9 +1507,13 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       return reply.code(400).send({ message: 'metadata.title requerido' });
     }
 
-    // ================= INSERT + ID EN UNA SOLA QUERY =================
-    const [rows]: any = await db.execute(
+    // ========= INSERT + ID (robusto para cualquier driver) =========
+    const [idRows]: any = await db.execute(
       `
+      SET NOCOUNT ON;
+
+      DECLARE @t TABLE (id BIGINT);
+
       INSERT INTO philatelic_items (
         owner_user_id,
         title,
@@ -1520,42 +1529,47 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         created_at,
         updated_at
       )
-      OUTPUT INSERTED.id
+      OUTPUT INSERTED.id INTO @t(id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME());
+
+      SELECT TOP (1) id FROM @t;
       `,
       [
         ownerId,
         meta.title.trim(),
         meta.description || null,
         meta.country || null,
-        meta.issueYear ?? null,
-        meta.condition ?? null,
-        meta.catalogCode ?? null,
-        meta.faceValue ?? null,
+        meta.issueYear ?? meta.issue_year ?? meta.year ?? null,
+        meta.condition ?? meta.condition_code ?? null,
+        meta.catalogCode ?? meta.catalog_code ?? null,
+        meta.faceValue ?? meta.face_value ?? null,
         meta.currency ?? null,
-        meta.acquisitionDate ?? null,
+        meta.acquisitionDate ?? meta.acquisition_date ?? null,
         meta.visibility || 'public',
       ]
     );
 
-    const itemId = Number(rows?.[0]?.id);
+    // depende del wrapper: a veces viene como [ [ {id: ...} ] , ...]
+    const row0 = Array.isArray(idRows) ? idRows[0] : null;
+    const itemId = Number(row0?.id);
+
     if (!Number.isFinite(itemId)) {
       throw new Error('No se pudo obtener el id insertado');
     }
-    // =================================================================
+    // ===============================================================
 
     // ================= IMÁGENES =================
     if (files.length) {
       const fs = require('fs');
       const path = require('path');
-      const base = process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
 
+      const base = process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
       if (!fs.existsSync(base)) fs.mkdirSync(base, { recursive: true });
 
       for (const [i, f] of files.entries()) {
         const filePath = path.join(
           base,
-          `${itemId}-${Date.now()}-${i}-${f.filename}`.replace(/[^\w.-]+/g, '_')
+          `${itemId}-${Date.now()}-${i}-${f.filename}`.replace(/[^\w.\-]+/g, '_')
         );
 
         fs.writeFileSync(filePath, f.buffer);
@@ -1570,10 +1584,10 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       }
     }
 
-    reply.code(201).send({ id: itemId, message: 'item_creado' });
+    return reply.code(201).send({ id: itemId, message: 'item_creado' });
   } catch (e: any) {
     console.error('[POST /items] ERROR:', e);
-    reply.code(500).send({
+    return reply.code(500).send({
       message: 'internal_error',
       detail: String(e?.message || ''),
     });
