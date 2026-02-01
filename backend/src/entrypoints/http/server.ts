@@ -1275,7 +1275,7 @@ function authGuard(req: FastifyRequest, reply: FastifyReply, done: HookHandlerDo
 
 app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
-    const ownerId = ensureAuth(req); // userId
+    const ownerId = ensureAuth(req);
 
     const ct = String((req.headers['content-type'] || '')).toLowerCase();
     const isMultipart = ct.startsWith('multipart/form-data');
@@ -1366,8 +1366,8 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         ? String(meta.visibility).trim()
         : 'public';
 
-    // ================== ÚNICO CAMBIO REAL AQUÍ ==================
-    const [rows]: any = await db.execute(
+    // ================== FIX REAL AQUÍ ==================
+    await db.execute(
       `
       INSERT INTO philatelic_items (
         owner_user_id,
@@ -1384,7 +1384,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         created_at,
         updated_at
       )
-      OUTPUT INSERTED.id
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME());
       `,
       [
@@ -1402,11 +1401,15 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       ]
     );
 
-    const itemId = Number(rows?.[0]?.id);
+    const [idRows]: any = await db.execute(
+      `SELECT CAST(SCOPE_IDENTITY() AS BIGINT) AS id;`
+    );
+
+    const itemId = Number(idRows?.[0]?.id);
     if (!Number.isFinite(itemId)) {
       throw new Error('No se pudo obtener el id insertado');
     }
-    // ============================================================
+    // ===================================================
 
     if (files.length > 0) {
       const fs = require('fs');
@@ -1433,54 +1436,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           `,
           [itemId, fullPath, i === 0 ? 1 : 0]
         );
-      }
-    }
-
-    if (Array.isArray(meta?.tags) && meta.tags.length) {
-      const tagNames = meta.tags
-        .map((t: any) => String(t ?? '').trim())
-        .filter(Boolean);
-
-      for (const name of tagNames) {
-        let tagId: number | null = null;
-
-        const [rowsExist]: any = await db.execute(
-          `SELECT TOP (1) * FROM tags WHERE owner_user_id = ? AND name = ?;`,
-          [ownerId, name]
-        );
-
-        if (rowsExist?.length) {
-          tagId = Number(rowsExist[0].tag_id ?? rowsExist[0].id);
-        }
-
-        if (!tagId) {
-          await db.execute(
-            `INSERT INTO tags (name, owner_user_id) VALUES (?, ?);`,
-            [name, ownerId]
-          );
-
-          const [rowsNew]: any = await db.execute(
-            `SELECT TOP (1) * FROM tags WHERE owner_user_id = ? AND name = ?;`,
-            [ownerId, name]
-          );
-
-          if (rowsNew?.length) {
-            tagId = Number(rowsNew[0].tag_id ?? rowsNew[0].id);
-          }
-        }
-
-        if (tagId) {
-          await db.execute(
-            `
-            INSERT INTO item_tags (item_id, tag_id)
-            SELECT ?, ?
-            WHERE NOT EXISTS (
-              SELECT 1 FROM item_tags WHERE item_id = ? AND tag_id = ?
-            );
-            `,
-            [itemId, tagId, itemId, tagId]
-          );
-        }
       }
     }
 
