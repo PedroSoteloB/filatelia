@@ -104,10 +104,6 @@
                 <!-- Perú histórico -->
                 <option value="Perú (Confederación Perú-Boliviana)"></option>
               </datalist>
-            
-              <small class="hint">
-                Puedes ingresar países actuales, estados históricos, colonias o entidades postales.
-              </small>
             </label>
             
             <!-- fila 2 -->
@@ -204,11 +200,7 @@
                 <option value="Daños menores"></option>
                 <option value="Daños visibles"></option>
               </datalist>
-            
-              <small class="hint">
-                Describe la condición postal y física de la pieza. Ej.: <em>MNH</em>, <em>Usado VF</em>, <em>CTO Fine</em>.
-                Puedes escribir libremente condiciones adicionales.
-              </small>
+
             </label>
             
           </div>
@@ -268,10 +260,6 @@
                 <option value="RUB – Rublo ruso"></option>
                 <option value="TRY – Lira turca"></option>
               </datalist>
-            
-              <small class="hint">
-                Selecciona una moneda oficial (código ISO 4217).
-              </small>
             </label>
             
 
@@ -319,8 +307,85 @@
           </div>
         </section>
 
-        <!-- BLOQUE 4: Atributos dinámicos -->
+
         <section class="attrs block">
+          <h3>Atributos dinámicos</h3>
+        
+          <div class="attrs-row">
+            <input
+              class="attr-name"
+              type="text"
+              [value]="attrNameDraft()"
+              (input)="onAttrNameInput($event)"
+              (blur)="normalizeAttrNameDraft()"
+              placeholder="Nombre"
+              [class.is-invalid]="attrNameError()"
+              autocomplete="off"
+            />
+        
+            <select
+              class="attr-type"
+              [value]="attrTypeDraft()"
+              (change)="onAttrTypeChange($event)">
+              <option value="text">Texto</option>
+              <option value="number">Número</option>
+              <option value="date">Fecha</option>
+              <option value="list">Lista</option>
+            </select>
+        
+            <!-- input de valor que se adapta al tipo -->
+            <ng-container [ngSwitch]="attrTypeDraft()">
+              <input
+                *ngSwitchCase="'number'"
+                class="attr-value"
+                type="number"
+                [value]="attrValueDraft()"
+                (input)="onAttrValueInput($event)"
+                placeholder="Valor número" />
+              <input
+                *ngSwitchCase="'date'"
+                class="attr-value"
+                type="date"
+                [value]="attrValueDraft()"
+                (input)="onAttrValueInput($event)"
+                placeholder="YYYY-MM-DD" />
+              <input
+                *ngSwitchDefault
+                class="attr-value"
+                type="text"
+                [value]="attrValueDraft()"
+                (input)="onAttrValueInput($event)"
+                placeholder="Valor texto" />
+            </ng-container>
+        
+            <button
+              type="button"
+              class="btn"
+              (click)="addAttr()"
+              [disabled]="!attrNameDraft().trim() || isAttrNameDuplicate()">
+              Agregar atributo
+            </button>
+          </div>
+        
+          <!-- Mensajito si está duplicado -->
+          <div class="attr-error" *ngIf="attrNameError()">
+            {{ attrNameError() }}
+          </div>
+        
+          <div class="attr-help">
+            Ejemplos: Dentado (número 12.5), Serie (texto <em>Flora</em>), Fecha de emisión (fecha).
+          </div>
+        
+          <div class="attr-list" *ngIf="attrs().length">
+            <div class="attr-pill" *ngFor="let a of attrs(); index as i">
+              <strong>{{ a.name }}</strong> — <em>{{ a.type }}</em> : <span>{{ a.value }}</span>
+              <button type="button" class="pill-x" (click)="removeAttr(i)" aria-label="Quitar atributo">×</button>
+            </div>
+          </div>
+        </section>
+        
+       
+        <!-- <section class="attrs block">
           <h3>Atributos dinámicos</h3>
 
           <div class="attrs-row">
@@ -341,7 +406,7 @@
               <option value="list">Lista</option>
             </select>
 
-            <!-- input de valor que se adapta al tipo -->
+        
             <ng-container [ngSwitch]="attrTypeDraft()">
               <input
                 *ngSwitchCase="'number'"
@@ -381,7 +446,7 @@
               <button type="button" class="pill-x" (click)="removeAttr(i)" aria-label="Quitar atributo">×</button>
             </div>
           </div>
-        </section>
+        </section> -->
 
         <!-- BLOQUE 5: Descripción -->
         <section class="block">
@@ -424,11 +489,33 @@
         </section>
 
         <!-- Acciones -->
-        <div class="actions">
+        <!-- <div class="actions">
           <button class="btn primary" type="submit" [disabled]="form.invalid || !files().length || busy()">
             {{ busy() ? 'Subiendo…' : 'Crear pieza' }}
           </button>
+        </div> -->
+        <div class="actions">
+          <button
+            class="btn primary"
+            type="submit"
+            [disabled]="form.invalid || !files().length || busy()">
+        
+            <ng-container *ngIf="!busy(); else loadingTpl">
+              Crear pieza
+            </ng-container>
+        
+            <ng-template #loadingTpl>
+              <span class="spinner"></span>
+              Subiendo…
+            </ng-template>
+          </button>
         </div>
+        
+        <!-- Mensaje de éxito -->
+        <div class="success-msg" *ngIf="successId()">
+          ✅ Pieza creada correctamente. Redirigiendo a tu catálogo…
+        </div>
+        
       </fieldset>
     </form>
 

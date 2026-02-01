@@ -651,3 +651,25 @@ section {
   border-color: color-mix(in oklab, var(--accent) 55%, var(--border-subtle));
   background: color-mix(in oklab, var(--accent-soft) 50%, var(--paper) 50%);
 }
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.success-msg {
+  margin-top: 12px;
+  color: #2e7d32;
+  font-weight: 500;
+}
