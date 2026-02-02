@@ -519,7 +519,7 @@
     (submit)="addNewTagFromInput(); $event.preventDefault()"
   >
     <!-- Agregar nuevo tag (texto) -->
-    <div class="inline-row">
+    <!-- <div class="inline-row">
       <input
         #newTagInput
         class="text-input"
@@ -531,7 +531,7 @@
         [disabled]="saving()"
         autocomplete="off"
       />
-    </div>
+    </div> -->
 
     <!-- Lista editable -->
     <div class="tags-list" *ngIf="draftTagNames?.length; else noDraftTagsTpl">
