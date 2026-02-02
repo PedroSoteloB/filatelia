@@ -176,9 +176,7 @@
 <!-- item-details.component.html -->
 <div class="item-details-page">
   <div class="details-inner">
-    <a routerLink="/items/mine" class="back-link">
-      ← Volver al listado
-    </a>
+    <a routerLink="/items/mine" class="back-link"> ← Volver al listado </a>
 
     <ng-container *ngIf="busy(); else contentTpl">
       <div class="loading">Cargando detalles…</div>
@@ -187,10 +185,8 @@
     <ng-template #contentTpl>
       <ng-container *ngIf="!error(); else errorTpl">
         <ng-container *ngIf="item() as it">
-
           <!-- CARD PRINCIPAL -->
           <section class="details-card">
-
             <!-- Encabezado -->
             <header class="details-header">
               <div class="title-block">
@@ -201,12 +197,16 @@
                 <input
                   *ngIf="isEditing()"
                   class="text-input title-input"
-                  [(ngModel)]="draft.title"
+                  [ngModel]="draftValue.title"
+                  (ngModelChange)="patchDraft({ title: $event })"
                   placeholder="Título"
                 />
 
                 <!-- SUBTÍTULO (País • Año) -->
-                <p class="subtitle" *ngIf="!isEditing() && (it.country || it.issueYear)">
+                <p
+                  class="subtitle"
+                  *ngIf="!isEditing() && (it.country || it.issueYear)"
+                >
                   <span *ngIf="it.country">{{ it.country | titlecase }}</span>
                   <span *ngIf="it.country && it.issueYear"> • </span>
                   <span *ngIf="it.issueYear">{{ it.issueYear }}</span>
@@ -216,12 +216,14 @@
                   <div class="inline-row">
                     <input
                       class="text-input"
-                      [(ngModel)]="draft.country"
+                      [ngModel]="draftValue.country"
+                      (ngModelChange)="patchDraft({ country: $event })"
                       placeholder="País"
                     />
                     <input
                       class="text-input"
-                      [(ngModel)]="draft.issueYear"
+                      [ngModel]="draftValue.issueYear"
+                      (ngModelChange)="patchDraft({ issueYear: $event })"
                       type="number"
                       placeholder="Año"
                       min="0"
@@ -236,27 +238,41 @@
                   <div *ngIf="it.createdAt">
                     <span class="meta-label">Creado</span>
                     <span class="meta-value">
-                      {{ it.createdAt | date:'dd/MM/yyyy HH:mm':'UTC' }}
+                      {{ it.createdAt | date: 'dd/MM/yyyy HH:mm':'UTC' }}
                     </span>
                   </div>
                   <div *ngIf="it.updatedAt">
                     <span class="meta-label">Actualizado</span>
                     <span class="meta-value">
-                      {{ it.updatedAt | date:'dd/MM/yyyy HH:mm':'UTC' }}
+                      {{ it.updatedAt | date: 'dd/MM/yyyy HH:mm':'UTC' }}
                     </span>
                   </div>
                 </div>
 
                 <div class="actions">
-                  <button class="btn sm" *ngIf="!isEditing()" (click)="startEdit()">
+                  <button
+                    class="btn sm"
+                    *ngIf="!isEditing()"
+                    (click)="startEdit()"
+                  >
                     Editar
                   </button>
 
-                  <button class="btn sm" *ngIf="isEditing()" (click)="saveEdit()">
-                    Guardar
+                  <button
+                    class="btn sm"
+                    *ngIf="isEditing()"
+                    (click)="saveEdit()"
+                    [disabled]="saving()"
+                  >
+                    {{ saving() ? 'Guardando…' : 'Guardar' }}
                   </button>
 
-                  <button class="btn sm danger" *ngIf="isEditing()" (click)="cancelEdit()">
+                  <button
+                    class="btn sm danger"
+                    *ngIf="isEditing()"
+                    (click)="cancelEdit()"
+                    [disabled]="saving()"
+                  >
                     Cancelar
                   </button>
                 </div>
@@ -296,9 +312,13 @@
                   <!-- VISIBILIDAD (edit) -->
                   <div class="edit-block" *ngIf="isEditing()">
                     <label class="field-label">Visibilidad</label>
-                    <select class="text-input" [(ngModel)]="draft.visibility">
-                      <option [ngValue]="'public'">Público</option>
-                      <option [ngValue]="'private'">Privado</option>
+                    <select
+                      class="text-input"
+                      [ngModel]="draftValue.visibility"
+                      (ngModelChange)="patchDraft({ visibility: $event })"
+                    >
+                      <option value="public">Público</option>
+                      <option value="private">Privado</option>
                     </select>
                   </div>
                 </div>
@@ -306,7 +326,6 @@
 
               <!-- Columna derecha: información -->
               <section class="right-column">
-
                 <!-- Card de metadatos -->
                 <section class="section-card">
                   <h2 class="section-title">Datos principales</h2>
@@ -321,7 +340,8 @@
                       <dd *ngIf="isEditing()">
                         <input
                           class="text-input"
-                          [(ngModel)]="draft.country"
+                          [ngModel]="draftValue.country"
+                          (ngModelChange)="patchDraft({ country: $event })"
                           placeholder="País"
                         />
                       </dd>
@@ -336,7 +356,8 @@
                       <dd *ngIf="isEditing()">
                         <input
                           class="text-input"
-                          [(ngModel)]="draft.issueYear"
+                          [ngModel]="draftValue.issueYear"
+                          (ngModelChange)="patchDraft({ issueYear: $event })"
                           type="number"
                           placeholder="Año"
                           min="0"
@@ -353,7 +374,8 @@
                       <dd *ngIf="isEditing()">
                         <input
                           class="text-input"
-                          [(ngModel)]="draft.conditionCode"
+                          [ngModel]="draftValue.conditionCode"
+                          (ngModelChange)="patchDraft({ conditionCode: $event })"
                           placeholder="Condición (ej: F)"
                         />
                       </dd>
@@ -368,7 +390,8 @@
                       <dd *ngIf="isEditing()">
                         <input
                           class="text-input"
-                          [(ngModel)]="draft.catalogCode"
+                          [ngModel]="draftValue.catalogCode"
+                          (ngModelChange)="patchDraft({ catalogCode: $event })"
                           placeholder="Código de catálogo"
                         />
                       </dd>
@@ -392,7 +415,8 @@
                         <div class="inline-row">
                           <input
                             class="text-input"
-                            [(ngModel)]="draft.faceValue"
+                            [ngModel]="draftValue.faceValue"
+                            (ngModelChange)="patchDraft({ faceValue: $event })"
                             type="number"
                             placeholder="Valor"
                             min="0"
@@ -400,7 +424,8 @@
                           />
                           <input
                             class="text-input"
-                            [(ngModel)]="draft.currency"
+                            [ngModel]="draftValue.currency"
+                            (ngModelChange)="patchDraft({ currency: $event })"
                             placeholder="Moneda (ej: EUR)"
                           />
                         </div>
@@ -414,21 +439,20 @@
                       <dd *ngIf="!isEditing()">
                         {{
                           it.acquisitionDate
-                            ? (it.acquisitionDate | date:'dd/MM/yyyy':'UTC')
+                            ? (it.acquisitionDate | date: 'dd/MM/yyyy':'UTC')
                             : '—'
                         }}
                       </dd>
 
                       <dd *ngIf="isEditing()">
-                        <!-- yyyy-MM-dd para input date -->
                         <input
                           class="text-input"
-                          [(ngModel)]="draft.acquisitionDate"
+                          [ngModel]="draftValue.acquisitionDate"
+                          (ngModelChange)="patchDraft({ acquisitionDate: $event })"
                           type="date"
                         />
                       </dd>
                     </div>
-
                   </dl>
                 </section>
 
@@ -443,7 +467,8 @@
                   <textarea
                     *ngIf="isEditing()"
                     class="text-area"
-                    [(ngModel)]="draft.description"
+                    [ngModel]="draftValue.description"
+                    (ngModelChange)="patchDraft({ description: $event })"
                     rows="4"
                     placeholder="Escribe una descripción..."
                   ></textarea>
@@ -457,9 +482,7 @@
                       #{{ t.name }}
                     </span>
                   </div>
-                  <p class="hint" *ngIf="isEditing()">
-                    (Edición de tags: pendiente)
-                  </p>
+                  <p class="hint" *ngIf="isEditing()">(Edición de tags: pendiente)</p>
                 </section>
 
                 <!-- Card atributos (solo lectura por ahora) -->
@@ -471,20 +494,16 @@
                         <span class="attr-chip">{{ a.attrType || 'Texto' }}</span>
                         <span class="attr-name">{{ a.name }}</span>
                       </div>
-                      <p class="attr-value">
-                        {{ a.value ?? '—' }}
-                      </p>
+                      <p class="attr-value">{{ a.value ?? '—' }}</p>
                     </article>
                   </div>
                   <p class="hint" *ngIf="isEditing()">
                     (Edición de atributos: pendiente)
                   </p>
                 </section>
-
               </section>
             </div>
           </section>
-
         </ng-container>
       </ng-container>
 

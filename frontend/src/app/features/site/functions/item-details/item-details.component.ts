@@ -275,6 +275,7 @@
 //       });
 //   }
 // }
+
 import {
   Component,
   ViewEncapsulation,
@@ -293,6 +294,7 @@ import {
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { PLATFORM_ID } from '@angular/core';
+import { FormsModule } from '@angular/forms'; // ✅ 1) IMPORTA FormsModule
 
 import { environment } from '../../../../core/environments/environment.prod';
 
@@ -460,7 +462,7 @@ function cleanDraft(d: ItemDraft): ItemDraft {
 @Component({
   selector: 'app-item-details',
   standalone: true,
-  imports: [CommonModule, RouterModule, HttpClientModule],
+  imports: [CommonModule, RouterModule, HttpClientModule, FormsModule], // ✅ 2) AGREGA FormsModule AQUÍ
   templateUrl: './item-details.component.html',
   styleUrls: ['./item-details.component.scss'],
   encapsulation: ViewEncapsulation.None,
@@ -486,6 +488,24 @@ export class ItemDetailsComponent implements OnInit {
   currentId = signal<number | null>(null);
 
   isBrowser = false;
+
+  // ✅ 3) GETTER para usar en el HTML como draftValue.xxx
+  get draftValue(): ItemDraft {
+    return (
+      this.draft() ?? {
+        title: '',
+        description: null,
+        country: null,
+        issueYear: null,
+        conditionCode: null,
+        catalogCode: null,
+        faceValue: null,
+        currency: null,
+        acquisitionDate: null,
+        visibility: 'private',
+      }
+    );
+  }
 
   ngOnInit(): void {
     this.isBrowser = isPlatformBrowser(this.platformId);
@@ -609,34 +629,19 @@ export class ItemDetailsComponent implements OnInit {
     this.saving.set(true);
     this.error.set(null);
 
-    /** ✅ CAMELCASE (recomendado, alineado a tu UI) */
+    /** ✅ CAMELCASE (alineado a tu UI) */
     const payload = cleaned;
 
-    /**
-     * 🟡 SI TU BACK EXIGE SNAKE_CASE, reemplaza el payload por esto:
-     *
-     * const payload = {
-     *   title: cleaned.title,
-     *   description: cleaned.description,
-     *   country: cleaned.country,
-     *   issue_year: cleaned.issueYear,
-     *   condition_code: cleaned.conditionCode,
-     *   catalog_code: cleaned.catalogCode,
-     *   face_value: cleaned.faceValue,
-     *   currency: cleaned.currency,
-     *   acquisition_date: cleaned.acquisitionDate,
-     *   visibility: cleaned.visibility,
-     * };
-     */
+    // 🟡 Si tu backend exige snake_case, cambia aquí el payload (no en el HTML)
 
     this.http
       .put(`${API_BASE}/items/${id}`, payload, { headers: this.buildHeaders() })
       .subscribe({
         next: (raw: any) => {
-          // si el back devuelve el item actualizado:
-          const updated = raw ? normalizeItem(raw) : ({ ...it, ...cleaned } as MyItem);
+          const updated = raw
+            ? normalizeItem(raw)
+            : ({ ...it, ...cleaned } as MyItem);
 
-          // conserva campos que usualmente el PUT no devuelve
           const prev = this.item();
           const finalItem: MyItem = {
             ...updated,
