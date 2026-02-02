@@ -1346,7 +1346,6 @@
 //       });
 //   }
 // }
-
 import {
   Component,
   ViewEncapsulation,
@@ -1354,18 +1353,14 @@ import {
   signal,
   OnInit,
   Inject,
-  ViewChildren,   // ✅ NUEVO
-  ViewChild,      // ✅ NUEVO
-  QueryList,      // ✅ NUEVO
-  ElementRef,     // ✅ NUEVO
+  ViewChildren,
+  ViewChild,
+  QueryList,
+  ElementRef,
 } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import {
-  HttpClient,
-  HttpClientModule,
-  HttpHeaders,
-} from '@angular/common/http';
+import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http';
 import { forkJoin, of } from 'rxjs';
 import { catchError, switchMap } from 'rxjs/operators';
 import { PLATFORM_ID } from '@angular/core';
@@ -1422,10 +1417,7 @@ type ItemDraft = {
   visibility: Visibility | null;
 };
 
-function pickCoverFromImages(
-  imgs: ImageRef[] | undefined,
-  fallback?: any
-): string | null {
+function pickCoverFromImages(imgs: ImageRef[] | undefined, fallback?: any): string | null {
   const arr = Array.isArray(imgs) ? imgs : [];
   const primary = arr.find((im) => !!im?.primary && !!im?.file)?.file ?? null;
   const first = arr.find((im) => !!im?.file)?.file ?? null;
@@ -1529,10 +1521,7 @@ function cleanDraft(d: ItemDraft): ItemDraft {
   };
 }
 
-function buildTouchedPayload(
-  cleaned: ItemDraft,
-  touched: Set<keyof ItemDraft>
-): Partial<ItemDraft> {
+function buildTouchedPayload(cleaned: ItemDraft, touched: Set<keyof ItemDraft>): Partial<ItemDraft> {
   const payload: Partial<ItemDraft> = {};
   touched.forEach((k) => {
     (payload as any)[k] = cleaned[k];
@@ -1555,11 +1544,7 @@ function normalizeTagNames(names: string[]): string[] {
 }
 
 function errorMessage(err: any, fallback: string) {
-  return (
-    err?.error?.message ??
-    (typeof err?.message === 'string' ? err.message : null) ??
-    fallback
-  );
+  return err?.error?.message ?? (typeof err?.message === 'string' ? err.message : null) ?? fallback;
 }
 
 @Component({
@@ -1591,17 +1576,11 @@ export class ItemDetailsComponent implements OnInit {
 
   private touched = new Set<keyof ItemDraft>();
 
-  /** ===== TAGS 1:1 (por item) ===== */
+  /** ===== TAGS (solo renombrar texto) ===== */
   draftTagNames: string[] = [];
   newTagName = '';
   private tagsTouched = false;
 
-  /**
-   * ✅ NUEVO: refs a inputs de tags para que el “pill” enfoque el input.
-   * En el HTML pon:
-   *  - input nuevo: #newTagInput
-   *  - cada tag input: #tagInput
-   */
   @ViewChildren('tagInput') tagInputs!: QueryList<ElementRef<HTMLInputElement>>;
   @ViewChild('newTagInput') newTagInput?: ElementRef<HTMLInputElement>;
 
@@ -1636,35 +1615,26 @@ export class ItemDetailsComponent implements OnInit {
     });
   }
 
-  /** ✅ NUEVO: foco cómodo */
   focusNewTagInput() {
     if (!this.isBrowser) return;
-    // pequeño delay para asegurar que el input exista/renderice
     setTimeout(() => this.newTagInput?.nativeElement?.focus(), 0);
   }
 
-  /** ✅ NUEVO: click en el pill → enfoca el input del tag (sin atinarle al cuadrito) */
   focusTag(index: number) {
     if (!this.isBrowser) return;
     setTimeout(() => {
       const el = this.tagInputs?.toArray?.()[index]?.nativeElement;
       if (!el) return;
       el.focus();
-      el.select(); // ✅ opcional: selecciona todo para editar rápido
+      el.select();
     }, 0);
   }
 
   private buildHeaders(): HttpHeaders {
     if (!this.isBrowser) return new HttpHeaders();
 
-    const token =
-      localStorage.getItem('accessToken') ||
-      sessionStorage.getItem('accessToken') ||
-      '';
-
-    return token
-      ? new HttpHeaders({ Authorization: `Bearer ${token}` })
-      : new HttpHeaders();
+    const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken') || '';
+    return token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : new HttpHeaders();
   }
 
   private fetchItem(id: number) {
@@ -1680,17 +1650,11 @@ export class ItemDetailsComponent implements OnInit {
           return forkJoin({
             base: of(base),
             tags: this.http
-              .get<ItemTag[]>(`${API_BASE}/items/${id}/tags`, {
-                headers: this.buildHeaders(),
-              })
+              .get<ItemTag[]>(`${API_BASE}/items/${id}/tags`, { headers: this.buildHeaders() })
               .pipe(catchError(() => of((base.tags as ItemTag[]) ?? []))),
             attrs: this.http
-              .get<AttributeValue[]>(`${API_BASE}/items/${id}/attributes`, {
-                headers: this.buildHeaders(),
-              })
-              .pipe(
-                catchError(() => of((base.attributes as AttributeValue[]) ?? []))
-              ),
+              .get<AttributeValue[]>(`${API_BASE}/items/${id}/attributes`, { headers: this.buildHeaders() })
+              .pipe(catchError(() => of((base.attributes as AttributeValue[]) ?? []))),
           });
         })
       )
@@ -1699,14 +1663,10 @@ export class ItemDetailsComponent implements OnInit {
           const merged = { ...base, tags, attributes: attrs };
           this.item.set(merged);
 
-          this.draftTagNames = normalizeTagNames(
-            Array.isArray(tags) ? tags.map((t) => t.name) : []
-          );
+          this.draftTagNames = normalizeTagNames(Array.isArray(tags) ? tags.map((t) => t.name) : []);
           this.tagsTouched = false;
 
-          if (!this.isEditing()) {
-            this.draft.set(toDraft(merged));
-          }
+          if (!this.isEditing()) this.draft.set(toDraft(merged));
 
           this.touched.clear();
           this.busy.set(false);
@@ -1728,13 +1688,10 @@ export class ItemDetailsComponent implements OnInit {
 
     this.touched.clear();
 
-    this.draftTagNames = normalizeTagNames(
-      Array.isArray(it.tags) ? it.tags.map((t) => t.name) : []
-    );
+    this.draftTagNames = normalizeTagNames(Array.isArray(it.tags) ? it.tags.map((t) => t.name) : []);
     this.tagsTouched = false;
     this.newTagName = '';
 
-    // ✅ NUEVO: al entrar a editar, foco al input de nuevo tag
     this.focusNewTagInput();
   }
 
@@ -1757,15 +1714,14 @@ export class ItemDetailsComponent implements OnInit {
     const d = this.draft();
     if (!d) return;
 
-    (Object.keys(patch) as (keyof ItemDraft)[]).forEach((k) => {
-      this.touched.add(k);
-    });
-
+    (Object.keys(patch) as (keyof ItemDraft)[]).forEach((k) => this.touched.add(k));
     this.draft.set({ ...d, ...patch });
   }
 
-  /** ===== TAGS 1:1 helpers ===== */
+  /** ===== TAGS helpers (solo renombrar) ===== */
 
+  // ⚠️ Si tu regla es "solo renombrar", idealmente NO permitir agregar desde aquí.
+  // Si quieres permitirlo, ya no es "solo renombrar" y se requiere backend /items/:id/tags.
   addNewTagFromInput() {
     const name = (this.newTagName ?? '').trim();
     if (!name) return;
@@ -1779,8 +1735,6 @@ export class ItemDetailsComponent implements OnInit {
     }
 
     this.newTagName = '';
-
-    // ✅ NUEVO: vuelve a foco para seguir tipeando tags rápido
     this.focusNewTagInput();
   }
 
@@ -1788,11 +1742,14 @@ export class ItemDetailsComponent implements OnInit {
     const arr = [...this.draftTagNames];
     if (index < 0 || index >= arr.length) return;
 
+    const before = String(arr[index] ?? '').trim();
+    const afterName = String(newName ?? '').trim();
+
     arr[index] = newName;
     const normalized = normalizeTagNames(arr);
 
     this.draftTagNames = normalized;
-    this.tagsTouched = true;
+    if (before !== afterName) this.tagsTouched = true;
   }
 
   removeDraftTagAt(index: number) {
@@ -1803,22 +1760,36 @@ export class ItemDetailsComponent implements OnInit {
     this.draftTagNames = arr;
     this.tagsTouched = true;
 
-    // ✅ NUEVO: tras borrar, intenta enfocar el tag “que quedó” en esa posición
-    // (si ya no existe, enfoca el input nuevo)
     const next = Math.min(index, this.draftTagNames.length - 1);
     if (next >= 0) this.focusTag(next);
     else this.focusNewTagInput();
   }
 
-  /** ✅ NO ocultar errores del PUT tags */
-  private saveTagsForItem(itemId: number) {
-    const tagNames = normalizeTagNames(this.draftTagNames);
+  /** ✅ SOLO RENOMBRAR TAGS EXISTENTES: PUT /tags/:id */
+  private renameTagsOnly(itemId: number) {
+    const it = this.item();
+    const currentTags = Array.isArray(it?.tags) ? (it!.tags as ItemTag[]) : [];
+    const newNames = normalizeTagNames(this.draftTagNames);
 
-    return this.http.put<ItemTag[]>(
-      `${API_BASE}/items/${itemId}/tags`,
-      { tagNames },
-      { headers: this.buildHeaders() }
-    );
+    // Si cambió la cantidad, ya NO es renombrar (sería agregar/quitar)
+    if (newNames.length !== currentTags.length) {
+      throw new Error(
+        'Solo se permite renombrar tags existentes. No se puede agregar/eliminar tags aquí.'
+      );
+    }
+
+    const calls = currentTags.map((t, idx) => {
+      const newName = String(newNames[idx] ?? '').trim();
+      if (!newName || newName === t.name) return of(null);
+
+      return this.http.put<ItemTag>(
+        `${API_BASE}/tags/${t.id}`,
+        { name: newName },
+        { headers: this.buildHeaders() }
+      );
+    });
+
+    return forkJoin(calls); // (ItemTag | null)[]
   }
 
   saveEdit() {
@@ -1829,8 +1800,7 @@ export class ItemDetailsComponent implements OnInit {
 
     const cleaned = cleanDraft(d);
 
-    const effectiveTitle =
-      (this.touched.has('title') ? cleaned.title : it.title) ?? '';
+    const effectiveTitle = (this.touched.has('title') ? cleaned.title : it.title) ?? '';
     if (!effectiveTitle.trim()) {
       this.error.set('El título no puede estar vacío.');
       return;
@@ -1843,26 +1813,30 @@ export class ItemDetailsComponent implements OnInit {
 
     const saveItem$ =
       Object.keys(payload).length > 0
-        ? this.http.put(`${API_BASE}/items/${id}`, payload, {
-            headers: this.buildHeaders(),
-          })
+        ? this.http.put(`${API_BASE}/items/${id}`, payload, { headers: this.buildHeaders() })
         : of(null);
 
-    const saveTags$ = this.tagsTouched ? this.saveTagsForItem(id) : of(null);
+    // ✅ CAMBIO: antes era /items/:id/tags, ahora renombra con /tags/:id
+    const saveTags$ = this.tagsTouched ? this.renameTagsOnly(id) : of(null);
 
-    forkJoin({
-      itemRes: saveItem$,
-      tagsRes: saveTags$,
-    }).subscribe({
+    forkJoin({ itemRes: saveItem$, tagsRes: saveTags$ }).subscribe({
       next: ({ itemRes, tagsRes }) => {
         const baseUpdated = itemRes ? normalizeItem(itemRes) : it;
 
         let finalTags: ItemTag[] | undefined = it.tags;
+
         if (this.tagsTouched) {
           if (!Array.isArray(tagsRes)) {
             throw new Error('No se pudo guardar tags (respuesta inválida).');
           }
-          finalTags = tagsRes;
+
+          // tagsRes = (ItemTag | null)[]
+          const updatedById = new Map<number, ItemTag>();
+          for (const r of tagsRes as Array<ItemTag | null>) {
+            if (r && typeof r.id === 'number') updatedById.set(r.id, r);
+          }
+
+          finalTags = (Array.isArray(it.tags) ? it.tags : []).map((t) => updatedById.get(t.id) ?? t);
         }
 
         const finalItem: MyItem = {
@@ -1886,9 +1860,7 @@ export class ItemDetailsComponent implements OnInit {
         this.tagsTouched = false;
         this.newTagName = '';
 
-        this.draftTagNames = normalizeTagNames(
-          Array.isArray(finalTags) ? finalTags.map((t) => t.name) : []
-        );
+        this.draftTagNames = normalizeTagNames(Array.isArray(finalTags) ? finalTags.map((t) => t.name) : []);
 
         this.saving.set(false);
       },
@@ -1906,22 +1878,16 @@ export class ItemDetailsComponent implements OnInit {
   }
 
   goEdit(id: number) {
-    this.router.navigate(['/items/upload'], {
-      queryParams: { id },
-    });
+    this.router.navigate(['/items/upload'], { queryParams: { id } });
   }
 
   goUploadNewFrom(id: number) {
-    this.router.navigate(['/items/upload'], {
-      queryParams: { from: id },
-    });
+    this.router.navigate(['/items/upload'], { queryParams: { from: id } });
   }
 
   confirmDelete(id: number) {
     if (!this.isBrowser) return;
-    const ok = window.confirm(
-      '¿Estás segura de eliminar esta pieza? Esta acción no se puede deshacer.'
-    );
+    const ok = window.confirm('¿Estás segura de eliminar esta pieza? Esta acción no se puede deshacer.');
     if (!ok) return;
     this.deleteItem(id);
   }
@@ -1930,17 +1896,15 @@ export class ItemDetailsComponent implements OnInit {
     this.busy.set(true);
     this.error.set(null);
 
-    this.http
-      .delete(`${API_BASE}/items/${id}`, { headers: this.buildHeaders() })
-      .subscribe({
-        next: () => {
-          this.busy.set(false);
-          this.router.navigate(['/items/mine']);
-        },
-        error: (err) => {
-          this.error.set(errorMessage(err, 'No se pudo eliminar la pieza.'));
-          this.busy.set(false);
-        },
-      });
+    this.http.delete(`${API_BASE}/items/${id}`, { headers: this.buildHeaders() }).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.router.navigate(['/items/mine']);
+      },
+      error: (err) => {
+        this.error.set(errorMessage(err, 'No se pudo eliminar la pieza.'));
+        this.busy.set(false);
+      },
+    });
   }
 }
