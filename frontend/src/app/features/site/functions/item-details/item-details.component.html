@@ -474,15 +474,73 @@
                   ></textarea>
                 </section>
 
-                <!-- Card tags (solo lectura por ahora) -->
-                <section class="section-card" *ngIf="it.tags?.length">
+                <!-- ✅ Card tags (editable) -->
+                <section class="section-card">
                   <h2 class="section-title">Tags</h2>
-                  <div class="tags-list">
-                    <span class="tag-pill" *ngFor="let t of it.tags">
-                      #{{ t.name }}
-                    </span>
-                  </div>
-                  <p class="hint" *ngIf="isEditing()">(Edición de tags: pendiente)</p>
+
+                  <!-- VIEW -->
+                  <ng-container *ngIf="!isEditing(); else tagsEditTpl">
+                    <div class="tags-list" *ngIf="it.tags?.length; else noTagsTpl">
+                      <span class="tag-pill" *ngFor="let t of it.tags">
+                        #{{ t.name }}
+                      </span>
+                    </div>
+
+                    <ng-template #noTagsTpl>
+                      <p class="hint">—</p>
+                    </ng-template>
+                  </ng-container>
+
+                  <!-- EDIT -->
+                  <ng-template #tagsEditTpl>
+                    <div class="inline-row">
+                      <select
+                        class="text-input"
+                        [ngModel]="selectedTagId"
+                        (ngModelChange)="onSelectTag($event)"
+                      >
+                        <option [ngValue]="null">Agregar tag…</option>
+
+                        <option
+                          *ngFor="let t of allTags"
+                          [ngValue]="t.id"
+                          [disabled]="isTagSelected(t.id)"
+                        >
+                          {{ t.name }}
+                        </option>
+                      </select>
+
+                      <input
+                        class="text-input"
+                        [ngModel]="newTagName"
+                        (ngModelChange)="newTagName = $event"
+                        placeholder="Crear tag nuevo (Enter)"
+                        (keydown.enter)="addNewTagFromInput(); $event.preventDefault()"
+                      />
+                    </div>
+
+                    <div class="tags-list" *ngIf="draftTags?.length; else noDraftTagsTpl">
+                      <span class="tag-pill" *ngFor="let t of draftTags">
+                        #{{ t.name }}
+                        <button
+                          type="button"
+                          class="tag-x"
+                          (click)="removeDraftTag(t.id)"
+                          aria-label="Quitar tag"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    </div>
+
+                    <ng-template #noDraftTagsTpl>
+                      <p class="hint">No has seleccionado tags.</p>
+                    </ng-template>
+
+                    <p class="hint">
+                      Se guardará el set completo de tags (reemplazo) al presionar “Guardar”.
+                    </p>
+                  </ng-template>
                 </section>
 
                 <!-- Card atributos (solo lectura por ahora) -->
