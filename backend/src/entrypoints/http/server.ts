@@ -3297,6 +3297,7 @@ app.put(
   { preHandler: authGuard },
   async (req: any, reply: any) => {
     const conn = await db.getConnection();
+
     try {
       const ownerId = ensureAuth(req);
       const itemId = Number(req.params.id);
@@ -3304,55 +3305,55 @@ app.put(
         return reply.code(400).send({ message: 'itemId inválido' });
       }
 
-      // 1) payload
+      // payload
       const { tagNames = [] } = req.body || {};
       const namesRaw: string[] = Array.isArray(tagNames)
-        ? tagNames.map((x: any) => String(x ?? '').trim()).filter(Boolean)
+        ? tagNames.map((x: any) => String(x).trim()).filter(Boolean)
         : [];
 
-      // dedupe case-insensitive (mantiene casing del primero)
+      // dedupe case-insensitive
       const seen = new Set<string>();
       const finalNames: string[] = [];
       for (const n of namesRaw) {
-        const key = n.toLowerCase();
-        if (!seen.has(key)) {
-          seen.add(key);
+        const k = n.toLowerCase();
+        if (!seen.has(k)) {
+          seen.add(k);
           finalNames.push(n);
         }
       }
 
       await conn.beginTransaction();
 
-      // 2) ownership
+      // validar item
       const [it]: any = await conn.execute(
-        'SELECT TOP (1) id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
+        'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
         [itemId, ownerId]
       );
-      if (!it?.length) {
+      if (!it.length) {
         await conn.rollback();
         return reply.code(404).send({ message: 'item_not_found' });
       }
 
-      // 3) borrar relaciones actuales
-      await conn.execute('DELETE FROM item_tags WHERE item_id = ?', [itemId]);
+      // borrar relaciones actuales
+      await conn.execute(
+        'DELETE FROM item_tags WHERE item_id = ?',
+        [itemId]
+      );
 
-      // 4) si no hay tags => listo
+      // si no hay tags → listo
       if (finalNames.length === 0) {
         await conn.commit();
         return reply.send([]);
       }
 
-      // 5) Asegurar tags (INSERT missing) uno por uno (seguro y simple)
-      //    Si quieres performance luego lo batch-eamos, primero que funcione estable.
+      // asegurar tags
       for (const name of finalNames) {
-        // ¿existe?
         const [found]: any = await conn.execute(
-          'SELECT TOP (1) id FROM tags WHERE owner_user_id = ? AND LOWER(name) = LOWER(?)',
+          'SELECT TOP 1 tag_id FROM tags WHERE owner_user_id = ? AND LOWER(name) = LOWER(?)',
           [ownerId, name]
         );
 
-        if (!found?.length) {
-          // insertar (sin OUTPUT para evitar líos del driver)
+        if (!found.length) {
           await conn.execute(
             'INSERT INTO tags (owner_user_id, name) VALUES (?, ?)',
             [ownerId, name]
@@ -3360,30 +3361,27 @@ app.put(
         }
       }
 
-      // 6) Insertar relaciones item_tags trayendo ids por LOWER(name)
+      // insertar relaciones
       for (const name of finalNames) {
-        const [tagRow]: any = await conn.execute(
-          'SELECT TOP (1) id, name FROM tags WHERE owner_user_id = ? AND LOWER(name) = LOWER(?)',
+        const [row]: any = await conn.execute(
+          'SELECT TOP 1 tag_id FROM tags WHERE owner_user_id = ? AND LOWER(name) = LOWER(?)',
           [ownerId, name]
         );
 
-        const tagId = Number(tagRow?.[0]?.id);
-        if (Number.isFinite(tagId)) {
-          await conn.execute(
-            'INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)',
-            [itemId, tagId]
-          );
-        }
+        await conn.execute(
+          'INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)',
+          [itemId, row[0].tag_id]
+        );
       }
 
-      // 7) devolver tags finales (id real de tags)
+      // devolver tags finales
       const [rows]: any = await conn.execute(
         `
-        SELECT t.id, t.name
+        SELECT t.tag_id AS id, t.name
         FROM item_tags it
-        JOIN tags t ON t.id = it.tag_id
+        JOIN tags t ON t.tag_id = it.tag_id
         WHERE it.item_id = ?
-        ORDER BY t.name ASC;
+        ORDER BY t.name ASC
         `,
         [itemId]
       );
@@ -3398,6 +3396,7 @@ app.put(
     }
   }
 );
+
 
 
 //en azure
