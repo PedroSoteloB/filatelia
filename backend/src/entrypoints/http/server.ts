@@ -3293,109 +3293,58 @@ app.get('/presentations/:id/ppt', { preHandler: authGuard }, async (req:any, rep
 
 // app.listen({ port: 3000, host: '0.0.0.0' });  en local
 app.put(
-  '/items/:id/tags',
+  '/tags/:id',
   { preHandler: authGuard },
   async (req: any, reply: any) => {
     const conn = await db.getConnection();
-
     try {
       const ownerId = ensureAuth(req);
-      const itemId = Number(req.params.id);
-      if (!Number.isFinite(itemId)) {
-        return reply.code(400).send({ message: 'itemId inválido' });
-      }
+      const tagId = Number(req.params.id);
+      const name = String(req.body?.name ?? '').trim();
 
-      // payload
-      const { tagNames = [] } = req.body || {};
-      const namesRaw: string[] = Array.isArray(tagNames)
-        ? tagNames.map((x: any) => String(x).trim()).filter(Boolean)
-        : [];
+      if (!Number.isFinite(tagId)) return reply.code(400).send({ message: 'tagId inválido' });
+      if (!name) return reply.code(400).send({ message: 'name requerido' });
 
-      // dedupe case-insensitive
-      const seen = new Set<string>();
-      const finalNames: string[] = [];
-      for (const n of namesRaw) {
-        const k = n.toLowerCase();
-        if (!seen.has(k)) {
-          seen.add(k);
-          finalNames.push(n);
-        }
-      }
-
-      await conn.beginTransaction();
-
-      // validar item
-      const [it]: any = await conn.execute(
-        'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
-        [itemId, ownerId]
+      // (Opcional) evitar duplicados por usuario (case-insensitive)
+      const [dup]: any = await conn.execute(
+        `SELECT TOP 1 id
+         FROM tags
+         WHERE owner_user_id = ?
+           AND LOWER(name) = LOWER(?)
+           AND id <> ?`,
+        [ownerId, name, tagId]
       );
-      if (!it.length) {
-        await conn.rollback();
-        return reply.code(404).send({ message: 'item_not_found' });
-      }
+      if (dup.length) return reply.code(409).send({ message: 'tag_name_already_exists' });
 
-      // borrar relaciones actuales
-      await conn.execute(
-        'DELETE FROM item_tags WHERE item_id = ?',
-        [itemId]
+      const [res]: any = await conn.execute(
+        `UPDATE tags
+         SET name = ?
+         WHERE id = ? AND owner_user_id = ?`,
+        [name, tagId, ownerId]
       );
 
-      // si no hay tags → listo
-      if (finalNames.length === 0) {
-        await conn.commit();
-        return reply.send([]);
-      }
+      // mssql/mysql2: res.affectedRows | res.rowsAffected (depende del driver)
+      const affected =
+        (res?.affectedRows ?? (Array.isArray(res?.rowsAffected) ? res.rowsAffected[0] : res?.rowsAffected)) || 0;
 
-      // asegurar tags (PK real = tags.id)
-      for (const name of finalNames) {
-        const [found]: any = await conn.execute(
-          'SELECT TOP 1 id FROM tags WHERE owner_user_id = ? AND LOWER(name) = LOWER(?)',
-          [ownerId, name]
-        );
+      if (!affected) return reply.code(404).send({ message: 'tag_not_found' });
 
-        if (!found.length) {
-          await conn.execute(
-            'INSERT INTO tags (owner_user_id, name) VALUES (?, ?)',
-            [ownerId, name]
-          );
-        }
-      }
-
-      // insertar relaciones (item_tags.tag_id apunta a tags.id)
-      for (const name of finalNames) {
-        const [row]: any = await conn.execute(
-          'SELECT TOP 1 id FROM tags WHERE owner_user_id = ? AND LOWER(name) = LOWER(?)',
-          [ownerId, name]
-        );
-
-        await conn.execute(
-          'INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)',
-          [itemId, row[0].id]
-        );
-      }
-
-      // devolver tags finales
       const [rows]: any = await conn.execute(
-        `
-        SELECT t.id AS id, t.name
-        FROM item_tags it
-        JOIN tags t ON t.id = it.tag_id
-        WHERE it.item_id = ?
-        ORDER BY t.name ASC
-        `,
-        [itemId]
+        `SELECT id, name
+         FROM tags
+         WHERE id = ? AND owner_user_id = ?`,
+        [tagId, ownerId]
       );
 
-      await conn.commit();
-      return reply.send(rows);
+      return reply.send(rows[0]);
     } catch (e: any) {
-      try { await conn.rollback(); } catch {}
       return reply.code(500).send({ message: e?.message || 'internal_error' });
     } finally {
       try { conn.release?.(); } catch {}
     }
   }
 );
+
 
 
 
