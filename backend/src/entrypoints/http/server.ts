@@ -3344,13 +3344,27 @@ app.put('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: an
     }
 
     // 5) devolver tags finales (1:1 del item)
-    const [rows]: any = await conn.execute( // <- cambio: conn.execute
-      `SELECT id, name
-         FROM item_tags
-        WHERE item_id = ?
-        ORDER BY name ASC`,
-      [itemId]
-    );
+    // const [rows]: any = await conn.execute( // <- cambio: conn.execute
+    //   `SELECT id, name
+    //      FROM item_tags
+    //     WHERE item_id = ?
+    //     ORDER BY name ASC`,
+    //   [itemId]
+    // );
+    // 5) devolver tags finales (1:1 del item)
+// ✅ FIX: item_tags no tiene columna id → generamos una con ROW_NUMBER()
+const [rows]: any = await db.execute(
+  `SELECT
+      ROW_NUMBER() OVER (ORDER BY name ASC) AS id,
+      name
+   FROM item_tags
+   WHERE item_id = ?
+   ORDER BY name ASC`,
+  [itemId]
+);
+
+reply.send(rows);
+
 
     await conn.commit(); // <- cambio: commit TX
     reply.send(rows);
