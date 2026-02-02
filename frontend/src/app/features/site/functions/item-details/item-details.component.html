@@ -173,7 +173,7 @@
     </ng-template>
   </div>
 </div> -->
-<!-- item-details.component.html -->
+<!-- item-details.component.html (COMPLETO) -->
 <div class="item-details-page">
   <div class="details-inner">
     <a routerLink="/items/mine" class="back-link"> ← Volver al listado </a>
@@ -200,6 +200,7 @@
                   [ngModel]="draftValue.title"
                   (ngModelChange)="patchDraft({ title: $event })"
                   placeholder="Título"
+                  [disabled]="saving()"
                 />
 
                 <!-- SUBTÍTULO (País • Año) -->
@@ -219,6 +220,7 @@
                       [ngModel]="draftValue.country"
                       (ngModelChange)="patchDraft({ country: $event })"
                       placeholder="País"
+                      [disabled]="saving()"
                     />
                     <input
                       class="text-input"
@@ -227,6 +229,7 @@
                       type="number"
                       placeholder="Año"
                       min="0"
+                      [disabled]="saving()"
                     />
                   </div>
                 </div>
@@ -297,7 +300,11 @@
 
                   <div class="image-caption">
                     <span class="badge">
-                      {{ it.country ? (it.country | titlecase) : 'País no definido' }}
+                      {{
+                        it.country
+                          ? (it.country | titlecase)
+                          : 'País no definido'
+                      }}
                     </span>
 
                     <span class="badge" *ngIf="it.issueYear">
@@ -316,6 +323,7 @@
                       class="text-input"
                       [ngModel]="draftValue.visibility"
                       (ngModelChange)="patchDraft({ visibility: $event })"
+                      [disabled]="saving()"
                     >
                       <option value="public">Público</option>
                       <option value="private">Privado</option>
@@ -343,6 +351,7 @@
                           [ngModel]="draftValue.country"
                           (ngModelChange)="patchDraft({ country: $event })"
                           placeholder="País"
+                          [disabled]="saving()"
                         />
                       </dd>
                     </div>
@@ -361,6 +370,7 @@
                           type="number"
                           placeholder="Año"
                           min="0"
+                          [disabled]="saving()"
                         />
                       </dd>
                     </div>
@@ -377,6 +387,7 @@
                           [ngModel]="draftValue.conditionCode"
                           (ngModelChange)="patchDraft({ conditionCode: $event })"
                           placeholder="Condición (ej: F)"
+                          [disabled]="saving()"
                         />
                       </dd>
                     </div>
@@ -393,6 +404,7 @@
                           [ngModel]="draftValue.catalogCode"
                           (ngModelChange)="patchDraft({ catalogCode: $event })"
                           placeholder="Código de catálogo"
+                          [disabled]="saving()"
                         />
                       </dd>
                     </div>
@@ -403,7 +415,10 @@
 
                       <dd *ngIf="!isEditing()">
                         <ng-container
-                          *ngIf="it.faceValue !== null && it.faceValue !== undefined; else dash"
+                          *ngIf="
+                            it.faceValue !== null && it.faceValue !== undefined;
+                            else dash
+                          "
                         >
                           {{ it.faceValue }}
                           <span *ngIf="it.currency">({{ it.currency }})</span>
@@ -421,12 +436,14 @@
                             placeholder="Valor"
                             min="0"
                             step="0.01"
+                            [disabled]="saving()"
                           />
                           <input
                             class="text-input"
                             [ngModel]="draftValue.currency"
                             (ngModelChange)="patchDraft({ currency: $event })"
                             placeholder="Moneda (ej: EUR)"
+                            [disabled]="saving()"
                           />
                         </div>
                       </dd>
@@ -439,7 +456,8 @@
                       <dd *ngIf="!isEditing()">
                         {{
                           it.acquisitionDate
-                            ? (it.acquisitionDate | date: 'dd/MM/yyyy':'UTC')
+                            ? (it.acquisitionDate
+                              | date: 'dd/MM/yyyy':'UTC')
                             : '—'
                         }}
                       </dd>
@@ -450,6 +468,7 @@
                           [ngModel]="draftValue.acquisitionDate"
                           (ngModelChange)="patchDraft({ acquisitionDate: $event })"
                           type="date"
+                          [disabled]="saving()"
                         />
                       </dd>
                     </div>
@@ -471,10 +490,11 @@
                     (ngModelChange)="patchDraft({ description: $event })"
                     rows="4"
                     placeholder="Escribe una descripción..."
+                    [disabled]="saving()"
                   ></textarea>
                 </section>
 
-                <!-- ✅ Card tags (1:1 por item, editables/renombrables) -->
+                <!-- ✅ Card tags (MEJORADO) -->
                 <section class="section-card">
                   <h2 class="section-title">Tags</h2>
 
@@ -493,46 +513,72 @@
 
                   <!-- EDIT -->
                   <ng-template #tagsEditTpl>
-                    <!-- Agregar nuevo tag (texto) -->
-                    <div class="inline-row">
-                      <input
-                        class="text-input"
-                        [ngModel]="newTagName"
-                        (ngModelChange)="newTagName = $event"
-                        placeholder="Escribe un tag y Enter (ej: Personaje)"
-                        (keydown.enter)="addNewTagFromInput(); $event.preventDefault()"
-                      />
-                    </div>
-
-                    <!-- Lista editable -->
-                    <div class="tags-list" *ngIf="draftTagNames?.length; else noDraftTagsTpl">
-                      <span class="tag-pill" *ngFor="let name of draftTagNames; let i = index">
-                        #
+                    <!-- ✅ MEJORA: form + names para ngModel + autofocus + click-to-focus -->
+                    <form
+                      class="tags-edit-form"
+                      (submit)="addNewTagFromInput(); $event.preventDefault()"
+                    >
+                      <!-- Agregar nuevo tag -->
+                      <div class="inline-row">
                         <input
-                          class="tag-edit-input"
-                          [ngModel]="name"
-                          (ngModelChange)="renameDraftTagAt(i, $event)"
-                          placeholder="Tag"
+                          class="text-input"
+                          [ngModel]="newTagName"
+                          (ngModelChange)="newTagName = $event"
+                          name="newTagName"
+                          placeholder="Escribe un tag y Enter (ej: Personaje)"
+                          (keydown.enter)="addNewTagFromInput(); $event.preventDefault()"
+                          [disabled]="saving()"
+                          autocomplete="off"
+                          autofocus
                         />
+                      </div>
 
-                        <button
-                          type="button"
-                          class="tag-x"
-                          (click)="removeDraftTagAt(i)"
-                          aria-label="Quitar tag"
+                      <!-- Lista editable -->
+                      <div
+                        class="tags-list"
+                        *ngIf="draftTagNames?.length; else noDraftTagsTpl"
+                      >
+                        <!-- ✅ MEJORA: el pill completo hace focus al input, así no tienes que atinarle al cuadrito -->
+                        <span
+                          class="tag-pill editable"
+                          *ngFor="let name of draftTagNames; let i = index"
+                          (click)="tagInput{{ i }}.focus()"
                         >
-                          ×
-                        </button>
-                      </span>
-                    </div>
+                          #
+                          <input
+                            #tagInput{{ i }}
+                            class="tag-edit-input"
+                            [ngModel]="name"
+                            (ngModelChange)="renameDraftTagAt(i, $event)"
+                            [name]="'tag_' + i"
+                            placeholder="Tag"
+                            (keydown.enter)="$event.preventDefault()"
+                            [disabled]="saving()"
+                            autocomplete="off"
+                            spellcheck="false"
+                          />
 
-                    <ng-template #noDraftTagsTpl>
-                      <p class="hint">No has agregado tags.</p>
-                    </ng-template>
+                          <button
+                            type="button"
+                            class="tag-x"
+                            (click)="removeDraftTagAt(i); $event.stopPropagation()"
+                            aria-label="Quitar tag"
+                            [disabled]="saving()"
+                            title="Eliminar"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      </div>
 
-                    <p class="hint">
-                      Puedes renombrar el texto del tag. Se guardará el set completo al presionar “Guardar”.
-                    </p>
+                      <ng-template #noDraftTagsTpl>
+                        <p class="hint">No has agregado tags.</p>
+                      </ng-template>
+
+                      <p class="hint">
+                        Puedes renombrar el tag directamente. Tip: haz click en cualquier parte del pill para escribir.
+                      </p>
+                    </form>
                   </ng-template>
                 </section>
 
@@ -548,9 +594,7 @@
                       <p class="attr-value">{{ a.value ?? '—' }}</p>
                     </article>
                   </div>
-                  <p class="hint" *ngIf="isEditing()">
-                    (Edición de atributos: pendiente)
-                  </p>
+                  <p class="hint" *ngIf="isEditing()">(Edición de atributos: pendiente)</p>
                 </section>
               </section>
             </div>

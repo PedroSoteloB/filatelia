@@ -3292,24 +3292,30 @@ app.get('/presentations/:id/ppt', { preHandler: authGuard }, async (req:any, rep
 });
 
 // app.listen({ port: 3000, host: '0.0.0.0' });  en local
-// REEMPLAZAR tags de un ítem (set completo) 1:1 POR ITEM
+// REEMPLAZAR tags de un ítem (set completo) 1:1 POR ITEM  ✅ (con TX + insert batch)
 app.put('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: any) => {
+  const conn = await db.getConnection(); // <- cambio: usar conexión para transacción
   try {
     const ownerId = ensureAuth(req);
     const itemId = Number(req.params.id);
     if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'itemId inválido' });
 
-    // 1) validar item pertenece al owner
-    const [it]: any = await db.execute(
+    // 1) validar item pertenece al owner (dentro de TX)
+    await conn.beginTransaction(); // <- cambio: iniciar TX
+
+    const [it]: any = await conn.execute( // <- cambio: conn.execute
       'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
       [itemId, ownerId]
     );
-    if (!it.length) return reply.code(404).send({ message: 'item_not_found' });
+    if (!it.length) {
+      await conn.rollback(); // <- cambio: rollback si no existe
+      return reply.code(404).send({ message: 'item_not_found' });
+    }
 
     // 2) leer payload: SOLO nombres
     const { tagNames = [] } = req.body || {};
     const names: string[] = Array.isArray(tagNames)
-      ? tagNames.map((x: any) => String(x).trim()).filter(Boolean)
+      ? tagNames.map((x: any) => String(x ?? '').trim()).filter(Boolean)
       : [];
 
     // 3) dedupe case-insensitive
@@ -3324,17 +3330,21 @@ app.put('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: an
     }
 
     // 4) REPLACE: borrar todos los tags del item y reinsertar
-    await db.execute('DELETE FROM item_tags WHERE item_id = ?', [itemId]);
+    await conn.execute('DELETE FROM item_tags WHERE item_id = ?', [itemId]); // <- cambio: conn.execute
 
-    for (const nm of finalNames) {
-      await db.execute(
-        'INSERT INTO item_tags (item_id, name) VALUES (?, ?)',
-        [itemId, nm]
+    if (finalNames.length) {
+      // <- cambio: insertar en batch (en vez de for + inserts)
+      const values = finalNames.map(() => '(?, ?)').join(', ');
+      const params = finalNames.flatMap((nm) => [itemId, nm]);
+
+      await conn.execute(
+        `INSERT INTO item_tags (item_id, name) VALUES ${values}`,
+        params
       );
     }
 
     // 5) devolver tags finales (1:1 del item)
-    const [rows]: any = await db.execute(
+    const [rows]: any = await conn.execute( // <- cambio: conn.execute
       `SELECT id, name
          FROM item_tags
         WHERE item_id = ?
@@ -3342,9 +3352,13 @@ app.put('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: an
       [itemId]
     );
 
+    await conn.commit(); // <- cambio: commit TX
     reply.send(rows);
   } catch (e: any) {
+    try { await conn.rollback(); } catch {} // <- cambio: rollback seguro
     reply.code(500).send({ message: e?.message || 'internal_error' });
+  } finally {
+    try { conn.release?.(); } catch {} // <- cambio: liberar conexión
   }
 });
 
