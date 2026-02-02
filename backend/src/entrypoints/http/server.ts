@@ -3292,7 +3292,6 @@ app.get('/presentations/:id/ppt', { preHandler: authGuard }, async (req:any, rep
 });
 
 // app.listen({ port: 3000, host: '0.0.0.0' });  en local
-// REEMPLAZAR tags de un ítem (set completo) 1:1 POR ITEM  ✅ (con TX + insert batch)
 app.put(
   '/items/:id/tags',
   { preHandler: authGuard },
@@ -3324,7 +3323,7 @@ app.put(
 
       await conn.beginTransaction();
 
-      // 3) validar item pertenece al owner (dentro de TX)
+      // 3) validar ownership del item (dentro de TX)
       const [it]: any = await conn.execute(
         'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
         [itemId, ownerId]
@@ -3337,56 +3336,81 @@ app.put(
       // 4) borrar relaciones actuales
       await conn.execute('DELETE FROM item_tags WHERE item_id = ?', [itemId]);
 
-      // 5) para cada nombre: obtener/crear tag en tabla tags y crear relación
-      for (const name of finalNames) {
-        // buscar tag del usuario (si tu modelo es por owner_user_id)
-        const [found]: any = await conn.execute(
-          'SELECT TOP 1 id, name FROM tags WHERE owner_user_id = ? AND name = ?',
-          [ownerId, name]
+      // Si no hay tags, commit y devolver []
+      if (finalNames.length === 0) {
+        await conn.commit();
+        return reply.send([]);
+      }
+
+      // ======= 5) asegurar que existan tags en tabla tags (insert missing en batch) =======
+      // Construimos un "VALUES (?), (?), ..." con parámetros
+      const valuesSql = finalNames.map(() => '(?)').join(', ');
+      const lowerPlaceholders = finalNames.map(() => '?').join(', ');
+
+      // 5a) Insertar tags que NO existan (case-insensitive)
+      await conn.execute(
+        `
+        ;WITH v(name) AS (
+          SELECT x.name
+          FROM (VALUES ${valuesSql}) AS x(name)
+        )
+        INSERT INTO tags (owner_user_id, name)
+        SELECT ?, v.name
+        FROM v
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM tags t
+          WHERE t.owner_user_id = ?
+            AND LOWER(t.name) = LOWER(v.name)
         );
+        `,
+        [...finalNames, ownerId, ownerId]
+      );
 
-        let tagId: number;
+      // 5b) Obtener IDs de TODOS los tags (los recién creados + los que ya existían)
+      const [tagRows]: any = await conn.execute(
+        `
+        SELECT id, name
+        FROM tags
+        WHERE owner_user_id = ?
+          AND LOWER(name) IN (${lowerPlaceholders})
+        `,
+        [ownerId, ...finalNames.map(n => n.toLowerCase())]
+      );
 
-        if (found.length) {
-          tagId = Number(found[0].id);
-        } else {
-          // crear tag
-          const [ins]: any = await conn.execute(
-            'INSERT INTO tags (owner_user_id, name) OUTPUT INSERTED.id VALUES (?, ?)',
-            [ownerId, name]
-          );
+      // Por seguridad, mapear por lower(name) -> id
+      const idByLower = new Map<string, number>();
+      for (const r of (Array.isArray(tagRows) ? tagRows : [])) {
+        const nm = String(r?.name ?? '');
+        const id = Number(r?.id);
+        if (nm && Number.isFinite(id)) idByLower.set(nm.toLowerCase(), id);
+      }
 
-          // dependiendo del driver, OUTPUT puede venir como rows
-          // - si ins[0].id existe: úsalo
-          // - si no, vuelve a consultar
-          tagId = Number(ins?.[0]?.id);
+      // 5c) Insertar relaciones item_tags en batch
+      const tagIds = finalNames
+        .map(n => idByLower.get(n.toLowerCase()))
+        .filter((x): x is number => Number.isFinite(Number(x)));
 
-          if (!Number.isFinite(tagId)) {
-            const [recheck]: any = await conn.execute(
-              'SELECT TOP 1 id FROM tags WHERE owner_user_id = ? AND name = ?',
-              [ownerId, name]
-            );
-            tagId = Number(recheck?.[0]?.id);
-          }
-        }
+      if (tagIds.length) {
+        const relSql = tagIds.map(() => '(?, ?)').join(', ');
+        const relParams = tagIds.flatMap((tid) => [itemId, tid]);
 
-        // insertar relación item <-> tag
         await conn.execute(
-          'INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)',
-          [itemId, tagId]
+          `INSERT INTO item_tags (item_id, tag_id) VALUES ${relSql};`,
+          relParams
         );
       }
 
       // 6) devolver tags finales (id real de tags + name)
       const [rows]: any = await conn.execute(
-        `SELECT
-            t.id   AS id,
-            t.name AS name
-         FROM item_tags it
-         JOIN tags t ON t.id = it.tag_id
-         WHERE it.item_id = ?
-           AND (t.owner_user_id = ? OR t.owner_user_id IS NULL)
-         ORDER BY t.name ASC`,
+        `
+        SELECT t.id, t.name
+        FROM item_tags it
+        INNER JOIN tags t ON t.id = it.tag_id
+        WHERE it.item_id = ?
+          AND t.owner_user_id = ?
+        ORDER BY t.name ASC;
+        `,
         [itemId, ownerId]
       );
 
