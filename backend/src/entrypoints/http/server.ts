@@ -3346,6 +3346,25 @@ app.put(
 );
 
 
+app.get('/items/countries', { preHandler: authGuard }, async (req:any, reply:any) => {
+  try {
+    const ownerId = ensureAuth(req);
+
+    const [rows]: any = await db.execute(
+      `SELECT DISTINCT country
+       FROM philatelic_items
+       WHERE owner_user_id = ?
+         AND country IS NOT NULL
+         AND LTRIM(RTRIM(country)) <> ''
+       ORDER BY country`,
+      [ownerId]
+    );
+
+    reply.send(rows.map((r:any) => r.country));
+  } catch (e:any) {
+    reply.code(500).send({ message: e?.message || 'internal_error' });
+  }
+});
 
 
 //en azure

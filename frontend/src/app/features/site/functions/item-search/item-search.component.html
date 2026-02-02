@@ -77,7 +77,7 @@
               (keydown.enter)="search()" />
           </div>
 
-          <div class="field">
+          <!-- <div class="field">
             <label>País</label>
             <input
               type="text"
@@ -85,7 +85,22 @@
               [value]="country()"
               (input)="onCountryChange($event)"
               (keydown.enter)="search()" />
+          </div> -->
+          <div class="field">
+            <label>País</label>
+            <input
+              type="text"
+              placeholder="Peru, Chile…"
+              list="countriesList"
+              [value]="country()"
+              (input)="onCountryChange($event)"
+              (keydown.enter)="search()" />
+          
+            <datalist id="countriesList">
+              <option *ngFor="let c of countries()" [value]="c"></option>
+            </datalist>
           </div>
+          
 
           <div class="field">
             <label>Condición</label>
@@ -299,33 +314,6 @@
       </div>
 
       <div class="right">
-        <!-- <div class="inline-form">
-          <input #saveName type="text" placeholder="Nombre de búsqueda…" />
-          <button class="btn" (click)="saveSearch(saveName.value)" [disabled]="busy()">
-            Guardar búsqueda
-          </button>
-        </div> -->
-
-        <!-- <div class="inline-form">
-          <input #smartName type="text" placeholder="Nombre colección (smart)…" />
-          <select #sortKey>
-            <option value="issue_year">issue_year</option>
-            <option value="title">title</option>
-            <option value="country">country</option>
-            <option value="created_at">created_at</option>
-          </select>
-          <select #sortDir>
-            <option value="asc">asc</option>
-            <option value="desc">desc</option>
-          </select>
-          <button
-            class="btn"
-            (click)="onCreateSmartClick(smartName.value, sortKey.value, sortDir.value)"
-            [disabled]="busy()">
-            Crear SMART
-          </button>
-        </div> -->
-
         <div class="inline-form">
           <input #snapName type="text" placeholder="Nombre snapshot…" />
           <input #snapN type="number" min="1" [value]="snapshotLimit()" class="w-80" />
