@@ -3346,10 +3346,10 @@ app.put(
         return reply.send([]);
       }
 
-      // asegurar tags
+      // asegurar tags (PK real = tags.id)
       for (const name of finalNames) {
         const [found]: any = await conn.execute(
-          'SELECT TOP 1 tag_id FROM tags WHERE owner_user_id = ? AND LOWER(name) = LOWER(?)',
+          'SELECT TOP 1 id FROM tags WHERE owner_user_id = ? AND LOWER(name) = LOWER(?)',
           [ownerId, name]
         );
 
@@ -3361,25 +3361,25 @@ app.put(
         }
       }
 
-      // insertar relaciones
+      // insertar relaciones (item_tags.tag_id apunta a tags.id)
       for (const name of finalNames) {
         const [row]: any = await conn.execute(
-          'SELECT TOP 1 tag_id FROM tags WHERE owner_user_id = ? AND LOWER(name) = LOWER(?)',
+          'SELECT TOP 1 id FROM tags WHERE owner_user_id = ? AND LOWER(name) = LOWER(?)',
           [ownerId, name]
         );
 
         await conn.execute(
           'INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)',
-          [itemId, row[0].tag_id]
+          [itemId, row[0].id]
         );
       }
 
       // devolver tags finales
       const [rows]: any = await conn.execute(
         `
-        SELECT t.tag_id AS id, t.name
+        SELECT t.id AS id, t.name
         FROM item_tags it
-        JOIN tags t ON t.tag_id = it.tag_id
+        JOIN tags t ON t.id = it.tag_id
         WHERE it.item_id = ?
         ORDER BY t.name ASC
         `,
