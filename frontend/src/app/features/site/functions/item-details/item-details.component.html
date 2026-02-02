@@ -474,7 +474,7 @@
                   ></textarea>
                 </section>
 
-                <!-- ✅ Card tags (editable) -->
+                <!-- ✅ Card tags (1:1 por item, editables/renombrables) -->
                 <section class="section-card">
                   <h2 class="section-title">Tags</h2>
 
@@ -493,39 +493,32 @@
 
                   <!-- EDIT -->
                   <ng-template #tagsEditTpl>
+                    <!-- Agregar nuevo tag (texto) -->
                     <div class="inline-row">
-                      <select
-                        class="text-input"
-                        [ngModel]="selectedTagId"
-                        (ngModelChange)="onSelectTag($event)"
-                      >
-                        <option [ngValue]="null">Agregar tag…</option>
-
-                        <option
-                          *ngFor="let t of allTags"
-                          [ngValue]="t.id"
-                          [disabled]="isTagSelected(t.id)"
-                        >
-                          {{ t.name }}
-                        </option>
-                      </select>
-
                       <input
                         class="text-input"
                         [ngModel]="newTagName"
                         (ngModelChange)="newTagName = $event"
-                        placeholder="Crear tag nuevo (Enter)"
+                        placeholder="Escribe un tag y Enter (ej: Personaje)"
                         (keydown.enter)="addNewTagFromInput(); $event.preventDefault()"
                       />
                     </div>
 
-                    <div class="tags-list" *ngIf="draftTags?.length; else noDraftTagsTpl">
-                      <span class="tag-pill" *ngFor="let t of draftTags">
-                        #{{ t.name }}
+                    <!-- Lista editable -->
+                    <div class="tags-list" *ngIf="draftTagNames?.length; else noDraftTagsTpl">
+                      <span class="tag-pill" *ngFor="let name of draftTagNames; let i = index">
+                        #
+                        <input
+                          class="tag-edit-input"
+                          [ngModel]="name"
+                          (ngModelChange)="renameDraftTagAt(i, $event)"
+                          placeholder="Tag"
+                        />
+
                         <button
                           type="button"
                           class="tag-x"
-                          (click)="removeDraftTag(t.id)"
+                          (click)="removeDraftTagAt(i)"
                           aria-label="Quitar tag"
                         >
                           ×
@@ -534,11 +527,11 @@
                     </div>
 
                     <ng-template #noDraftTagsTpl>
-                      <p class="hint">No has seleccionado tags.</p>
+                      <p class="hint">No has agregado tags.</p>
                     </ng-template>
 
                     <p class="hint">
-                      Se guardará el set completo de tags (reemplazo) al presionar “Guardar”.
+                      Puedes renombrar el texto del tag. Se guardará el set completo al presionar “Guardar”.
                     </p>
                   </ng-template>
                 </section>

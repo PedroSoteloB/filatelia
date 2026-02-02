@@ -3292,7 +3292,7 @@ app.get('/presentations/:id/ppt', { preHandler: authGuard }, async (req:any, rep
 });
 
 // app.listen({ port: 3000, host: '0.0.0.0' });  en local
-// REEMPLAZAR tags de un ítem (set completo)
+// REEMPLAZAR tags de un ítem (set completo) 1:1 POR ITEM
 app.put('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -3306,71 +3306,39 @@ app.put('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: an
     );
     if (!it.length) return reply.code(404).send({ message: 'item_not_found' });
 
-    // 2) leer payload
-    const { tagIds = [], tagNames = [] } = req.body || {};
-
-    const haveOwner = await hasColumn('tags', 'owner_user_id');
-    const ownerFilter = await tagsOwnerWhere(ownerId);
-
-    // 3) normalizar ids
-    let ids: number[] = Array.isArray(tagIds)
-      ? tagIds.map((x: any) => Number(x)).filter(Number.isFinite)
+    // 2) leer payload: SOLO nombres
+    const { tagNames = [] } = req.body || {};
+    const names: string[] = Array.isArray(tagNames)
+      ? tagNames.map((x: any) => String(x).trim()).filter(Boolean)
       : [];
 
-    // 4) resolver/crear tagNames -> ids
-    if (Array.isArray(tagNames) && tagNames.length) {
-      const names = tagNames.map((x: any) => String(x).trim()).filter(Boolean);
-
-      if (names.length) {
-        const placeholders = names.map(() => '?').join(',');
-
-        const [found]: any = await db.execute(
-          `SELECT id, name
-             FROM tags
-            WHERE ${ownerFilter.where}
-              AND name IN (${placeholders})`,
-          [...ownerFilter.params, ...names]
-        );
-
-        const foundByName = new Map<string, number>();
-        for (const r of (found || [])) foundByName.set(r.name, r.id);
-
-        for (const nm of names) {
-          if (foundByName.has(nm)) {
-            ids.push(foundByName.get(nm)!);
-          } else {
-            const [ins]: any = await db.execute(
-              haveOwner
-                ? `INSERT INTO tags (name, owner_user_id) VALUES (?,?)`
-                : `INSERT INTO tags (name) VALUES (?)`,
-              haveOwner ? [nm, ownerId] : [nm]
-            );
-            ids.push(ins.insertId);
-          }
-        }
+    // 3) dedupe case-insensitive
+    const seen = new Set<string>();
+    const finalNames: string[] = [];
+    for (const n of names) {
+      const key = n.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        finalNames.push(n);
       }
     }
 
-    // 5) dedupe
-    ids = Array.from(new Set(ids.map(Number).filter(Number.isFinite)));
-
-    // 6) REPLACE: borrar todos los tags del item y reinsertar
+    // 4) REPLACE: borrar todos los tags del item y reinsertar
     await db.execute('DELETE FROM item_tags WHERE item_id = ?', [itemId]);
 
-    for (const tid of ids) {
+    for (const nm of finalNames) {
       await db.execute(
-        'INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)',
-        [itemId, tid]
+        'INSERT INTO item_tags (item_id, name) VALUES (?, ?)',
+        [itemId, nm]
       );
     }
 
-    // 7) devolver tags finales
+    // 5) devolver tags finales (1:1 del item)
     const [rows]: any = await db.execute(
-      `SELECT t.id, t.name
-         FROM item_tags it
-         JOIN tags t ON t.id = it.tag_id
-        WHERE it.item_id = ?
-        ORDER BY t.name ASC`,
+      `SELECT id, name
+         FROM item_tags
+        WHERE item_id = ?
+        ORDER BY name ASC`,
       [itemId]
     );
 
@@ -3379,6 +3347,7 @@ app.put('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: an
     reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });
+
 
 //en azure
 const PORT = Number(process.env.PORT || 3000);
