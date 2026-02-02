@@ -135,17 +135,41 @@ export class ItemSearchComponent implements OnInit {
   private readonly VALID_CONDITIONS = new Set(['MINT','USED','VF','F','G']);
 
   // ===== lifecycle =====
-  async ngOnInit() {
-    // auth/roles
-    await Promise.all([this.loadTags(), this.loadAttrDefs(), this.loadCountries()]);
+  // async ngOnInit() {
+  //   // auth/roles
+  //   await Promise.all([this.loadTags(), this.loadAttrDefs(), this.loadCountries()]);
 
+  //   this.isBrowser = isPlatformBrowser(this.platformId);
+  //   if (this.isBrowser) {
+  //     const token =
+  //       localStorage.getItem('accessToken') ??
+  //       sessionStorage.getItem('accessToken') ??
+  //       '';
+
+  //     if (token && !isExpired(token)) {
+  //       this.isAuth = true;
+  //       const role = getRoleFromToken(token);
+  //       this.isAdmin = Array.isArray(role) ? role.includes('admin') : role === 'admin';
+  //     } else {
+  //       if (token) { localStorage.clear(); sessionStorage.clear(); }
+  //       this.isAuth = false;
+  //       this.isAdmin = false;
+  //     }
+  //   }
+
+  //   // bootstrap de catálogos (público)
+  //   await Promise.all([this.loadTags(), this.loadAttrDefs()]);
+  // }
+  async ngOnInit() {
+    // 1) browser + token + roles
     this.isBrowser = isPlatformBrowser(this.platformId);
+  
     if (this.isBrowser) {
       const token =
         localStorage.getItem('accessToken') ??
         sessionStorage.getItem('accessToken') ??
         '';
-
+  
       if (token && !isExpired(token)) {
         this.isAuth = true;
         const role = getRoleFromToken(token);
@@ -156,10 +180,21 @@ export class ItemSearchComponent implements OnInit {
         this.isAdmin = false;
       }
     }
-
-    // bootstrap de catálogos (público)
-    await Promise.all([this.loadTags(), this.loadAttrDefs()]);
+  
+    // 2) cargar catálogos (públicos)
+    await Promise.all([
+      this.loadTags(),
+      this.loadAttrDefs()
+    ]);
+  
+    // 3) cargar países (solo si hay auth, porque endpoint es protegido)
+    if (this.isAuth) {
+      await this.loadCountries();
+    } else {
+      this.countries.set([]); // para que no muestre nada
+    }
   }
+  
 
   // ===== NAV (usados por el header de esta vista) =====
   goInicio() { this.router.navigateByUrl('/'); }
