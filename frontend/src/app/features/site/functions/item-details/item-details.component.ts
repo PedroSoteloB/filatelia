@@ -1907,4 +1907,14 @@ export class ItemDetailsComponent implements OnInit {
       },
     });
   }
+
+  selectAll(ev: Event) {
+    const el = ev.target as HTMLInputElement | null;
+    if (!el) return;
+    // espera 0ms para que el focus termine de aplicarse
+    setTimeout(() => {
+      el.select();
+    }, 0);
+  }
+  
 }

@@ -542,7 +542,7 @@
       >
         #
 
-        <input
+        <!-- <input
           #tagInput
           class="tag-edit-input"
           [ngModel]="name"
@@ -554,7 +554,22 @@
           autocomplete="off"
           spellcheck="false"
           (click)="$event.stopPropagation()"
-        />
+        /> -->
+        <input
+  #tagInput
+  class="tag-edit-input"
+  [ngModel]="name"
+  (ngModelChange)="renameDraftTagAt(i, $event)"
+  [name]="'tag_' + i"
+  placeholder="Tag"
+  (keydown.enter)="$event.preventDefault()"
+  [disabled]="saving()"
+  autocomplete="off"
+  spellcheck="false"
+  (focus)="selectAll($event)"
+  (click)="$event.stopPropagation()"
+/>
+
 
         <button
           type="button"
