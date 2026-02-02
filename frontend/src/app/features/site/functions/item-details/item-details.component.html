@@ -536,9 +536,9 @@
     <!-- Lista editable -->
     <div class="tags-list" *ngIf="draftTagNames?.length; else noDraftTagsTpl">
       <span
-        class="tag-pill editable"
-        *ngFor="let name of draftTagNames; let i = index"
-        (click)="focusTag(i)"
+      class="tag-pill editable"
+      *ngFor="let name of draftTagNames; let i = index; trackBy: trackByIndex"
+      (click)="focusTag(i)"
       >
         #
 

@@ -1346,6 +1346,7 @@
 //       });
 //   }
 // }
+
 import {
   Component,
   ViewEncapsulation,
@@ -1738,19 +1739,33 @@ export class ItemDetailsComponent implements OnInit {
     this.focusNewTagInput();
   }
 
-  renameDraftTagAt(index: number, newName: string) {
-    const arr = [...this.draftTagNames];
-    if (index < 0 || index >= arr.length) return;
-
-    const before = String(arr[index] ?? '').trim();
-    const afterName = String(newName ?? '').trim();
-
-    arr[index] = newName;
-    const normalized = normalizeTagNames(arr);
-
-    this.draftTagNames = normalized;
-    if (before !== afterName) this.tagsTouched = true;
+  trackByIndex(index: number) {
+    return index;
   }
+  
+  // renameDraftTagAt(index: number, newName: string) {
+  //   const arr = [...this.draftTagNames];
+  //   if (index < 0 || index >= arr.length) return;
+
+  //   const before = String(arr[index] ?? '').trim();
+  //   const afterName = String(newName ?? '').trim();
+
+  //   arr[index] = newName;
+  //   const normalized = normalizeTagNames(arr);
+
+  //   this.draftTagNames = normalized;
+  //   if (before !== afterName) this.tagsTouched = true;
+  // }
+  renameDraftTagAt(index: number, newName: string) {
+    if (index < 0 || index >= this.draftTagNames.length) return;
+  
+    const arr = [...this.draftTagNames];
+    arr[index] = newName; // ✅ NO normalizar aquí
+    this.draftTagNames = arr;
+  
+    this.tagsTouched = true;
+  }
+  
 
   removeDraftTagAt(index: number) {
     const arr = [...this.draftTagNames];
