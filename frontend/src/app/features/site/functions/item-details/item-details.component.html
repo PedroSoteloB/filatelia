@@ -512,74 +512,73 @@
                   </ng-container>
 
                   <!-- EDIT -->
-                  <ng-template #tagsEditTpl>
-                    <!-- ✅ MEJORA: form + names para ngModel + autofocus + click-to-focus -->
-                    <form
-                      class="tags-edit-form"
-                      (submit)="addNewTagFromInput(); $event.preventDefault()"
-                    >
-                      <!-- Agregar nuevo tag -->
-                      <div class="inline-row">
-                        <input
-                          class="text-input"
-                          [ngModel]="newTagName"
-                          (ngModelChange)="newTagName = $event"
-                          name="newTagName"
-                          placeholder="Escribe un tag y Enter (ej: Personaje)"
-                          (keydown.enter)="addNewTagFromInput(); $event.preventDefault()"
-                          [disabled]="saving()"
-                          autocomplete="off"
-                          autofocus
-                        />
-                      </div>
+         <!-- EDIT -->
+<ng-template #tagsEditTpl>
+  <form
+    class="tags-edit-form"
+    (submit)="addNewTagFromInput(); $event.preventDefault()"
+  >
+    <!-- Agregar nuevo tag (texto) -->
+    <div class="inline-row">
+      <input
+        #newTagInput
+        class="text-input"
+        [ngModel]="newTagName"
+        (ngModelChange)="newTagName = $event"
+        name="newTagName"
+        placeholder="Escribe un tag y Enter (ej: Personaje)"
+        (keydown.enter)="addNewTagFromInput(); $event.preventDefault()"
+        [disabled]="saving()"
+        autocomplete="off"
+      />
+    </div>
 
-                      <!-- Lista editable -->
-                      <div
-                        class="tags-list"
-                        *ngIf="draftTagNames?.length; else noDraftTagsTpl"
-                      >
-                        <!-- ✅ MEJORA: el pill completo hace focus al input, así no tienes que atinarle al cuadrito -->
-                        <span
-                          class="tag-pill editable"
-                          *ngFor="let name of draftTagNames; let i = index"
-                          (click)="tagInput{{ i }}.focus()"
-                        >
-                          #
-                          <input
-                            #tagInput{{ i }}
-                            class="tag-edit-input"
-                            [ngModel]="name"
-                            (ngModelChange)="renameDraftTagAt(i, $event)"
-                            [name]="'tag_' + i"
-                            placeholder="Tag"
-                            (keydown.enter)="$event.preventDefault()"
-                            [disabled]="saving()"
-                            autocomplete="off"
-                            spellcheck="false"
-                          />
+    <!-- Lista editable -->
+    <div class="tags-list" *ngIf="draftTagNames?.length; else noDraftTagsTpl">
+      <span
+        class="tag-pill editable"
+        *ngFor="let name of draftTagNames; let i = index"
+        (click)="focusTag(i)"
+      >
+        #
 
-                          <button
-                            type="button"
-                            class="tag-x"
-                            (click)="removeDraftTagAt(i); $event.stopPropagation()"
-                            aria-label="Quitar tag"
-                            [disabled]="saving()"
-                            title="Eliminar"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      </div>
+        <input
+          #tagInput
+          class="tag-edit-input"
+          [ngModel]="name"
+          (ngModelChange)="renameDraftTagAt(i, $event)"
+          [name]="'tag_' + i"
+          placeholder="Tag"
+          (keydown.enter)="$event.preventDefault()"
+          [disabled]="saving()"
+          autocomplete="off"
+          spellcheck="false"
+          (click)="$event.stopPropagation()"
+        />
 
-                      <ng-template #noDraftTagsTpl>
-                        <p class="hint">No has agregado tags.</p>
-                      </ng-template>
+        <button
+          type="button"
+          class="tag-x"
+          (click)="removeDraftTagAt(i); $event.stopPropagation()"
+          aria-label="Quitar tag"
+          [disabled]="saving()"
+          title="Eliminar"
+        >
+          ×
+        </button>
+      </span>
+    </div>
 
-                      <p class="hint">
-                        Puedes renombrar el tag directamente. Tip: haz click en cualquier parte del pill para escribir.
-                      </p>
-                    </form>
-                  </ng-template>
+    <ng-template #noDraftTagsTpl>
+      <p class="hint">No has agregado tags.</p>
+    </ng-template>
+
+    <p class="hint">
+      Tip: haz click en cualquier parte del pill para editar. Se guardará el set completo al presionar “Guardar”.
+    </p>
+  </form>
+</ng-template>
+
                 </section>
 
                 <!-- Card atributos (solo lectura por ahora) -->
