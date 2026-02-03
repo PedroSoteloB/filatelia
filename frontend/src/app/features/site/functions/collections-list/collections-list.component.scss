@@ -65,7 +65,7 @@
   cursor: pointer;
 }
 
-/* Botones genéricos */
+/* ====== BOTONES ====== */
 
 .btn {
   border: 1px solid rgba(0, 0, 0, 0.08);
@@ -107,7 +107,7 @@
   cursor: default;
 }
 
-/* ====== LAYOUT PRINCIPAL DE COLECCIONES ====== */
+/* ====== LAYOUT PRINCIPAL ====== */
 
 .collections-page {
   padding: 1.25rem 0 2.5rem;
@@ -118,7 +118,7 @@
   margin: 0 auto;
 }
 
-/* Header de página */
+/* ====== HEADER ====== */
 
 .page-header {
   display: flex;
@@ -132,7 +132,6 @@
   margin: 0;
   font-size: 1.6rem;
   font-weight: 800;
-  letter-spacing: 0.01em;
 }
 
 .page-subtitle {
@@ -141,82 +140,7 @@
   color: var(--muted);
 }
 
-.page-header-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-/* Estados */
-
-.status {
-  margin: 0.5rem 0 0.75rem;
-  padding: 0.6rem 0.75rem;
-  border-radius: 10px;
-  font-size: 0.9rem;
-}
-
-.status.error {
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid rgba(185, 28, 28, 0.2);
-}
-
-.status.busy {
-  background: #fefce8;
-  color: #854d0e;
-  border: 1px solid rgba(133, 77, 14, 0.2);
-}
-
-/* Panel de resumen */
-
-.summary-panel {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 0.75rem;
-  margin: 0.5rem 0 1rem;
-}
-
-.summary-panel .stat {
-  background: #fffcf7;
-  border-radius: 16px;
-  padding: 0.9rem 1rem;
-  border: 1px dashed rgba(176, 137, 104, 0.35);
-  text-align: left;
-}
-
-.summary-panel .num {
-  font-size: 1.4rem;
-  font-weight: 800;
-  color: #7f5539;
-}
-
-.summary-panel .label {
-  margin-top: 0.15rem;
-  font-size: 0.9rem;
-  color: var(--muted);
-}
-
-/* Estado vacío */
-
-.empty {
-  margin-top: 1.5rem;
-  padding: 2rem 1.5rem;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #fffaf4 0%, #fffdf8 100%);
-  border: 1px dashed rgba(176, 137, 104, 0.35);
-  text-align: center;
-}
-
-.empty h2 {
-  margin: 0 0 0.5rem;
-  font-size: 1.3rem;
-}
-
-.empty .muted {
-  margin: 0 0 1rem;
-}
-
-/* ====== GRID DE COLECCIONES ====== */
+/* ====== GRID ====== */
 
 .collections-grid {
   margin-top: 0.5rem;
@@ -225,7 +149,7 @@
   gap: 0.9rem;
 }
 
-/* Tarjeta de colección */
+/* ====== TARJETA ====== */
 
 .collection-card {
   background: #ffffff;
@@ -236,311 +160,85 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  transition: transform 0.15s ease, box-shadow 0.2s ease;
 }
 
-.collection-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
-}
+/* ====== CABECERA ====== */
 
 .card-head {
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
   gap: 0.5rem;
-}
-
-.card-head .left {
-  min-width: 0;
 }
 
 .card-head .name {
   font-weight: 700;
   font-size: 1rem;
-  line-height: 1.3;
   white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
-}
-
-.type-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.15rem 0.55rem;
-  margin-top: 0.25rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: #f3f4ff;
-  color: #4338ca;
-}
-
-.type-badge.smart {
-  background: #e0fbea;
-  color: #166534;
-}
-
-.type-badge.static {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.card-head .actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-/* Cuerpo de tarjeta */
-
-.card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-}
-
-.row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.main-row .col {
-  flex: 1 1 140px;
-  min-width: 0;
-}
-
-.label.small {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.value {
-  margin-top: 0.15rem;
-  font-size: 0.9rem;
-}
-
-.value.desc {
-  max-height: 3.1em;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.value.filter {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    "Courier New", monospace;
-  font-size: 0.8rem;
-  background: #f9f5ff;
-  border-radius: 10px;
-  padding: 0.25rem 0.45rem;
-}
+/* ====== BLOQUE DE IMÁGENES (FIX DEFINITIVO) ====== */
 
-/* Meta info */
-
-.meta-row {
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.meta {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.8rem;
-}
-
-.muted {
-  color: #6b7280;
-}
-
-.small {
-  font-size: 0.8rem;
-}
-
-.code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    "Courier New", monospace;
-}
-
-/* ====== Responsive ====== */
-
-@media (max-width: 720px) {
-  .topbar {
-    padding-inline: 0.65rem;
-    gap: 0.5rem;
-  }
-
-  .actions {
-    gap: 0.35rem;
-  }
-
-  .actions .btn {
-    display: none;
-  }
-
-  .actions .btn.light {
-    display: inline-flex; /* por si quieres dejar solo "Cerrar sesión" visible */
-  }
-
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .collections-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .meta-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-}
-
-/* micro-texto superior según tipo */
-.tagline {
-  margin-bottom: 0.35rem;
-}
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.15rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  background: #f9fafb;
-  color: #4b5563;
-}
-
-.pill-smart {
-  background: #e0fbea;
-  color: #166534;
-}
-
-.pill-static {
-  background: #fff1dd;
-  color: #92400e;
-}
-
-/* bloques de información tipo ficha */
-.info {
-  margin: 0;
-  padding: 0;
+.thumb-block {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 10px;
+  margin: 10px 0 12px;
 }
 
-.info-block {
-  background: #fffdf9;
-  border-radius: 12px;
-  padding: 0.5rem 0.6rem;
-  border: 1px solid rgba(176, 137, 104, 0.15);
-}
-
-.info-block dt {
-  margin: 0;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-}
-
-.info-block dd {
-  margin: 0.15rem 0 0;
-  font-size: 0.9rem;
-  line-height: 1.35;
-}
-
-/* variante monoespaciada para filtros */
-.info-block .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    "Courier New", monospace;
-  font-size: 0.8rem;
-  background: #f9f5ff;
-  border-radius: 8px;
-  padding: 0.3rem 0.4rem;
-}
-
-/* cajita pastel del contenido */
-.pill-box {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  background: #f8f2ff;
-  border-radius: 10px;
-  padding: 0.35rem 0.5rem;
-}
-
-.pill-box .strong {
-  font-weight: 600;
-}
-
-.pill-box .hint {
-  font-size: 0.8rem;
-  color: #6b7280;
-}
-
-/* ajusta meta inferior para respirar mejor */
-.card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-}
-
-.meta-row {
-  margin-top: 0.25rem;
-  padding-top: 0.35rem;
-  border-top: 1px dashed rgba(176, 137, 104, 0.35);
-}
-
-.collection-card .thumb{
+.collection-card .thumb {
   width: 100%;
-  height: 140px;
+  height: 180px;
   border-radius: 14px;
   overflow: hidden;
-  margin: 10px 0 12px;
   background: #f3eee9;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.collection-card .thumb img{
+.collection-card .thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.collection-card .thumb.placeholder{
+.collection-card .thumb.placeholder {
   color: #7a6b5b;
   font-size: 13px;
 }
 
+/* ====== STRIP / CARRUSEL ====== */
+
 .thumb-strip {
   display: flex;
   gap: 8px;
-  margin-top: 10px;
   overflow-x: auto;
   padding-bottom: 4px;
 }
 
 .thumb-mini {
-  width: 44px;
-  height: 44px;
+  width: 52px;
+  height: 52px;
   object-fit: cover;
   border-radius: 10px;
   cursor: pointer;
   flex: 0 0 auto;
-  opacity: 0.95;
+  opacity: 0.9;
+  border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .thumb-mini:hover {
   opacity: 1;
+  transform: scale(1.03);
+}
+
+/* ====== RESPONSIVE ====== */
+
+@media (max-width: 720px) {
+  .collections-grid {
+    grid-template-columns: 1fr;
+  }
 }

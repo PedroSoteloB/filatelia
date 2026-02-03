@@ -115,7 +115,7 @@
           </div>
         </div>
 
-        <div class="thumb" [class.placeholder]="!getMainThumb(c)">
+        <!-- <div class="thumb" [class.placeholder]="!getMainThumb(c)">
           <img
             *ngIf="getMainThumb(c)"
             [src]="getMainThumb(c)!"
@@ -124,7 +124,32 @@
           />
           <span *ngIf="!getMainThumb(c)">Sin miniatura</span>
         
-          <!-- ✅ Carrusel simple (strip) -->
+      
+          <div class="thumb-strip" *ngIf="(c.thumbs?.length || 0) > 1">
+            <img
+              class="thumb-mini"
+              *ngFor="let t of (c.thumbs || []).slice(0, 8); trackBy: trackByThumb"
+              [src]="t"
+              alt="Thumb"
+              loading="lazy"
+              (error)="onThumbMiniError(c, t)"
+              (click)="setMainThumb(c, t)"
+            />
+          </div>
+        </div> -->
+        <div class="thumb-block">
+          <!-- Imagen principal -->
+          <div class="thumb" [class.placeholder]="!getMainThumb(c)">
+            <img
+              *ngIf="getMainThumb(c)"
+              [src]="getMainThumb(c)!"
+              alt="Miniatura"
+              (error)="onThumbError($event)"
+            />
+            <span *ngIf="!getMainThumb(c)">Sin miniatura</span>
+          </div>
+        
+          <!-- Carrusel abajo (ya no se corta) -->
           <div class="thumb-strip" *ngIf="(c.thumbs?.length || 0) > 1">
             <img
               class="thumb-mini"
