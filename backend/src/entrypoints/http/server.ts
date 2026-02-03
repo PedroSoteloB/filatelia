@@ -1484,9 +1484,36 @@ app.put('/collections/:id', { preHandler: authGuard }, async (req: any, reply: a
   } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
 });
 
+// app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+//     const [rows]: any = await db.execute(
+//       `SELECT id,
+//               name,
+//               description,
+//               type,
+//               filter_json,
+//               sort_key,
+//               sort_dir,
+//               created_at,
+//               updated_at,
+//               parent_collection_id,
+//               cover_image_path
+//          FROM collections
+//         WHERE owner_user_id = ?
+//           AND parent_collection_id IS NULL
+//         ORDER BY created_at DESC`,
+//       [ownerId]
+//     );
+//     reply.send(rows);
+//   } catch (e:any) {
+//     reply.code(500).send({ message: e?.message || 'internal_error' });
+//   }
+// });
 app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
+
     const [rows]: any = await db.execute(
       `SELECT id,
               name,
@@ -1505,8 +1532,19 @@ app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) 
         ORDER BY created_at DESC`,
       [ownerId]
     );
-    reply.send(rows);
-  } catch (e:any) {
+
+    // ✅ normalizar cover_image_path a URL pública/absoluta
+    const out = (rows || []).map((r: any) => {
+      const rel = toPublicUrl(r.cover_image_path);  // "/uploads/..."
+      const abs = toAbsoluteUrl(rel);               // "https://tu-api.../uploads/..."
+      return {
+        ...r,
+        thumb: abs || rel || null   // ✅ campo listo para el front
+      };
+    });
+
+    reply.send(out);
+  } catch (e: any) {
     reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });

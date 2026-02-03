@@ -498,3 +498,27 @@
   padding-top: 0.35rem;
   border-top: 1px dashed rgba(176, 137, 104, 0.35);
 }
+
+.collection-card .thumb{
+  width: 100%;
+  height: 140px;
+  border-radius: 14px;
+  overflow: hidden;
+  margin: 10px 0 12px;
+  background: #f3eee9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.collection-card .thumb img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.collection-card .thumb.placeholder{
+  color: #7a6b5b;
+  font-size: 13px;
+}
