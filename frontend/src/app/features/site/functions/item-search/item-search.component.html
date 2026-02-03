@@ -334,25 +334,43 @@
         </div>
         <button class="btn" (click)="search()">Reintentar</button>
       </div>
-
-      <!-- <div class="grid" *ngIf="results().length">
+<!-- 
+      <div class="grid" *ngIf="results().length">
         <article class="card" *ngFor="let it of results()">
-  
-        <div class="overlay" (click)="$event.preventDefault(); $event.stopPropagation()"></div>
-
-        
+      
+          <div class="overlay" (click)="$event.preventDefault(); $event.stopPropagation()"></div>
+      
           <div class="thumb" [class.placeholder]="!it.cover">
             <img *ngIf="it.cover" [src]="it.cover" alt="" />
             <span *ngIf="!it.cover">Sin imagen</span>
           </div>
+      
           <div class="body">
             <h3 class="title" [title]="it.title">{{ it.title }}</h3>
+      
             <div class="meta">
               <span *ngIf="it.country">{{ it.country }}</span>
               <span *ngIf="it.issueYear"> · {{ it.issueYear }}</span>
               <span class="muted"> · #{{ it.id }}</span>
             </div>
+      
+          
+            <div class="tags" *ngIf="it.tags?.length">
+              <span class="tag" *ngFor="let t of it.tags">
+                {{ t }}
+              </span>
+            </div>
+      
+          
+            <div class="attrs" *ngIf="it.attrs?.length">
+              <div class="attr" *ngFor="let a of it.attrs">
+                <span class="attr-name">{{ a.name }}:</span>
+                <span class="attr-value">{{ a.value }}</span>
+              </div>
+            </div>
+      
           </div>
+      
         </article>
       </div> -->
       <div class="grid" *ngIf="results().length">
@@ -374,18 +392,30 @@
               <span class="muted"> · #{{ it.id }}</span>
             </div>
       
-            <!-- ✅ TAGS -->
-            <div class="tags" *ngIf="it.tags?.length">
-              <span class="tag" *ngFor="let t of it.tags">
-                {{ t }}
-              </span>
+            <!-- ✅ TAGS estilo #Venezuela Castilla -->
+            <div class="tags-wrap" *ngIf="it.tags?.length">
+              <div class="section-label">Tags</div>
+              <div class="tags-elegant">
+                <span class="tag-elegant" *ngFor="let t of it.tags | slice:0:6">
+                  #{{ t }}
+                </span>
+                <span class="tag-elegant more" *ngIf="it.tags.length > 6">
+                  +{{ it.tags.length - 6 }}
+                </span>
+              </div>
             </div>
       
-            <!-- ✅ ATRIBUTOS -->
-            <div class="attrs" *ngIf="it.attrs?.length">
-              <div class="attr" *ngFor="let a of it.attrs">
-                <span class="attr-name">{{ a.name }}:</span>
-                <span class="attr-value">{{ a.value }}</span>
+            <!-- ✅ ATRIBUTOS (mismo lenguaje visual, tipo ficha) -->
+            <div class="attrs-wrap" *ngIf="it.attrs?.length">
+              <div class="section-label">Atributos</div>
+              <div class="attrs-elegant">
+                <div class="attr-elegant" *ngFor="let a of it.attrs | slice:0:4">
+                  <span class="attr-k">{{ a.name }}:</span>
+                  <span class="attr-v">{{ a.value }}</span>
+                </div>
+                <div class="attr-elegant more" *ngIf="it.attrs.length > 4">
+                  +{{ it.attrs.length - 4 }} más
+                </div>
               </div>
             </div>
       
@@ -393,6 +423,7 @@
       
         </article>
       </div>
+      
       
     </section>
   </div>
