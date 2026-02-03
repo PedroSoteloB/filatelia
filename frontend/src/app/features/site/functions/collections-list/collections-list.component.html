@@ -125,7 +125,7 @@
             *ngIf="c.thumb"
             [src]="c.thumb"
             alt="Miniatura"
-            (error)="($event.target as HTMLImageElement).style.display='none'"
+            (error)="onThumbError($event)"
           />
           <span *ngIf="!c.thumb">Sin miniatura</span>
         </div>

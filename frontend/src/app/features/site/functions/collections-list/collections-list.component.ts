@@ -325,4 +325,9 @@ export class CollectionsListComponent implements OnInit {
       this.busy.set(false);
     }
   }
+  onThumbError(ev: Event) {
+    const img = ev.target as HTMLImageElement | null;
+    if (img) img.style.display = 'none';
+  }
+  
 }
