@@ -675,6 +675,128 @@ reply.send(out);
 
 
 
+// app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+//     const q: any = req.query || {};
+//     const attrs = parseJsonSafely(q.attrs, undefined);
+
+//     const f = {
+//       q: q.q,
+//       country: q.country,
+//       condition: q.condition,
+//       yearFrom: q.yearFrom ? Number(q.yearFrom) : undefined,
+//       yearTo:   q.yearTo   ? Number(q.yearTo)   : undefined,
+//       tagIds: Array.isArray(q.tagIds) ? q.tagIds : (q.tagIds ? [q.tagIds] : []),
+//       tagNames: Array.isArray(q.tagNames) ? q.tagNames : (q.tagNames ? [q.tagNames] : []),
+//       tagsMode: q.tagsMode,
+//       attrs
+//     };
+
+//     const {
+//       where,
+//       params: whereParams,
+//       tagIds,
+//       tagNames,
+//       tagMode,
+//       attrFilters
+//     } = buildWhereFromFilter(ownerId, f);
+
+//     let join = '';
+//     const joinParams: any[] = [];
+
+//     if ((tagIds.length + tagNames.length) > 0) {
+//       let allTagIds = [...tagIds];
+
+//       if (tagNames.length) {
+//         const placeholders = tagNames.map(() => '?').join(',');
+//         const ownerFilter = await tagsOwnerWhere(ownerId);
+//         const [trs]: any = await db.execute(
+//           `SELECT id FROM tags WHERE ${ownerFilter.where} AND name IN (${placeholders})`,
+//           [...ownerFilter.params, ...tagNames]
+//         );
+//         allTagIds = allTagIds.concat(trs.map((r: any) => r.id));
+//       }
+
+//       const uniqueIds = Array.from(
+//         new Set(allTagIds.map(Number).filter(Number.isFinite))
+//       );
+
+//       if (uniqueIds.length) {
+//         if (tagMode === 'AND') {
+//           join += `
+//             JOIN (
+//               SELECT it.item_id
+//               FROM item_tags it
+//               WHERE it.tag_id IN (${uniqueIds.map(() => '?').join(',')})
+//               GROUP BY it.item_id
+//               HAVING COUNT(DISTINCT it.tag_id) = ${uniqueIds.length}
+//             ) tfilter ON tfilter.item_id = i.id`;
+//           joinParams.push(...uniqueIds);
+//         } else {
+//           join += `
+//             JOIN item_tags itf
+//               ON itf.item_id = i.id
+//              AND itf.tag_id IN (${uniqueIds.map(() => '?').join(',')})`;
+//           joinParams.push(...uniqueIds);
+//         }
+//       }
+//     }
+
+//     const { join: attrJoin, params: attrParams } = await buildAttrJoins(ownerId, attrFilters);
+//     join += attrJoin;
+//     joinParams.push(...attrParams);
+
+//     const offset =
+//       Number.isFinite(Number(q.offset)) && Number(q.offset) >= 0
+//         ? Number(q.offset)
+//         : 0;
+//     const limit =
+//       Number.isFinite(Number(q.limit)) && Number(q.limit) > 0
+//         ? Number(q.limit)
+//         : 20;
+
+//     const sql = `
+//       SELECT DISTINCT
+//         i.id,
+//         i.title,
+//         i.country,
+//         i.issue_year AS issueYear,
+//         i.created_at AS createdAt,
+//         (
+//           SELECT TOP 1 file_path
+//           FROM item_images
+//           WHERE item_id = i.id
+//           ORDER BY is_primary DESC, id ASC
+//         ) AS cover
+//       FROM philatelic_items i
+//       ${join}
+//       WHERE ${where.join(' AND ')}
+//       ORDER BY createdAt DESC
+//       OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
+
+//     const [rows]: any = await db.execute(sql, [...joinParams, ...whereParams]);
+
+//     // 🔹 normaliza la URL de cover
+//     const out = rows.map((r: any) => {
+//       const rel = toPublicUrl(r.cover);   // "/uploads/..."
+//       const abs = toAbsoluteUrl(rel);     // "https://filatelia-api.../uploads/..."
+//       return {
+//         ...r,
+//         cover: abs || rel,
+//       };
+//     });
+
+//     reply.send(out);
+//   } catch (e: any) {
+//     if (e.message === 'UNAUTHORIZED') {
+//       return reply.code(401).send({ message: 'unauthorized' });
+//     }
+//     reply.code(500).send({ message: e?.message || 'internal_error' });
+//   }
+// });
+
+
 app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -705,6 +827,7 @@ app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any)
     let join = '';
     const joinParams: any[] = [];
 
+    // ---------------- TAG FILTER (igual que ya lo tienes)
     if ((tagIds.length + tagNames.length) > 0) {
       let allTagIds = [...tagIds];
 
@@ -743,6 +866,7 @@ app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any)
       }
     }
 
+    // ---------------- ATTR FILTER JOIN (igual que ya lo tienes)
     const { join: attrJoin, params: attrParams } = await buildAttrJoins(ownerId, attrFilters);
     join += attrJoin;
     joinParams.push(...attrParams);
@@ -751,11 +875,13 @@ app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any)
       Number.isFinite(Number(q.offset)) && Number(q.offset) >= 0
         ? Number(q.offset)
         : 0;
+
     const limit =
       Number.isFinite(Number(q.limit)) && Number(q.limit) > 0
         ? Number(q.limit)
         : 20;
 
+    // ✅ AHORA: además de cover, devolvemos tags + attrs (como JSON)
     const sql = `
       SELECT DISTINCT
         i.id,
@@ -768,22 +894,70 @@ app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any)
           FROM item_images
           WHERE item_id = i.id
           ORDER BY is_primary DESC, id ASC
-        ) AS cover
+        ) AS cover,
+
+        -- ✅ TAGS del item (array JSON)
+        COALESCE(
+          (
+            SELECT
+              '[' + STRING_AGG('"' + REPLACE(t.name, '"', '\\"') + '"', ',') + ']'
+            FROM item_tags it
+            JOIN tags t ON t.id = it.tag_id
+            WHERE it.item_id = i.id
+          ),
+          '[]'
+        ) AS tagsJson,
+
+        -- ✅ ATRIBUTOS dinámicos del item (array JSON)
+        COALESCE(
+          (
+            SELECT
+              ad.name AS [name],
+              COALESCE(
+                ia.value_text,
+                CAST(ia.value_number AS VARCHAR(50)),
+                CONVERT(VARCHAR(10), ia.value_date, 23)
+              ) AS [value]
+            FROM item_attributes ia
+            JOIN attribute_definitions ad
+              ON ad.id = ia.attribute_id
+            WHERE ia.item_id = i.id
+            FOR JSON PATH
+          ),
+          '[]'
+        ) AS attrsJson
+
       FROM philatelic_items i
       ${join}
       WHERE ${where.join(' AND ')}
       ORDER BY createdAt DESC
-      OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
+      OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
+    `;
 
     const [rows]: any = await db.execute(sql, [...joinParams, ...whereParams]);
 
-    // 🔹 normaliza la URL de cover
+    // 🔹 normaliza cover + parsea JSON de tags/attrs
     const out = rows.map((r: any) => {
       const rel = toPublicUrl(r.cover);   // "/uploads/..."
       const abs = toAbsoluteUrl(rel);     // "https://filatelia-api.../uploads/..."
+
+      let tags: string[] = [];
+      let attrsOut: { name: string; value: string }[] = [];
+
+      try { tags = JSON.parse(r.tagsJson || '[]'); } catch {}
+      try { attrsOut = JSON.parse(r.attrsJson || '[]'); } catch {}
+
       return {
-        ...r,
+        id: r.id,
+        title: r.title,
+        country: r.country,
+        issueYear: r.issueYear,
+        createdAt: r.createdAt,
         cover: abs || rel,
+
+        // ✅ nuevos campos para el frontend
+        tags,
+        attrs: attrsOut
       };
     });
 
@@ -795,8 +969,6 @@ app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any)
     reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });
-
-
 
 
 app.get('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) => {

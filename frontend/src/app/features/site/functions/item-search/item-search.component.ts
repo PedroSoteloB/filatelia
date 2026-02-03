@@ -41,6 +41,8 @@ type ItemRow = {
   country?: string | null;
   issueYear?: number | null;
   cover?: string | null;
+  tags?: string[]; // ["Aves", "Peru", ...]
+  attrs?: { name: string; value: string }[]; // [{name:"Color", value:"Azul"}, ...]
 };
 
 // ==== Helpers JWT (roles y expiración) ====
@@ -466,7 +468,14 @@ export class ItemSearchComponent implements OnInit {
       const rows = await firstValueFrom(
         this.http.get<ItemRow[]>(`${API_BASE}/items/search`, { params })
       );
-      this.results.set(rows || []);
+      const safe = (rows || []).map(r => ({
+        ...r,
+        tags: r.tags ?? [],
+        attrs: r.attrs ?? []
+      }));
+      
+      this.results.set(safe);
+     // this.results.set(rows || []);
     } catch (e: any) {
       this.error.set(e?.message || 'Error en búsqueda');
     } finally {
@@ -591,57 +600,57 @@ export class ItemSearchComponent implements OnInit {
   // }
 
   async createStaticSnapshot(name: string, howMany: number) {
-    if (!this.requireAuthOrLogin()) return;
-  
-    const nm = (name || '').trim();
-    if (!nm) { this.error.set('Nombre requerido para SNAPSHOT'); return; }
-  
-    try {
-      this.busy.set(true);
-      this.error.set(null);
-  
-      const payload = {
-        name: nm,
-        description: 'snapshot estático de resultados (IDs referenciados)',
-        type: 'static',
-        filter_json: null,
-        sort_key: 'issue_year',
-        sort_dir: 'asc'
-      };
-  
-      // 1) Crear colección
-      const created: any = await firstValueFrom(
-        this.api.post('/collections', payload, this.authHeaders())
+  if (!this.requireAuthOrLogin()) return;
+
+  const nm = (name || '').trim();
+  if (!nm) { this.error.set('Nombre requerido para SNAPSHOT'); return; }
+
+  try {
+    this.busy.set(true);
+    this.error.set(null);
+
+    const payload = {
+      name: nm,
+      description: 'snapshot estático de resultados (IDs referenciados)',
+      type: 'static',
+      filter_json: null,
+      sort_key: 'issue_year',
+      sort_dir: 'asc'
+    };
+
+    // 1) Crear colección
+    const created: any = await firstValueFrom(
+      this.api.post('/collections', payload, this.authHeaders())
+    );
+
+    const collectionId = created?.id;
+    if (!collectionId) throw new Error('No se obtuvo id de la colección');
+
+    // 2) Asegurar resultados
+    if (!this.results().length) await this.search();
+
+    // 3) Vincular items
+    const items = this.results().slice(0, howMany);
+    for (const it of items) {
+      await firstValueFrom(
+        this.api.post(
+          `/collections/${collectionId}/items`,
+          { itemId: it.id },
+          this.authHeaders()
+        )
       );
-  
-      const collectionId = created?.id;
-      if (!collectionId) throw new Error('No se obtuvo id de la colección');
-  
-      // 2) Asegurar resultados
-      if (!this.results().length) await this.search();
-  
-      // 3) Vincular items
-      const items = this.results().slice(0, howMany);
-      for (const it of items) {
-        await firstValueFrom(
-          this.api.post(
-            `/collections/${collectionId}/items`,
-            { itemId: it.id },
-            this.authHeaders()
-          )
-        );
-      }
-  
-      // ✅ 4) Redirigir al listado de colecciones
-      this.router.navigateByUrl('/collections');
-  
-    } catch (e: any) {
-      this.error.set(e?.message || 'No se pudo crear el snapshot estático');
-    } finally {
-      this.busy.set(false);
     }
+
+    // ✅ 4) Redirigir al listado de colecciones
+    this.router.navigateByUrl('/collections');
+
+  } catch (e: any) {
+    this.error.set(e?.message || 'No se pudo crear el snapshot estático');
+  } finally {
+    this.busy.set(false);
   }
-  
+}
+
   // -------- util: serializar filtro actual
   private currentFilterJson() {
     const f: any = {};
