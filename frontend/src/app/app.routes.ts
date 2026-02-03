@@ -52,12 +52,6 @@ export const routes: Routes = [
         .then(m => m.MyItemsComponent)
   } ,
   {
-    path: 'items/:id', // ✅ AGREGA ESTO
-    loadComponent: () =>
-      import('./features/site/functions/item-details/item-details.component')
-        .then(m => m.ItemDetailsComponent)
-  },
-  {
     path: 'items/mine/:id',
     loadComponent: () =>
       import('./features/site/functions/item-details/item-details.component')
@@ -68,6 +62,12 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/site/functions/item-search/item-search.component')
         .then(m => m.ItemSearchComponent)
+  },
+  {
+    path: 'items/:id', // ✅ AGREGA ESTO
+    loadComponent: () =>
+      import('./features/site/functions/item-details/item-details.component')
+        .then(m => m.ItemDetailsComponent)
   },
   
   {
