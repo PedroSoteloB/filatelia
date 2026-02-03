@@ -352,7 +352,7 @@ export class CollectionsListComponent implements OnInit {
   
   // ✅ Convierte el filtro a "chips" tipo: Tag: Lote mundial, País: Perú, Año: 1980-1990, etc.
 filterChips(c: any): string[] {
-  const f = c?.filter || c?.smart_filter || c?.query || null; // ajusta según tu modelo real
+  const f = c?.filter_json ?? null;
   if (!f) return [];
 
   // Si ya viene como array de condiciones
