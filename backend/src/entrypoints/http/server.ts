@@ -1612,10 +1612,10 @@ app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) 
       // 2) fallback: calcular thumbs si no hay thumbs_json
       if (!thumbs.length) {
         if (String(r.type).toLowerCase() === 'static') {
-          // thumbs de items en collection_items
+          // ✅ FIX: QUITAR DISTINCT (porque tienes ORDER BY)
           const [trows]: any = await db.execute(
             `
-            SELECT DISTINCT TOP 6 img.file_path AS filePath
+            SELECT TOP 6 img.file_path AS filePath
               FROM collection_items ci
               JOIN philatelic_items i
                 ON i.id = ci.item_id
@@ -1640,7 +1640,9 @@ app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) 
             else if (typeof raw === 'string') f = JSON.parse(raw);
             else if (Buffer.isBuffer(raw)) f = JSON.parse(raw.toString('utf8'));
             else if (typeof raw === 'object') f = raw;
-          } catch { f = {}; }
+          } catch {
+            f = {};
+          }
 
           const built = buildWhereFromFilter(ownerId, f);
           const { where, params, tagIds, tagNames, tagMode, attrFilters } = built;
@@ -1662,7 +1664,9 @@ app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) 
               allTagIds = allTagIds.concat(trs.map((x: any) => x.id));
             }
 
-            const uniqueIds = Array.from(new Set(allTagIds.map(Number).filter(Number.isFinite)));
+            const uniqueIds = Array.from(
+              new Set(allTagIds.map(Number).filter(Number.isFinite))
+            );
 
             if (uniqueIds.length) {
               if (String(tagMode || 'OR').toUpperCase() === 'AND') {
@@ -1685,12 +1689,16 @@ app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) 
             }
           }
 
-          const { join: attrJoin, params: attrParams } = await buildAttrJoins(ownerId, attrFilters);
+          const { join: attrJoin, params: attrParams } = await buildAttrJoins(
+            ownerId,
+            attrFilters
+          );
           join += attrJoin;
           joinParams.push(...attrParams);
 
+          // ✅ FIX: QUITAR DISTINCT (porque tienes ORDER BY)
           const sqlThumbs = `
-            SELECT DISTINCT TOP 6
+            SELECT TOP 6
               (
                 SELECT TOP 1 file_path
                   FROM item_images
@@ -1713,13 +1721,13 @@ app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) 
 
       // (opcional) asegurar que cover esté dentro de thumbs al inicio
       if (coverAbs) {
-        thumbs = [coverAbs, ...thumbs.filter(u => u !== coverAbs)].slice(0, 12);
+        thumbs = [coverAbs, ...thumbs.filter((u) => u !== coverAbs)].slice(0, 12);
       }
 
       out.push({
         ...r,
-        cover_image_path: coverAbs,  // ✅ ya listo
-        thumbs,                      // ✅ carrusel
+        cover_image_path: coverAbs, // ✅ ya listo
+        thumbs, // ✅ carrusel
         thumb: coverAbs || (thumbs[0] || null), // ✅ compat/backward
       });
     }
