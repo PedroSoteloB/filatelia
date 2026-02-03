@@ -154,7 +154,10 @@
 .collection-card {
   background: #ffffff;
   border-radius: 16px;
-  padding: 0.85rem;
+
+  /* ✅ CAMBIO: más aire interno para que no se vea pegado */
+  padding: 1rem; /* antes 0.85rem */
+
   border: 1px solid #eee4dc;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
 
@@ -169,7 +172,10 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-bottom: 12px;
+
+  /* ✅ CAMBIO: más aire debajo del bloque imagen */
+  margin-bottom: 1.25rem; /* antes 12px */
+
   padding: 10px;
   border-radius: 16px;
   background: #fffdf9;
@@ -232,6 +238,9 @@
   align-items: center;
   min-height: 44px;
   gap: 0.5rem;
+
+  /* ✅ CAMBIO: separa título del bloque siguiente */
+  margin-bottom: 0.5rem;
 }
 
 .card-title-row .name {
@@ -263,7 +272,9 @@
 .card-actions-row {
   display: flex;
   gap: 0.45rem;
-  margin: 0.4rem 0;
+
+  /* ✅ CAMBIO: aire abajo para que no se pegue al body */
+  margin: 0.4rem 0 0.75rem; /* antes 0.4rem 0 */
 }
 
 /* ====== BODY ====== */
@@ -281,7 +292,10 @@
   display: flex;
   justify-content: space-between;
   margin-top: auto;
-  padding-top: 0.35rem;
+
+  /* ✅ CAMBIO: más aire arriba del footer */
+  padding-top: 0.75rem; /* antes 0.35rem */
+
   border-top: 1px dashed rgba(176, 137, 104, 0.35);
 }
 
