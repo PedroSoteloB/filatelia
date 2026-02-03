@@ -147,6 +147,9 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 0.9rem;
+
+  /* 🔑 clave: todas las cards a la misma altura */
+  align-items: stretch;
 }
 
 /* ====== TARJETA ====== */
@@ -157,9 +160,12 @@
   padding: 0.75rem 0.85rem 0.9rem;
   border: 1px solid #eee4dc;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+
+  /* 🔑 clave */
+  height: 100%;
 }
 
 /* ====== BLOQUE DE IMÁGENES ====== */
@@ -226,6 +232,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
+
+  /* 🔑 para que todas las cards calcen igual */
+  min-height: 44px;
 }
 
 .card-title-row .name {
@@ -234,6 +243,8 @@
   font-weight: 800;
   font-size: 1rem;
   line-height: 1.25;
+
+  /* 1 línea con ellipsis */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -269,6 +280,10 @@
   display: flex;
   gap: 0.45rem;
   justify-content: flex-end;
+
+  /* 🔑 para que todas las cards calcen igual */
+  min-height: 38px;
+
   margin-bottom: 0.25rem;
 }
 
@@ -278,6 +293,9 @@
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
+
+  /* 🔑 clave */
+  flex: 1 1 auto;
 }
 
 .tagline {
@@ -340,7 +358,10 @@
   display: flex;
   justify-content: space-between;
   gap: 0.5rem;
-  margin-top: 0.25rem;
+
+  /* 🔑 esto empuja el footer siempre abajo */
+  margin-top: auto;
+
   padding-top: 0.35rem;
   border-top: 1px dashed rgba(176, 137, 104, 0.35);
 }
