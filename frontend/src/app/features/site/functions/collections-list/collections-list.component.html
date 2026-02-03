@@ -90,7 +90,7 @@
     <section class="collections-grid" *ngIf="collections().length">
       <article class="collection-card" *ngFor="let c of collections()">
 
-        <!-- ✅ FOTO + CARRUSEL -->
+        <!-- ✅ FOTO + CARRUSEL (SIEMPRE RESERVA ESPACIO) -->
         <div class="thumb-block">
           <div class="thumb" [class.placeholder]="!getMainThumb(c)">
             <img
@@ -103,7 +103,11 @@
             <span *ngIf="!getMainThumb(c)">Sin miniatura</span>
           </div>
 
-          <div class="thumb-strip" *ngIf="(c.thumbs?.length || 0) > 1">
+          <!-- 🔑 SIEMPRE existe: si no hay thumbs, se oculta pero mantiene el alto -->
+          <div
+            class="thumb-strip"
+            [class.strip-empty]="(c.thumbs?.length || 0) <= 1">
+
             <img
               class="thumb-mini"
               *ngFor="let t of (c.thumbs || []).slice(0, 8); trackBy: trackByThumb"
@@ -158,7 +162,7 @@
             </div>
           </dl>
 
-          <!-- ✅ META (siempre abajo si tu SCSS usa margin-top:auto) -->
+          <!-- ✅ META -->
           <div class="meta-row">
             <div class="meta">
               <span class="muted small">Creado:</span>
