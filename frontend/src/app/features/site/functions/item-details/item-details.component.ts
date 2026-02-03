@@ -1932,4 +1932,12 @@ export class ItemDetailsComponent implements OnInit {
     }, 0);
   }
   
+  goBack() {
+    const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+    if (returnUrl) {
+      this.router.navigateByUrl(returnUrl);
+    } else {
+      this.router.navigateByUrl('/items/mine');
+    }
+  }
 }

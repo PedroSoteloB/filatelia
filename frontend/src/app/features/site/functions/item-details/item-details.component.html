@@ -176,7 +176,11 @@
 <!-- item-details.component.html (COMPLETO) -->
 <div class="item-details-page">
   <div class="details-inner">
-    <a routerLink="/items/mine" class="back-link"> ← Volver al listado </a>
+    <!-- <a routerLink="/items/mine" class="back-link"> ← Volver al listado </a> -->
+    <a (click)="goBack()" class="back-link" style="cursor:pointer">
+      ← Volver al listado
+    </a>
+    
 
     <ng-container *ngIf="busy(); else contentTpl">
       <div class="loading">Cargando detalles…</div>

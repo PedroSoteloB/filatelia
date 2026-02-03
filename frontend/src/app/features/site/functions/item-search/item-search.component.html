@@ -76,7 +76,7 @@
               (input)="onQChange($event)"
               (keydown.enter)="search()" />
           </div>
-          
+
           <div class="field">
             <label>País</label>
             <input
@@ -337,7 +337,13 @@
 
       <div class="grid" *ngIf="results().length">
         <article class="card" *ngFor="let it of results()">
-          <a class="overlay" [routerLink]="['/items', it.id]"></a>
+          <!-- <a class="overlay" [routerLink]="['/items', it.id]"></a> -->
+          <a
+          class="overlay"
+          [routerLink]="['/items', it.id]"
+          [queryParams]="{ returnUrl: router.url }">
+        </a>
+        
           <div class="thumb" [class.placeholder]="!it.cover">
             <img *ngIf="it.cover" [src]="it.cover" alt="" />
             <span *ngIf="!it.cover">Sin imagen</span>

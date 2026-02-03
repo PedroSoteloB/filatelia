@@ -539,16 +539,67 @@ export class ItemSearchComponent implements OnInit {
     this.createStaticSnapshot(name, howMany);
   }
 
+  // async createStaticSnapshot(name: string, howMany: number) {
+  //   if (!this.requireAuthOrLogin()) return;
+
+  //   const nm = (name || '').trim();
+  //   if (!nm) { this.error.set('Nombre requerido para SNAPSHOT'); return; }
+
+  //   try {
+  //     this.busy.set(true);
+  //     this.error.set(null);
+
+  //     const payload = {
+  //       name: nm,
+  //       description: 'snapshot estático de resultados (IDs referenciados)',
+  //       type: 'static',
+  //       filter_json: null,
+  //       sort_key: 'issue_year',
+  //       sort_dir: 'asc'
+  //     };
+
+  //     // 1) Crear colección (via ApiService)
+  //     const created: any = await firstValueFrom(
+  //       this.api.post(
+  //         '/collections',
+  //         payload,
+  //         this.authHeaders()
+  //       )
+  //     );
+  //     const collectionId = created?.id;
+  //     if (!collectionId) throw new Error('No se obtuvo id de la colección');
+
+  //     // 2) Asegurar resultados
+  //     if (!this.results().length) await this.search();
+
+  //     // 3) Vincular items
+  //     const items = this.results().slice(0, howMany);
+  //     for (const it of items) {
+  //       await firstValueFrom(
+  //         this.api.post(
+  //           `/collections/${collectionId}/items`,
+  //           { itemId: it.id },
+  //           this.authHeaders()
+  //         )
+  //       );
+  //     }
+  //   } catch (e: any) {
+  //     this.error.set(e?.message || 'No se pudo crear el snapshot estático');
+  //   } finally {
+  //     this.busy.set(false);
+  //   }
+  // }
+
   async createStaticSnapshot(name: string, howMany: number) {
     if (!this.requireAuthOrLogin()) return;
-
+  
     const nm = (name || '').trim();
     if (!nm) { this.error.set('Nombre requerido para SNAPSHOT'); return; }
-
+  
     try {
       this.busy.set(true);
       this.error.set(null);
-
+  
       const payload = {
         name: nm,
         description: 'snapshot estático de resultados (IDs referenciados)',
@@ -557,21 +608,18 @@ export class ItemSearchComponent implements OnInit {
         sort_key: 'issue_year',
         sort_dir: 'asc'
       };
-
-      // 1) Crear colección (via ApiService)
+  
+      // 1) Crear colección
       const created: any = await firstValueFrom(
-        this.api.post(
-          '/collections',
-          payload,
-          this.authHeaders()
-        )
+        this.api.post('/collections', payload, this.authHeaders())
       );
+  
       const collectionId = created?.id;
       if (!collectionId) throw new Error('No se obtuvo id de la colección');
-
+  
       // 2) Asegurar resultados
       if (!this.results().length) await this.search();
-
+  
       // 3) Vincular items
       const items = this.results().slice(0, howMany);
       for (const it of items) {
@@ -583,13 +631,17 @@ export class ItemSearchComponent implements OnInit {
           )
         );
       }
+  
+      // ✅ 4) Redirigir al listado de colecciones
+      this.router.navigateByUrl('/collections');
+  
     } catch (e: any) {
       this.error.set(e?.message || 'No se pudo crear el snapshot estático');
     } finally {
       this.busy.set(false);
     }
   }
-
+  
   // -------- util: serializar filtro actual
   private currentFilterJson() {
     const f: any = {};
