@@ -26,11 +26,8 @@ export type CollectionRow = {
   sort_dir: 'asc' | 'desc' | null;
   created_at: string;
   updated_at: string;
-    // ✅ NUEVO: viene del backend (SQL SELECT cover_image_path)
-    cover_image_path?: string | null;
-
-    // ✅ NUEVO: lo calculas en frontend para usarlo directo en el template
-    thumb?: string | null;
+  cover_image_path?: string | null; // viene del backend
+  thumb?: string | null;            // lo usamos en el template
 };
 
 // ==== Helpers JWT (roles y expiración) ====
@@ -191,22 +188,26 @@ export class CollectionsListComponent implements OnInit {
         )
       );
   
-      const normalized = (rows || []).map(row => {
-        // 🔹 normalizar filter_json
+      const normalized = (rows || []).map((row: any) => {
+        // ✅ 1) normalizar filter_json
         const parsedFilter = this.ensureParsedJson(row.filter_json);
   
-        // 🔹 normalizar miniatura
-        const rel = row.cover_image_path ?? null;
+        // ✅ 2) normalizar miniatura (soporta snake_case o camelCase)
+        const raw = (row.cover_image_path ?? row.coverImagePath ?? null) as string | null;
+        const rel = raw && raw.trim().length ? raw.trim() : null;
   
+        // ✅ 3) construir URL absoluta SOLO si es relativa
         const abs = rel
-          ? (rel.startsWith('http') ? rel : `${API_BASE}${rel}`)
+          ? (rel.startsWith('http')
+              ? rel
+              : `${API_BASE}${rel.startsWith('/') ? '' : '/'}${rel}`)
           : null;
   
         return {
           ...row,
           filter_json: parsedFilter,
           thumb: abs
-        };
+        } as CollectionRow;
       });
   
       this.collections.set(normalized);
@@ -221,6 +222,7 @@ export class CollectionsListComponent implements OnInit {
       this.busy.set(false);
     }
   }
+  
   
   /**
    * filter_json puede venir:
