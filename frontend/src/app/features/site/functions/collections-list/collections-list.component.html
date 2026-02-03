@@ -115,11 +115,21 @@
           </div>
         </div>
 
-        <!-- ✅ MINIATURA (AGREGADO) -->
-        <div class="thumb" [class.placeholder]="!c.thumb">
+        
+        <!-- <div class="thumb" [class.placeholder]="!c.thumb">
           <img *ngIf="c.thumb" [src]="c.thumb" alt="Miniatura" />
           <span *ngIf="!c.thumb">Sin miniatura</span>
+        </div> -->
+        <div class="thumb" [class.placeholder]="!c.thumb">
+          <img
+            *ngIf="c.thumb"
+            [src]="c.thumb"
+            alt="Miniatura"
+            (error)="($event.target as HTMLImageElement).style.display='none'"
+          />
+          <span *ngIf="!c.thumb">Sin miniatura</span>
         </div>
+        
 
         <div class="card-body">
           <!-- micro-texto arriba, cambia según tipo -->
