@@ -99,8 +99,8 @@
               class="type-badge"
               [class.smart]="c.type === 'smart'"
               [class.static]="c.type === 'static'">
-              <ng-container *ngIf="c.type === 'smart'">SMART DINÁMICA</ng-container>
-              <ng-container *ngIf="c.type === 'static'">SNAPSHOT ESTÁTICA</ng-container>
+              <!-- <ng-container *ngIf="c.type === 'smart'">SMART DINÁMICA</ng-container>
+              <ng-container *ngIf="c.type === 'static'">SNAPSHOT ESTÁTICA</ng-container> -->
             </div>
           </div>
 
@@ -178,7 +178,7 @@
             <div class="info-block">
               <dt>Descripción</dt>
               <dd>
-                {{ c.description || 'Snapshot estático de resultados (IDs referenciados).' }}
+                {{ c.description  }}
               </dd>
             </div>
 
@@ -189,7 +189,7 @@
               </dd>
             </div>
 
-            <div class="info-block" *ngIf="c.type === 'static'">
+            <!-- <div class="info-block" *ngIf="c.type === 'static'">
               <dt>Contenido</dt>
               <dd class="pill-box">
                 <span class="strong">Lista fija de ítems.</span>
@@ -197,17 +197,17 @@
                   Abre <b>“Ver detalle”</b> para revisar todas las piezas incluidas.
                 </span>
               </dd>
-            </div>
+            </div> -->
           </dl>
 
           <!-- meta inferior -->
           <div class="meta-row">
-            <div class="meta">
+            <!-- <div class="meta">
               <span class="muted small">Orden:</span>
               <span class="code small">
                 {{ c.sort_key || 'issue_year' }} / {{ c.sort_dir || 'asc' }}
               </span>
-            </div>
+            </div> -->
 
             <div class="meta">
               <span class="muted small">Creado:</span>
