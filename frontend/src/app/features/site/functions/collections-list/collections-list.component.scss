@@ -174,7 +174,13 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin: 10px 0 12px;
+
+  /* antes: margin 10px 0 12px */
+  margin: 10px 0 16px;     /* más aire abajo */
+  padding: 10px;           /* 🔑 aire interno */
+  border-radius: 16px;     /* opcional: look “tarjeta dentro de tarjeta” */
+  background: #fffdf9;     /* opcional: separa visualmente */
+  border: 1px solid rgba(176, 137, 104, 0.12); /* opcional */
 }
 
 .collection-card .thumb {
@@ -206,7 +212,10 @@
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 4px;
+
+  padding: 6px 2px 2px;  /* 🔑 aire arriba */
+  margin-top: 2px;
+  scroll-snap-type: x proximity; /* suave */
 }
 
 .thumb-mini {
@@ -216,8 +225,10 @@
   border-radius: 10px;
   cursor: pointer;
   flex: 0 0 auto;
-  opacity: 0.9;
+  opacity: 0.92;
   border: 1px solid rgba(0, 0, 0, 0.06);
+
+  scroll-snap-align: start;
 }
 
 .thumb-mini:hover {
@@ -233,8 +244,8 @@
   justify-content: space-between;
   gap: 0.6rem;
 
-  /* 🔑 para que todas las cards calcen igual */
   min-height: 44px;
+  margin-top: 2px;       /* 🔑 evita pegado con thumb-block */
 }
 
 .card-title-row .name {
@@ -281,10 +292,9 @@
   gap: 0.45rem;
   justify-content: flex-end;
 
-  /* 🔑 para que todas las cards calcen igual */
   min-height: 38px;
-
-  margin-bottom: 0.25rem;
+  margin-top: 6px;       /* 🔑 aire debajo del título */
+  margin-bottom: 4px;
 }
 
 /* ====== CUERPO ====== */
