@@ -1688,21 +1688,73 @@ app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, re
 });
 
 
+// app.post('/collections/:id/items', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+//     const colId = Number(req.params.id);
+//     const { itemId } = req.body || {};
+
+//     if (!Number.isFinite(colId) || !Number.isFinite(Number(itemId))) {
+//       return reply.code(400).send({ message: 'parámetros inválidos' });
+//     }
+
+//     // Colección (SQL Server: TOP 1 en vez de LIMIT 1)
+//     const [colRows]: any = await db.execute(
+//       'SELECT TOP 1 id, type FROM collections WHERE id = ? AND owner_user_id = ?',
+//       [colId, ownerId]
+//     );
+//     if (!colRows.length) {
+//       return reply.code(404).send({ message: 'collection_not_found' });
+//     }
+//     if (colRows[0].type !== 'static') {
+//       return reply.code(400).send({ message: 'solo para colecciones estáticas' });
+//     }
+
+//     // Item (también TOP 1)
+//     const [itemRows]: any = await db.execute(
+//       'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
+//       [itemId, ownerId]
+//     );
+//     if (!itemRows.length) {
+//       return reply.code(404).send({ message: 'item_not_found' });
+//     }
+
+//     // INSERT IGNORE versión SQL Server
+//     await db.execute(
+//       `INSERT INTO collection_items (collection_id, item_id)
+//        SELECT ?, ?
+//        WHERE NOT EXISTS (
+//          SELECT 1
+//            FROM collection_items
+//           WHERE collection_id = ? AND item_id = ?
+//        )`,
+//       [colId, itemId, colId, itemId]
+//     );
+
+//     return reply.send({ ok: true });
+//   } catch (e: any) {
+//     console.error('❌ POST /collections/:id/items error:', e);
+//     return reply.code(500).send({ message: e?.message || 'internal_error' });
+//   }
+// });
 app.post('/collections/:id/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
     const colId = Number(req.params.id);
     const { itemId } = req.body || {};
 
-    if (!Number.isFinite(colId) || !Number.isFinite(Number(itemId))) {
+    const itemIdNum = Number(itemId);
+
+    if (!Number.isFinite(colId) || !Number.isFinite(itemIdNum)) {
       return reply.code(400).send({ message: 'parámetros inválidos' });
     }
 
-    // Colección (SQL Server: TOP 1 en vez de LIMIT 1)
+    // 1) Colección: traer también cover_image_path
     const [colRows]: any = await db.execute(
-      'SELECT TOP 1 id, type FROM collections WHERE id = ? AND owner_user_id = ?',
+      'SELECT TOP 1 id, type, cover_image_path FROM collections WHERE id = ? AND owner_user_id = ?',
       [colId, ownerId]
     );
+
     if (!colRows.length) {
       return reply.code(404).send({ message: 'collection_not_found' });
     }
@@ -1710,16 +1762,16 @@ app.post('/collections/:id/items', { preHandler: authGuard }, async (req: any, r
       return reply.code(400).send({ message: 'solo para colecciones estáticas' });
     }
 
-    // Item (también TOP 1)
+    // 2) Item
     const [itemRows]: any = await db.execute(
       'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
-      [itemId, ownerId]
+      [itemIdNum, ownerId]
     );
     if (!itemRows.length) {
       return reply.code(404).send({ message: 'item_not_found' });
     }
 
-    // INSERT IGNORE versión SQL Server
+    // 3) Vincular (INSERT si no existe)
     await db.execute(
       `INSERT INTO collection_items (collection_id, item_id)
        SELECT ?, ?
@@ -1728,8 +1780,35 @@ app.post('/collections/:id/items', { preHandler: authGuard }, async (req: any, r
            FROM collection_items
           WHERE collection_id = ? AND item_id = ?
        )`,
-      [colId, itemId, colId, itemId]
+      [colId, itemIdNum, colId, itemIdNum]
     );
+
+    // 4) ✅ Si la colección no tiene miniatura, setearla desde la imagen del item
+    const currentCover = colRows[0]?.cover_image_path ?? null;
+
+    if (!currentCover) {
+      // buscar imagen del item (principal primero)
+      const [imgRows]: any = await db.execute(
+        `SELECT TOP 1 file_path
+           FROM item_images
+          WHERE item_id = ?
+          ORDER BY is_primary DESC, id ASC`,
+        [itemIdNum]
+      );
+
+      const coverPath = imgRows?.[0]?.file_path ?? null;
+
+      if (coverPath) {
+        await db.execute(
+          `UPDATE collections
+              SET cover_image_path = ?, updated_at = GETDATE()
+            WHERE id = ?
+              AND owner_user_id = ?
+              AND (cover_image_path IS NULL OR cover_image_path = '')`,
+          [coverPath, colId, ownerId]
+        );
+      }
+    }
 
     return reply.send({ ok: true });
   } catch (e: any) {
@@ -1737,6 +1816,7 @@ app.post('/collections/:id/items', { preHandler: authGuard }, async (req: any, r
     return reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });
+
 
 
 app.delete('/collections/:id/items/:itemId', { preHandler: authGuard }, async (req: any, reply: any) => {
