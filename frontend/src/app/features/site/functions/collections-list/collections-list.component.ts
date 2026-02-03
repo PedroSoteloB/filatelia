@@ -28,6 +28,7 @@ export type CollectionRow = {
   updated_at: string;
   cover_image_path?: string | null; // viene del backend
   thumb?: string | null;            // lo usamos en el template
+  thumbs?: string[];
 };
 
 // ==== Helpers JWT (roles y expiración) ====
