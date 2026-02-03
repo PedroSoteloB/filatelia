@@ -92,6 +92,7 @@
 
         <!-- ✅ FOTO + CARRUSEL (SIEMPRE RESERVA ESPACIO) -->
         <div class="thumb-block">
+          <!-- Imagen principal -->
           <div class="thumb" [class.placeholder]="!getMainThumb(c)">
             <img
               *ngIf="getMainThumb(c)"
@@ -103,11 +104,8 @@
             <span *ngIf="!getMainThumb(c)">Sin miniatura</span>
           </div>
 
-          <!-- 🔑 SIEMPRE existe: si no hay thumbs, se oculta pero mantiene el alto -->
-          <div
-            class="thumb-strip"
-            [class.strip-empty]="(c.thumbs?.length || 0) <= 1">
-
+          <!-- Carrusel: SIEMPRE existe, si no hay thumbs se oculta pero mantiene altura -->
+          <div class="thumb-strip" [class.strip-empty]="(c.thumbs?.length || 0) <= 1">
             <img
               class="thumb-mini"
               *ngFor="let t of (c.thumbs || []).slice(0, 8); trackBy: trackByThumb"
