@@ -330,4 +330,23 @@ export class CollectionsListComponent implements OnInit {
     if (img) img.style.display = 'none';
   }
   
+  getMainThumb(c: any): string | null {
+    return c?.thumb || (Array.isArray(c?.thumbs) && c.thumbs.length ? c.thumbs[0] : null);
+  }
+  
+  setMainThumb(c: any, url: string) {
+    if (!c) return;
+    c.thumb = url; // solo UI
+  }
+  
+  trackByThumb = (_: number, url: string) => url;
+  
+  onThumbMiniError(c: any, badUrl: string) {
+    // si una mini falla, la quitamos del array para no romper el strip
+    if (!c?.thumbs) return;
+    c.thumbs = (c.thumbs || []).filter((x: string) => x !== badUrl);
+    // si justo era la principal, recalcula
+    if (c.thumb === badUrl) c.thumb = this.getMainThumb(c);
+  }
+  
 }

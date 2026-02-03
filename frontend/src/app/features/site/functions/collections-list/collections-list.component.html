@@ -115,19 +115,27 @@
           </div>
         </div>
 
-        
-        <!-- <div class="thumb" [class.placeholder]="!c.thumb">
-          <img *ngIf="c.thumb" [src]="c.thumb" alt="Miniatura" />
-          <span *ngIf="!c.thumb">Sin miniatura</span>
-        </div> -->
-        <div class="thumb" [class.placeholder]="!c.thumb">
+        <div class="thumb" [class.placeholder]="!getMainThumb(c)">
           <img
-            *ngIf="c.thumb"
-            [src]="c.thumb"
+            *ngIf="getMainThumb(c)"
+            [src]="getMainThumb(c)!"
             alt="Miniatura"
             (error)="onThumbError($event)"
           />
-          <span *ngIf="!c.thumb">Sin miniatura</span>
+          <span *ngIf="!getMainThumb(c)">Sin miniatura</span>
+        
+          <!-- ✅ Carrusel simple (strip) -->
+          <div class="thumb-strip" *ngIf="(c.thumbs?.length || 0) > 1">
+            <img
+              class="thumb-mini"
+              *ngFor="let t of (c.thumbs || []).slice(0, 8); trackBy: trackByThumb"
+              [src]="t"
+              alt="Thumb"
+              loading="lazy"
+              (error)="onThumbMiniError(c, t)"
+              (click)="setMainThumb(c, t)"
+            />
+          </div>
         </div>
         
 

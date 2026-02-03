@@ -1424,6 +1424,29 @@ app.delete('/items/:id/attributes/:attributeId', { preHandler: authGuard }, asyn
 });
 
 // ------------------- COLLECTIONS -------------------
+function toAbsFromFsOrUrl(p?: string | null): string | null {
+  if (!p) return null;
+  // 1) si ya es URL, la devolvemos
+  if (/^https?:\/\//i.test(p)) return p;
+
+  // 2) si es path físico, lo pasamos a /uploads/...
+  const rel = toPublicUrl(p);          // "/uploads/xxx.png" o null
+  const abs = toAbsoluteUrl(rel);      // "https://API/uploads/xxx.png" o null
+  return abs || rel || null;
+}
+
+function parseThumbsJson(raw: any): string[] {
+  try {
+    const arr = typeof raw === 'string' ? JSON.parse(raw || '[]') : (raw || []);
+    return (Array.isArray(arr) ? arr : [])
+      .map((x: any) => x?.file_path ?? x?.filePath ?? x?.url ?? x)
+      .map((p: any) => (typeof p === 'string' ? toAbsFromFsOrUrl(p) : null))
+      .filter(Boolean) as string[];
+  } catch {
+    return [];
+  }
+}
+
 app.post('/collections', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -1510,38 +1533,196 @@ app.put('/collections/:id', { preHandler: authGuard }, async (req: any, reply: a
 //     reply.code(500).send({ message: e?.message || 'internal_error' });
 //   }
 // });
+
+// app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+
+//     const [rows]: any = await db.execute(
+//       `SELECT id,
+//               name,
+//               description,
+//               type,
+//               filter_json,
+//               sort_key,
+//               sort_dir,
+//               created_at,
+//               updated_at,
+//               parent_collection_id,
+//               cover_image_path
+//          FROM collections
+//         WHERE owner_user_id = ?
+//           AND parent_collection_id IS NULL
+//         ORDER BY created_at DESC`,
+//       [ownerId]
+//     );
+
+//     // ✅ normalizar cover_image_path a URL pública/absoluta
+//     const out = (rows || []).map((r: any) => {
+//       const rel = toPublicUrl(r.cover_image_path);  // "/uploads/..."
+//       const abs = toAbsoluteUrl(rel);               // "https://tu-api.../uploads/..."
+//       return {
+//         ...r,
+//         thumb: abs || rel || null   // ✅ campo listo para el front
+//       };
+//     });
+
+//     reply.send(out);
+//   } catch (e: any) {
+//     reply.code(500).send({ message: e?.message || 'internal_error' });
+//   }
+// });
 app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
 
+    // Intentamos traer thumbs_json si existiera (si no existe, no pasa nada)
+    const hasThumbsJson = await hasColumn('collections', 'thumbs_json');
+
     const [rows]: any = await db.execute(
-      `SELECT id,
-              name,
-              description,
-              type,
-              filter_json,
-              sort_key,
-              sort_dir,
-              created_at,
-              updated_at,
-              parent_collection_id,
-              cover_image_path
-         FROM collections
-        WHERE owner_user_id = ?
-          AND parent_collection_id IS NULL
-        ORDER BY created_at DESC`,
+      `
+      SELECT id,
+             name,
+             description,
+             type,
+             filter_json,
+             sort_key,
+             sort_dir,
+             created_at,
+             updated_at,
+             parent_collection_id,
+             cover_image_path
+             ${hasThumbsJson ? ', thumbs_json' : ''}
+        FROM collections
+       WHERE owner_user_id = ?
+         AND parent_collection_id IS NULL
+       ORDER BY created_at DESC
+      `,
       [ownerId]
     );
 
-    // ✅ normalizar cover_image_path a URL pública/absoluta
-    const out = (rows || []).map((r: any) => {
-      const rel = toPublicUrl(r.cover_image_path);  // "/uploads/..."
-      const abs = toAbsoluteUrl(rel);               // "https://tu-api.../uploads/..."
-      return {
+    const out: any[] = [];
+
+    for (const r of (rows || [])) {
+      const coverAbs = toAbsFromFsOrUrl(r.cover_image_path);
+
+      // 1) thumbs desde thumbs_json si existiera y estuviera lleno
+      let thumbs: string[] = hasThumbsJson ? parseThumbsJson(r.thumbs_json) : [];
+
+      // 2) fallback: calcular thumbs si no hay thumbs_json
+      if (!thumbs.length) {
+        if (String(r.type).toLowerCase() === 'static') {
+          // thumbs de items en collection_items
+          const [trows]: any = await db.execute(
+            `
+            SELECT DISTINCT TOP 6 img.file_path AS filePath
+              FROM collection_items ci
+              JOIN philatelic_items i
+                ON i.id = ci.item_id
+               AND i.owner_user_id = ?
+              JOIN item_images img
+                ON img.item_id = i.id
+             WHERE ci.collection_id = ?
+             ORDER BY img.is_primary DESC, img.id ASC
+            `,
+            [ownerId, r.id]
+          );
+
+          thumbs = (trows || [])
+            .map((x: any) => toAbsFromFsOrUrl(x.filePath))
+            .filter(Boolean) as string[];
+        } else {
+          // type = smart: usar filter_json y traer TOP 6 covers
+          let f: any = {};
+          try {
+            const raw = r.filter_json;
+            if (raw == null || raw === '') f = {};
+            else if (typeof raw === 'string') f = JSON.parse(raw);
+            else if (Buffer.isBuffer(raw)) f = JSON.parse(raw.toString('utf8'));
+            else if (typeof raw === 'object') f = raw;
+          } catch { f = {}; }
+
+          const built = buildWhereFromFilter(ownerId, f);
+          const { where, params, tagIds, tagNames, tagMode, attrFilters } = built;
+
+          let join = '';
+          const joinParams: any[] = [];
+
+          // reutiliza tu lógica de tags (pero en mini)
+          if ((tagIds.length + tagNames.length) > 0) {
+            let allTagIds = [...tagIds];
+
+            if (tagNames.length) {
+              const placeholders = tagNames.map(() => '?').join(',');
+              const ownerFilter = await tagsOwnerWhere(ownerId);
+              const [trs]: any = await db.execute(
+                `SELECT id FROM tags WHERE ${ownerFilter.where} AND name IN (${placeholders})`,
+                [...ownerFilter.params, ...tagNames]
+              );
+              allTagIds = allTagIds.concat(trs.map((x: any) => x.id));
+            }
+
+            const uniqueIds = Array.from(new Set(allTagIds.map(Number).filter(Number.isFinite)));
+
+            if (uniqueIds.length) {
+              if (String(tagMode || 'OR').toUpperCase() === 'AND') {
+                join += `
+                  JOIN (
+                    SELECT it.item_id
+                      FROM item_tags it
+                     WHERE it.tag_id IN (${uniqueIds.map(() => '?').join(',')})
+                     GROUP BY it.item_id
+                    HAVING COUNT(DISTINCT it.tag_id) = ${uniqueIds.length}
+                  ) tfilter ON tfilter.item_id = i.id`;
+                joinParams.push(...uniqueIds);
+              } else {
+                join += `
+                  JOIN item_tags itf
+                    ON itf.item_id = i.id
+                   AND itf.tag_id IN (${uniqueIds.map(() => '?').join(',')})`;
+                joinParams.push(...uniqueIds);
+              }
+            }
+          }
+
+          const { join: attrJoin, params: attrParams } = await buildAttrJoins(ownerId, attrFilters);
+          join += attrJoin;
+          joinParams.push(...attrParams);
+
+          const sqlThumbs = `
+            SELECT DISTINCT TOP 6
+              (
+                SELECT TOP 1 file_path
+                  FROM item_images
+                 WHERE item_id = i.id
+                 ORDER BY is_primary DESC, id ASC
+              ) AS cover
+            FROM philatelic_items i
+            ${join}
+            WHERE ${where.join(' AND ')}
+            ORDER BY i.${r.sort_key || 'issue_year'} ${String(r.sort_dir || 'asc').toUpperCase()}
+          `;
+
+          const [trows]: any = await db.execute(sqlThumbs, [...joinParams, ...params]);
+
+          thumbs = (trows || [])
+            .map((x: any) => toAbsFromFsOrUrl(x.cover))
+            .filter(Boolean) as string[];
+        }
+      }
+
+      // (opcional) asegurar que cover esté dentro de thumbs al inicio
+      if (coverAbs) {
+        thumbs = [coverAbs, ...thumbs.filter(u => u !== coverAbs)].slice(0, 12);
+      }
+
+      out.push({
         ...r,
-        thumb: abs || rel || null   // ✅ campo listo para el front
-      };
-    });
+        cover_image_path: coverAbs,  // ✅ ya listo
+        thumbs,                      // ✅ carrusel
+        thumb: coverAbs || (thumbs[0] || null), // ✅ compat/backward
+      });
+    }
 
     reply.send(out);
   } catch (e: any) {

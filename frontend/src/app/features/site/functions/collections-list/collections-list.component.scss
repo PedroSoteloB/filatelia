@@ -522,3 +522,25 @@
   color: #7a6b5b;
   font-size: 13px;
 }
+
+.thumb-strip {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.thumb-mini {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 10px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  opacity: 0.95;
+}
+
+.thumb-mini:hover {
+  opacity: 1;
+}
