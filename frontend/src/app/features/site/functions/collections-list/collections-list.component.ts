@@ -350,4 +350,73 @@ export class CollectionsListComponent implements OnInit {
     if (c.thumb === badUrl) c.thumb = this.getMainThumb(c);
   }
   
+  // ✅ Convierte el filtro a "chips" tipo: Tag: Lote mundial, País: Perú, Año: 1980-1990, etc.
+filterChips(c: any): string[] {
+  const f = c?.filter || c?.smart_filter || c?.query || null; // ajusta según tu modelo real
+  if (!f) return [];
+
+  // Si ya viene como array de condiciones
+  if (Array.isArray(f)) {
+    return f
+      .map((x: any) => this.formatChip(x))
+      .filter(Boolean)
+      .slice(0, 8);
+  }
+
+  // Si viene como objeto (por ejemplo { tags:[], attrs:{}, yearFrom, yearTo })
+  if (typeof f === 'object') {
+    const chips: string[] = [];
+
+    // tags
+    if (Array.isArray(f.tags) && f.tags.length) {
+      f.tags.slice(0, 4).forEach((t: any) => chips.push(`Tag: ${t}`));
+    }
+
+    // atributos (attrs)
+    if (f.attrs && typeof f.attrs === 'object') {
+      Object.entries(f.attrs).slice(0, 6).forEach(([k, v]) => {
+        if (v === null || v === undefined || v === '') return;
+        chips.push(`${this.prettyKey(k)}: ${String(v)}`);
+      });
+    }
+
+    // rangos comunes
+    if (f.yearFrom || f.yearTo) chips.push(`Año: ${f.yearFrom || '—'}–${f.yearTo || '—'}`);
+    if (f.country) chips.push(`País: ${f.country}`);
+
+    return chips.filter(Boolean).slice(0, 8);
+  }
+
+  // Si es string (por ejemplo tu previewFilter)
+  if (typeof f === 'string') {
+    // intenta separar por AND / ; / ,
+    return f
+      .split(/AND|;|,/i)
+      .map(s => s.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+  }
+
+  return [];
+}
+
+private formatChip(x: any): string {
+  // Ejemplos de estructuras: { field:'tag', op:'in', value:['a','b'] } o { key:'Pais', value:'Perú' }
+  const key = x?.field || x?.key || x?.name;
+  const op = x?.op || x?.operator;
+  const val = x?.value ?? x?.values ?? x?.val;
+
+  if (!key) return '';
+
+  if (Array.isArray(val)) return `${this.prettyKey(key)}: ${val.slice(0, 2).join(', ')}${val.length > 2 ? '…' : ''}`;
+  if (val === null || val === undefined || val === '') return `${this.prettyKey(key)}`;
+  return `${this.prettyKey(key)}: ${String(val)}`;
+}
+
+private prettyKey(k: string): string {
+  return String(k)
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, m => m.toUpperCase());
+}
+
 }
