@@ -155,28 +155,7 @@ export class CollectionsListComponent implements OnInit {
   /**
    * Llama GET /collections (protegido)
    */
-  // async loadCollections() {
-  //   try {
-  //     this.busy.set(true);
-  //     this.error.set(null);
 
-  //     const rows = await firstValueFrom(
-  //       this.http.get<CollectionRow[]>(`${API_BASE}/collections`, { headers: this.authHeaders() })
-  //     );
-
-  //     // Normalizar filter_json para que sea un objeto parseable en el front
-  //     const normalized = (rows || []).map(row => ({
-  //       ...row,
-  //       filter_json: this.ensureParsedJson(row.filter_json)
-  //     }));
-
-  //     this.collections.set(normalized);
-  //   } catch (e: any) {
-  //     this.error.set(e?.error?.message || e?.message || 'No se pudieron cargar las colecciones');
-  //   } finally {
-  //     this.busy.set(false);
-  //   }
-  // }
   async loadCollections() {
     try {
       this.busy.set(true);
@@ -351,54 +330,40 @@ export class CollectionsListComponent implements OnInit {
   }
   
   // ✅ Convierte el filtro a "chips" tipo: Tag: Lote mundial, País: Perú, Año: 1980-1990, etc.
-filterChips(c: any): string[] {
-  const f = c?.filter_json ?? null;
-  if (!f) return [];
-
-  // Si ya viene como array de condiciones
-  if (Array.isArray(f)) {
-    return f
-      .map((x: any) => this.formatChip(x))
-      .filter(Boolean)
-      .slice(0, 8);
-  }
-
-  // Si viene como objeto (por ejemplo { tags:[], attrs:{}, yearFrom, yearTo })
-  if (typeof f === 'object') {
+  filterChips(c: any): string[] {
+    const f = c?.filter_json ?? null;
+    if (!f || typeof f !== 'object') return [];
+  
     const chips: string[] = [];
-
-    // tags
-    if (Array.isArray(f.tags) && f.tags.length) {
-      f.tags.slice(0, 4).forEach((t: any) => chips.push(`Tag: ${t}`));
+  
+    // ✅ TAG IDS (según tu previewFilter)
+    if (Array.isArray(f.tagIds) && f.tagIds.length) {
+      f.tagIds.slice(0, 6).forEach((id: any) => chips.push(`TagId: ${id}`));
     }
-
-    // atributos (attrs)
-    if (f.attrs && typeof f.attrs === 'object') {
-      Object.entries(f.attrs).slice(0, 6).forEach(([k, v]) => {
-        if (v === null || v === undefined || v === '') return;
-        chips.push(`${this.prettyKey(k)}: ${String(v)}`);
+  
+    // ✅ ATTRS como ARRAY (según tu previewFilter)
+    if (Array.isArray(f.attrs) && f.attrs.length) {
+      f.attrs.slice(0, 6).forEach((a: any) => {
+        // soporta varios formatos comunes
+        const key = a?.key ?? a?.name ?? a?.attr ?? a?.field;
+        const val = a?.value ?? a?.val ?? a?.selected ?? a?.text;
+  
+        if (!key) return;
+        if (val === null || val === undefined || val === '') chips.push(`${this.prettyKey(key)}`);
+        else chips.push(`${this.prettyKey(key)}: ${String(val)}`);
       });
     }
-
-    // rangos comunes
-    if (f.yearFrom || f.yearTo) chips.push(`Año: ${f.yearFrom || '—'}–${f.yearTo || '—'}`);
+  
+    // ✅ country / yearFrom-yearTo (según tu previewFilter)
     if (f.country) chips.push(`País: ${f.country}`);
-
-    return chips.filter(Boolean).slice(0, 8);
+    if (f.yearFrom != null || f.yearTo != null) {
+      chips.push(`Año: ${f.yearFrom ?? '—'}–${f.yearTo ?? '—'}`);
+    }
+    if (f.condition) chips.push(`Condición: ${f.condition}`);
+  
+    return chips.slice(0, 8);
   }
-
-  // Si es string (por ejemplo tu previewFilter)
-  if (typeof f === 'string') {
-    // intenta separar por AND / ; / ,
-    return f
-      .split(/AND|;|,/i)
-      .map(s => s.trim())
-      .filter(Boolean)
-      .slice(0, 8);
-  }
-
-  return [];
-}
+  
 
 private formatChip(x: any): string {
   // Ejemplos de estructuras: { field:'tag', op:'in', value:['a','b'] } o { key:'Pais', value:'Perú' }
