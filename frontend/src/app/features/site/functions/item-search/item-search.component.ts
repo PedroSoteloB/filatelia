@@ -72,7 +72,7 @@ export class ItemSearchComponent implements OnInit {
   private router = inject(Router);
   private api    = inject(ApiService);
   countries = signal<string[]>([]);
-
+  conditions = signal<string[]>([]);
 
   constructor(@Inject(PLATFORM_ID) private platformId: Object) {}
 
@@ -188,11 +188,22 @@ export class ItemSearchComponent implements OnInit {
     ]);
   
     // 3) cargar países (solo si hay auth, porque endpoint es protegido)
+    // if (this.isAuth) {
+    //   await this.loadCountries();
+    // } else {
+    //   this.countries.set([]); // para que no muestre nada
+    // }
+
     if (this.isAuth) {
-      await this.loadCountries();
+      await Promise.all([
+        this.loadCountries(),
+        this.loadConditions()
+      ]);
     } else {
-      this.countries.set([]); // para que no muestre nada
+      this.countries.set([]);
+      this.conditions.set([]);
     }
+    
   }
   
 
@@ -609,5 +620,20 @@ export class ItemSearchComponent implements OnInit {
       console.warn('No se pudieron cargar países', e);
     }
   }
+
+  async loadConditions() {
+    if (!this.isBrowser) return;
+  
+    try {
+      const headers = this.authHeaders();
+      const list = await firstValueFrom(
+        this.http.get<string[]>(`${API_BASE}/items/conditions`, { headers })
+      );
+      this.conditions.set(list || []);
+    } catch (e: any) {
+      console.warn('No se pudieron cargar condiciones', e);
+    }
+  }
+  
   
 }

@@ -102,7 +102,7 @@
           </div>
           
 
-          <div class="field">
+          <!-- <div class="field">
             <label>Condición</label>
             <input
               type="text"
@@ -121,7 +121,26 @@
             <div class="muted small">
               Usa una condición válida. Si no aplica, déjalo vacío.
             </div>
+          </div> -->
+          <div class="field">
+            <label>Condición</label>
+            <input
+              type="text"
+              placeholder="MINT, USED, VF…"
+              list="conditionsList"
+              [value]="condition()"
+              (input)="onConditionChange($event)"
+              (keydown.enter)="search()" />
+          
+            <datalist id="conditionsList">
+              <option *ngFor="let c of conditions()" [value]="c"></option>
+            </datalist>
+          
+            <div class="muted small">
+              Selecciona una condición existente. Si no aplica, déjalo vacío.
+            </div>
           </div>
+          
 
           <div class="field">
             <label>Año desde</label>

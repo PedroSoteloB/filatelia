@@ -3367,6 +3367,27 @@ app.get('/items/countries', { preHandler: authGuard }, async (req:any, reply:any
 });
 
 
+app.get('/items/conditions', { preHandler: authGuard }, async (req: any, reply: any) => {
+  try {
+    const ownerId = ensureAuth(req);
+
+    const [rows]: any = await db.execute(
+      `SELECT DISTINCT condition_code
+       FROM philatelic_items
+       WHERE owner_user_id = ?
+         AND condition_code IS NOT NULL
+         AND LTRIM(RTRIM(condition_code)) <> ''
+       ORDER BY condition_code`,
+      [ownerId]
+    );
+
+    reply.send(rows.map((r: any) => r.condition_code));
+  } catch (e: any) {
+    reply.code(500).send({ message: e?.message || 'internal_error' });
+  }
+});
+
+
 //en azure
 const PORT = Number(process.env.PORT || 3000);
 const HOST = '0.0.0.0';
