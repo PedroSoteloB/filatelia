@@ -1,4 +1,5 @@
 <!-- src/app/features/site/landing/landing.component.html -->
+
 <header class="topbar">
   <div class="brand" (click)="goInicio()" style="cursor:pointer">
     <svg class="stamp" viewBox="0 0 120 120" aria-hidden="true">
@@ -22,7 +23,6 @@
   <nav class="actions">
     <a class="link" (click)="goInicio()">Inicio</a>
 
-    <!-- Versión autenticada -->
     <ng-container *ngIf="isAuth; else anon">
       <button class="btn" (click)="goUpload()">Nueva pieza</button>
       <button class="btn" (click)="goMyItems()">Mis ítems</button>
@@ -32,7 +32,6 @@
       <button class="btn light" (click)="logout()">Cerrar sesión</button>
     </ng-container>
 
-    <!-- Versión anónima -->
     <ng-template #anon>
       <a class="link" (click)="goLogin()">Iniciar sesión</a>
     </ng-template>
@@ -68,7 +67,7 @@
       Cargando colecciones…
     </div>
 
-    <!-- Resumen general -->
+    <!-- Resumen -->
     <section class="summary-panel" *ngIf="collections().length">
       <div class="stat">
         <div class="num">{{ collections().length }}</div>
@@ -91,54 +90,8 @@
     <section class="collections-grid" *ngIf="collections().length">
       <article class="collection-card" *ngFor="let c of collections()">
 
-        <div class="card-head">
-          <div class="left">
-            <div class="name" [title]="c.name">{{ c.name }}</div>
-
-            <div
-              class="type-badge"
-              [class.smart]="c.type === 'smart'"
-              [class.static]="c.type === 'static'">
-              <!-- <ng-container *ngIf="c.type === 'smart'">SMART DINÁMICA</ng-container>
-              <ng-container *ngIf="c.type === 'static'">SNAPSHOT ESTÁTICA</ng-container> -->
-            </div>
-          </div>
-
-          <div class="right actions">
-            <a class="btn tiny light" [routerLink]="buildDetailLink(c)">Ver detalle</a>
-            <button
-              class="btn tiny danger"
-              (click)="deleteCollection(c)"
-              [disabled]="busy()">
-              Eliminar
-            </button>
-          </div>
-        </div>
-
-        <!-- <div class="thumb" [class.placeholder]="!getMainThumb(c)">
-          <img
-            *ngIf="getMainThumb(c)"
-            [src]="getMainThumb(c)!"
-            alt="Miniatura"
-            (error)="onThumbError($event)"
-          />
-          <span *ngIf="!getMainThumb(c)">Sin miniatura</span>
-        
-      
-          <div class="thumb-strip" *ngIf="(c.thumbs?.length || 0) > 1">
-            <img
-              class="thumb-mini"
-              *ngFor="let t of (c.thumbs || []).slice(0, 8); trackBy: trackByThumb"
-              [src]="t"
-              alt="Thumb"
-              loading="lazy"
-              (error)="onThumbMiniError(c, t)"
-              (click)="setMainThumb(c, t)"
-            />
-          </div>
-        </div> -->
+        <!-- FOTO + CARRUSEL -->
         <div class="thumb-block">
-          <!-- Imagen principal -->
           <div class="thumb" [class.placeholder]="!getMainThumb(c)">
             <img
               *ngIf="getMainThumb(c)"
@@ -148,8 +101,7 @@
             />
             <span *ngIf="!getMainThumb(c)">Sin miniatura</span>
           </div>
-        
-          <!-- Carrusel abajo (ya no se corta) -->
+
           <div class="thumb-strip" *ngIf="(c.thumbs?.length || 0) > 1">
             <img
               class="thumb-mini"
@@ -162,53 +114,50 @@
             />
           </div>
         </div>
-        
 
-        <div class="card-body">
-          <!-- micro-texto arriba, cambia según tipo -->
-          <div class="tagline" *ngIf="c.type === 'smart'">
-            <span class="pill pill-smart">Se actualiza automáticamente según tus filtros.</span>
+        <!-- NOMBRE + BADGE -->
+        <div class="card-title-row">
+          <div class="name" [title]="c.name">{{ c.name }}</div>
+
+          <div
+            class="type-badge"
+            [class.smart]="c.type === 'smart'"
+            [class.static]="c.type === 'static'">
+            <ng-container *ngIf="c.type === 'smart'">SMART</ng-container>
+            <ng-container *ngIf="c.type === 'static'">SNAPSHOT</ng-container>
           </div>
-          <!-- <div class="tagline" *ngIf="c.type === 'static'">
-            <span class="pill pill-static">Foto fija de una búsqueda guardada.</span>
-          </div> -->
+        </div>
 
-          <!-- bloque de info principal -->
+        <!-- ACCIONES -->
+        <div class="card-actions-row">
+          <a class="btn tiny light" [routerLink]="buildDetailLink(c)">Ver detalle</a>
+          <button
+            class="btn tiny danger"
+            (click)="deleteCollection(c)"
+            [disabled]="busy()">
+            Eliminar
+          </button>
+        </div>
+
+        <!-- CONTENIDO -->
+        <div class="card-body">
+
+          <div class="tagline" *ngIf="c.type === 'smart'">
+            <span class="pill pill-smart">
+              Se actualiza automáticamente según tus filtros.
+            </span>
+          </div>
+
           <dl class="info">
-            <div class="info-block">
-              <dt>Descripción</dt>
-              <dd>
-                {{ c.description  }}
-              </dd>
-            </div>
-
             <div class="info-block" *ngIf="c.type === 'smart'">
               <dt>Filtro</dt>
               <dd class="mono">
                 {{ previewFilter(c) || 'Sin filtros visibles – revisa el detalle.' }}
               </dd>
             </div>
-
-            <!-- <div class="info-block" *ngIf="c.type === 'static'">
-              <dt>Contenido</dt>
-              <dd class="pill-box">
-                <span class="strong">Lista fija de ítems.</span>
-                <span class="hint">
-                  Abre <b>“Ver detalle”</b> para revisar todas las piezas incluidas.
-                </span>
-              </dd>
-            </div> -->
           </dl>
 
-          <!-- meta inferior -->
           <div class="meta-row">
-            <!-- <div class="meta">
-              <span class="muted small">Orden:</span>
-              <span class="code small">
-                {{ c.sort_key || 'issue_year' }} / {{ c.sort_dir || 'asc' }}
-              </span>
-            </div> -->
-
             <div class="meta">
               <span class="muted small">Creado:</span>
               <span class="small">{{ fmtDate(c.created_at) }}</span>
