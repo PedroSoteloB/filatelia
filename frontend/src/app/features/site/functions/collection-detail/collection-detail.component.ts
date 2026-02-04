@@ -678,6 +678,7 @@
 //   }
   
 // }
+
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -708,11 +709,11 @@ type SubFilter = {
   attrs?: any[];
 };
 
-// ====== Catálogos para UI tipo /items/search ======
+// ✅ Catálogos (pero ahora scoped a la colección)
 type TagDTO = { id: number; name: string };
 type AttrDefDTO = { id: number; name: string; attrType: 'text' | 'number' | 'date' | 'list' };
 
-// ====== Tipos seguros para builder de atributos ======
+// ✅ Tipos seguros para builder de atributos
 type AttrOp = '=' | 'like' | 'between';
 
 type AttrFilterBase = {
@@ -754,7 +755,8 @@ export class CollectionDetailComponent implements OnInit {
   collectionId = signal<number | null>(null);
   items = signal<CollectionItemRow[]>([]);
 
-  // ✅ Catálogos
+  // ✅ Catálogos (AHORA: filtrados por la colección)
+  // Países los derivamos de items() para que no aparezcan todos los del sistema.
   countries = signal<string[]>([]);
   allTags = signal<TagDTO[]>([]);
   allAttrDefs = signal<AttrDefDTO[]>([]);
@@ -770,7 +772,7 @@ export class CollectionDetailComponent implements OnInit {
     attrs: []
   };
 
-  // ✅ Tags igual que búsqueda (search + chips)
+  // ✅ Tags (search + chips)
   tagSearch = signal<string>('');
   selectedTagNames = signal<string[]>([]);
 
@@ -779,7 +781,7 @@ export class CollectionDetailComponent implements OnInit {
     const tags = this.allTags() || [];
     if (!term) return [];
     const out = tags
-      .filter(t => t.name.toLowerCase().includes(term))
+      .filter(t => (t.name || '').toLowerCase().includes(term))
       .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
     return out.slice(0, 60);
   });
@@ -805,10 +807,6 @@ export class CollectionDetailComponent implements OnInit {
     this.tagSearch.set('');
   }
 
-  setTagsMode(mode: 'OR' | 'AND') {
-    this.form.tagsMode = mode;
-  }
-
   // ==========================
   // ✅ Atributos dinámicos (draft UI)
   // ==========================
@@ -825,9 +823,8 @@ export class CollectionDetailComponent implements OnInit {
     return hit?.name ?? null;
   }
 
-  // Click "Añadir"
   onAddAttrClick() {
-    // ✅ FIX: asegurar número real (si viene string desde <select>)
+    // ✅ FIX: asegurar número real (por si el <select> te lo manda como string)
     const raw = this.attrDraftId as any;
     const id = typeof raw === 'string' ? Number(raw) : raw;
 
@@ -855,7 +852,6 @@ export class CollectionDetailComponent implements OnInit {
       ]);
     }
 
-    // limpia drafts (dejamos el id/op por si quiere seguir agregando)
     this.attrDraftValue = '';
     this.attrDraftFrom = '';
     this.attrDraftTo = '';
@@ -883,15 +879,14 @@ export class CollectionDetailComponent implements OnInit {
       return;
     }
 
-    // ✅ cargar catálogos para UI tipo búsqueda
-    await Promise.all([
-      this.loadCountries(),
-      this.loadTags(),
-      this.loadAttrDefs()
-    ]);
-
     this.collectionId.set(idNum);
-    await this.loadItems(idNum);
+
+    // ✅ Primero cargamos items (de ahí sacamos countries), y en paralelo tags/attrs scoped
+    await Promise.all([
+      this.loadItems(idNum),
+      this.loadTagsForCollection(idNum),
+      this.loadAttrDefsForCollection(idNum),
+    ]);
   }
 
   // ====== Auth headers ======
@@ -906,28 +901,13 @@ export class CollectionDetailComponent implements OnInit {
   }
 
   // =========================
-  // ✅ Cargar países/tags/attrs
+  // ✅ Cargar tags/attrs (SCOPED A LA COLECCIÓN)
   // =========================
-  async loadCountries() {
+  async loadTagsForCollection(colId: number) {
     try {
-      const list = await firstValueFrom(
-        this.http.get<string[]>(
-          `${API_BASE}/items/countries`,
-          { headers: this.authHeaders() }
-        )
-      );
-      this.countries.set(list || []);
-    } catch {
-      this.countries.set([]);
-    }
-  }
-
-  async loadTags() {
-    try {
-      // ✅ FIX: ahora con headers (por si /tags está protegido)
       const tags = await firstValueFrom(
         this.http.get<TagDTO[]>(
-          `${API_BASE}/tags`,
+          `${API_BASE}/collections/${colId}/tags`,
           { headers: this.authHeaders() }
         )
       );
@@ -937,12 +917,11 @@ export class CollectionDetailComponent implements OnInit {
     }
   }
 
-  async loadAttrDefs() {
+  async loadAttrDefsForCollection(colId: number) {
     try {
-      // ✅ FIX: ahora con headers (por si /attributes está protegido)
       const defs = await firstValueFrom(
         this.http.get<AttrDefDTO[]>(
-          `${API_BASE}/attributes`,
+          `${API_BASE}/collections/${colId}/attributes`,
           { headers: this.authHeaders() }
         )
       );
@@ -952,7 +931,22 @@ export class CollectionDetailComponent implements OnInit {
     }
   }
 
-  // --------- Carga base (sin filtros extra) ----------
+  // =========================
+  // ✅ Países SCOPED: derivado de los items de la colección (no global)
+  // =========================
+  private setCountriesFromItems(rows: CollectionItemRow[]) {
+    const uniq = Array.from(
+      new Set(
+        (rows || [])
+          .map(r => (r.country || '').trim())
+          .filter(x => !!x)
+      )
+    ).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+
+    this.countries.set(uniq);
+  }
+
+  // --------- Carga base ----------
   async loadItems(id: number) {
     try {
       this.busy.set(true);
@@ -965,7 +959,11 @@ export class CollectionDetailComponent implements OnInit {
         )
       );
 
-      this.items.set(rows || []);
+      const safeRows = rows || [];
+
+      this.items.set(safeRows);
+      this.setCountriesFromItems(safeRows);
+
       this.viewingSub = false;
       this.selectedIds.clear();
       this.coverCandidateId = null;
@@ -982,7 +980,14 @@ export class CollectionDetailComponent implements OnInit {
 
   async reloadBase() {
     const id = this.collectionId();
-    if (id) await this.loadItems(id);
+    if (!id) return;
+
+    await Promise.all([
+      this.loadItems(id),
+      // opcional: refrescar catálogos por si cambió la colección
+      this.loadTagsForCollection(id),
+      this.loadAttrDefsForCollection(id),
+    ]);
   }
 
   // --------- Sub-búsqueda dentro de la colección ----------
@@ -994,7 +999,6 @@ export class CollectionDetailComponent implements OnInit {
       this.busy.set(true);
       this.error.set(null);
 
-      // ✅ tags + attrs vienen del UI tipo búsqueda
       const tagNames = this.selectedTagNames();
       const af = this.attrFilters();
 
@@ -1044,6 +1048,10 @@ export class CollectionDetailComponent implements OnInit {
       this.viewingSub = true;
       this.selectedIds.clear();
       this.coverCandidateId = null;
+
+      // ✅ OJO: NO actualizamos countries acá,
+      // porque el selector de país debe ser “de la colección”, no “del resultado filtrado”.
+      // (si quisieras que cambie con la sub-búsqueda, aquí llamarías setCountriesFromItems)
     } catch (e: any) {
       this.error.set(
         e?.error?.message ||
@@ -1206,45 +1214,6 @@ export class CollectionDetailComponent implements OnInit {
 
       this.router.navigate(['/collections']);
     } catch (e: any) {
-      if (e?.status === 409 || /Duplicate entry/i.test(e?.error?.message || '')) {
-        try {
-          const id = this.collectionId()!;
-          const retryName = await this.uniqueCollectionName(
-            `Subconjunto de  ${id} (${this.selectedIds.size} items)`
-          );
-
-          const body = {
-            mode: 'snapshot',
-            name: retryName,
-            description: 'Creado desde sub-busqueda',
-            history: this.historyNote?.trim() || null,
-            selectedItemIds: Array.from(this.selectedIds),
-            coverItemId: this.coverCandidateId ?? Array.from(this.selectedIds)[0],
-          };
-
-          const resp2 = await firstValueFrom(
-            this.api.post<any>(
-              `/collections/${id}/derive`,
-              body,
-              this.authHeaders()
-            )
-          );
-
-          const childId2 = Number(resp2.id);
-          const presId2 = Number(resp2.presentationId || 0);
-
-          if (genPpt) {
-            const pid =
-              presId2 ||
-              (await this.findOrCreatePresentation(childId2, retryName));
-            await this.generatePptForPresentation(pid, { maxSlides: 15 });
-          }
-
-          this.router.navigate(['/collections']);
-          return;
-        } catch {}
-      }
-
       this.error.set(
         e?.error?.message ||
         e?.message ||
@@ -1363,4 +1332,3 @@ export class CollectionDetailComponent implements OnInit {
     return `${label} ${af.op} ${af.value}`;
   }
 }
-

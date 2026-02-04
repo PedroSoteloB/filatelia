@@ -32,7 +32,7 @@
           [(ngModel)]="form.q" />
       </div>
 
-      <!-- PAÍS (igual a búsqueda) -->
+      <!-- PAÍS (SCOPED A LA COLECCIÓN) -->
       <div class="field">
         <label>País</label>
         <input
@@ -43,6 +43,9 @@
         <datalist id="countryList">
           <option *ngFor="let c of countries()" [value]="c"></option>
         </datalist>
+        <div class="hint" *ngIf="!countries().length">
+          No se encontraron países en esta colección.
+        </div>
       </div>
 
       <div class="field">
@@ -64,38 +67,31 @@
       </div>
     </div>
 
-    <!-- TAGS -->
+    <!-- TAGS (SCOPED A LA COLECCIÓN) -->
     <div class="row row-2">
       <div class="field">
         <label>Tags</label>
 
-        <!-- buscador -->
         <input
           class="inp"
           placeholder="Escribe parte del tag…"
           [ngModel]="tagSearch()"
           (ngModelChange)="setTagSearch($event)" />
 
-        <!-- sugerencias (mejorado: muestra vacío si no hay match) -->
-        <div class="tag-suggest" *ngIf="tagSearch().trim().length">
-          <ng-container *ngIf="filteredTags().length; else noTagResults">
-            <button
-              type="button"
-              class="tag-suggest-item"
-              *ngFor="let t of filteredTags()"
-              (click)="onTagClick(t.name)">
-              {{ t.name }}
-            </button>
-          </ng-container>
-
-          <ng-template #noTagResults>
-            <div class="muted" style="padding: 8px 0;">
-              No se encontraron tags.
-            </div>
-          </ng-template>
+        <div class="hint" *ngIf="!allTags().length">
+          Esta colección no tiene tags asociados (o no hay coincidencias).
         </div>
 
-        <!-- chips -->
+        <div class="tag-suggest" *ngIf="filteredTags().length">
+          <button
+            type="button"
+            class="tag-suggest-item"
+            *ngFor="let t of filteredTags()"
+            (click)="onTagClick(t.name)">
+            {{ t.name }}
+          </button>
+        </div>
+
         <div class="tag-chips" *ngIf="selectedTagNames().length">
           <span class="chip" *ngFor="let n of selectedTagNames()">
             {{ n }}
@@ -122,64 +118,53 @@
       </div>
     </div>
 
-    <!-- ATRIBUTOS DINÁMICOS (MEJORADO) -->
+    <!-- ATRIBUTOS DINÁMICOS (SCOPED A LA COLECCIÓN) -->
     <div class="row row-3">
       <div class="field full">
         <label>Atributos dinámicos</label>
 
+        <div class="hint" *ngIf="!allAttrDefs().length">
+          Esta colección no tiene atributos dinámicos (o no hay coincidencias).
+        </div>
+
         <div class="attr-builder">
-          <!-- selector atributo (usa [ngValue] + disabled si aún no cargó /attributes) -->
-          <select class="inp" [(ngModel)]="attrDraftId" [disabled]="!allAttrDefs().length">
-            <option [ngValue]="null">
-              {{ allAttrDefs().length ? '— seleccionar —' : 'Cargando atributos…' }}
-            </option>
+          <select class="inp" [(ngModel)]="attrDraftId">
+            <option [ngValue]="null">— seleccionar —</option>
             <option *ngFor="let a of allAttrDefs()" [ngValue]="a.id">
               {{ a.name }}
             </option>
           </select>
 
-          <!-- operador -->
-          <select class="inp" [(ngModel)]="attrDraftOp" [disabled]="!allAttrDefs().length">
+          <select class="inp" [(ngModel)]="attrDraftOp">
             <option value="=">=</option>
             <option value="like">like</option>
             <option value="between">between</option>
           </select>
 
-          <!-- valor simple -->
           <input
             class="inp"
             placeholder="Valor…"
             *ngIf="attrDraftOp !== 'between'"
-            [(ngModel)]="attrDraftValue"
-            [disabled]="!allAttrDefs().length" />
+            [(ngModel)]="attrDraftValue" />
 
-          <!-- between -->
           <input
             class="inp"
             placeholder="Desde"
             *ngIf="attrDraftOp === 'between'"
-            [(ngModel)]="attrDraftFrom"
-            [disabled]="!allAttrDefs().length" />
+            [(ngModel)]="attrDraftFrom" />
 
           <input
             class="inp"
             placeholder="Hasta"
             *ngIf="attrDraftOp === 'between'"
-            [(ngModel)]="attrDraftTo"
-            [disabled]="!allAttrDefs().length" />
+            [(ngModel)]="attrDraftTo" />
 
           <button
             type="button"
             class="btn"
-            (click)="onAddAttrClick()"
-            [disabled]="!allAttrDefs().length">
+            (click)="onAddAttrClick()">
             Añadir
           </button>
-        </div>
-
-        <!-- mensaje cuando no hay atributos (opcional pero útil) -->
-        <div class="muted" style="padding-top: 6px;" *ngIf="allAttrDefs().length === 0">
-          No hay atributos disponibles (o aún están cargando).
         </div>
 
         <div class="attr-chips" *ngIf="attrFilters().length">
