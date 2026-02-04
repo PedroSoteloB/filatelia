@@ -88,7 +88,7 @@
 //       }))
 //     : [];
 
-//   // ✅ NUEVO: ordena para que primary salga primero (y luego el resto)
+//   // ✅ ordena para que primary salga primero (y luego el resto)
 //   images.sort((a, b) => Number(!!b.primary) - Number(!!a.primary));
 
 //   const hasCamel = Object.prototype.hasOwnProperty.call(raw, 'issueYear');
@@ -239,8 +239,67 @@
 //   @ViewChildren('tagInput') tagInputs!: QueryList<ElementRef<HTMLInputElement>>;
 //   @ViewChild('newTagInput') newTagInput?: ElementRef<HTMLInputElement>;
 
-//   // ✅ NUEVO: trackBy para imágenes (para ngFor)
+//   // trackBy para imágenes
 //   trackByImgId = (_: number, im: ImageRef) => im?.id ?? im?.file ?? _;
+
+//   /** ===== GALERÍA / CARRUSEL ===== */
+//   activeImageIndex = 0;
+
+//   getGalleryUrls(it: MyItem | null): string[] {
+//     if (!it) return [];
+//     const urls: string[] = [];
+
+//     if (it.cover) urls.push(it.cover);
+
+//     if (Array.isArray(it.images)) {
+//       for (const im of it.images) {
+//         if (im?.file) urls.push(im.file);
+//       }
+//     }
+
+//     return Array.from(new Set(urls));
+//   }
+
+//   goToImage(i: number) {
+//     this.activeImageIndex = i;
+
+//     // sincroniza cover con la imagen activa (para consistencia con UI)
+//     const current = this.item();
+//     const urls = this.getGalleryUrls(current);
+//     if (current && urls[i]) this.item.set({ ...current, cover: urls[i] });
+//   }
+
+//   prevImage(it: MyItem | null) {
+//     const urls = this.getGalleryUrls(it);
+//     if (urls.length <= 1) return;
+
+//     this.activeImageIndex = (this.activeImageIndex - 1 + urls.length) % urls.length;
+
+//     const current = this.item();
+//     if (current) this.item.set({ ...current, cover: urls[this.activeImageIndex] });
+//   }
+
+//   nextImage(it: MyItem | null) {
+//     const urls = this.getGalleryUrls(it);
+//     if (urls.length <= 1) return;
+
+//     this.activeImageIndex = (this.activeImageIndex + 1) % urls.length;
+
+//     const current = this.item();
+//     if (current) this.item.set({ ...current, cover: urls[this.activeImageIndex] });
+//   }
+
+//   // si quieres seguir usando setActiveImage en otros lados
+//   setActiveImage(img: ImageRef) {
+//     const current = this.item();
+//     if (!current || !img?.file) return;
+
+//     const urls = this.getGalleryUrls(current);
+//     const idx = urls.indexOf(img.file);
+
+//     this.item.set({ ...current, cover: img.file });
+//     if (idx >= 0) this.activeImageIndex = idx;
+//   }
 
 //   get draftValue(): ItemDraft {
 //     return (
@@ -320,12 +379,15 @@
 //         next: ({ base, tags, attrs }) => {
 //           const merged = { ...base, tags, attributes: attrs };
 
-//           // ✅ NUEVO: si por alguna razón cover vino null pero hay imágenes, setearla
+//           // si cover vino null pero hay imágenes, setearla
 //           if (!merged.cover) {
 //             merged.cover = pickCoverFromImages(merged.images, merged);
 //           }
 
 //           this.item.set(merged);
+
+//           // ✅ reset carrusel al cargar item nuevo
+//           this.activeImageIndex = 0;
 
 //           this.draftTagNames = normalizeTagNames(Array.isArray(tags) ? tags.map((t) => t.name) : []);
 //           this.tagsTouched = false;
@@ -408,7 +470,7 @@
 //     if (index < 0 || index >= this.draftTagNames.length) return;
 
 //     const arr = [...this.draftTagNames];
-//     arr[index] = newName; // ✅ NO normalizar aquí
+//     arr[index] = newName; // NO normalizar aquí
 //     this.draftTagNames = arr;
 
 //     this.tagsTouched = true;
@@ -427,7 +489,7 @@
 //     else this.focusNewTagInput();
 //   }
 
-//   /** ✅ SOLO RENOMBRAR TAGS EXISTENTES: PUT /tags/:id */
+//   /** SOLO RENOMBRAR TAGS EXISTENTES: PUT /tags/:id */
 //   private renameTagsOnly(itemId: number) {
 //     const it = this.item();
 //     const currentTags = Array.isArray(it?.tags) ? (it!.tags as ItemTag[]) : [];
@@ -499,7 +561,7 @@
 //           ...baseUpdated,
 //           tags: finalTags,
 //           attributes: it.attributes,
-//           images: it.images, // ✅ se mantiene (no se edita aquí)
+//           images: it.images,
 //           cover: it.cover ?? baseUpdated.cover,
 //         };
 
@@ -524,13 +586,6 @@
 //         this.saving.set(false);
 //       },
 //     });
-//   }
-
-//   // ✅ esto es lo que usa tu HTML para cambiar la imagen principal (cover)
-//   setActiveImage(img: ImageRef) {
-//     const current = this.item();
-//     if (!current || !img?.file) return;
-//     this.item.set({ ...current, cover: img.file });
 //   }
 
 //   goEdit(id: number) {
@@ -819,48 +874,50 @@ export class ItemDetailsComponent implements OnInit {
   /** ===== GALERÍA / CARRUSEL ===== */
   activeImageIndex = 0;
 
+  /**
+   * ✅ FIX: orden estable.
+   * - Primero images (ya vienen con primary primero por normalizeItem)
+   * - cover SOLO si no está dentro de images (caso raro)
+   * Así NO se reordena cuando cambias cover y no “salta” el carrusel.
+   */
   getGalleryUrls(it: MyItem | null): string[] {
     if (!it) return [];
+
     const urls: string[] = [];
 
-    if (it.cover) urls.push(it.cover);
-
+    // 1) Orden estable: primero imágenes
     if (Array.isArray(it.images)) {
       for (const im of it.images) {
         if (im?.file) urls.push(im.file);
       }
     }
 
-    return Array.from(new Set(urls));
+    const unique = Array.from(new Set(urls));
+
+    // 2) Si cover existe pero NO está en images, recién lo ponemos
+    if (it.cover && !unique.includes(it.cover)) unique.unshift(it.cover);
+
+    return unique;
   }
 
+  /**
+   * ✅ FIX: solo cambia el índice.
+   * (Opcional, pero recomendado para que jamás se “mueva” raro)
+   */
   goToImage(i: number) {
     this.activeImageIndex = i;
-
-    // sincroniza cover con la imagen activa (para consistencia con UI)
-    const current = this.item();
-    const urls = this.getGalleryUrls(current);
-    if (current && urls[i]) this.item.set({ ...current, cover: urls[i] });
   }
 
   prevImage(it: MyItem | null) {
     const urls = this.getGalleryUrls(it);
     if (urls.length <= 1) return;
-
     this.activeImageIndex = (this.activeImageIndex - 1 + urls.length) % urls.length;
-
-    const current = this.item();
-    if (current) this.item.set({ ...current, cover: urls[this.activeImageIndex] });
   }
 
   nextImage(it: MyItem | null) {
     const urls = this.getGalleryUrls(it);
     if (urls.length <= 1) return;
-
     this.activeImageIndex = (this.activeImageIndex + 1) % urls.length;
-
-    const current = this.item();
-    if (current) this.item.set({ ...current, cover: urls[this.activeImageIndex] });
   }
 
   // si quieres seguir usando setActiveImage en otros lados
@@ -870,8 +927,6 @@ export class ItemDetailsComponent implements OnInit {
 
     const urls = this.getGalleryUrls(current);
     const idx = urls.indexOf(img.file);
-
-    this.item.set({ ...current, cover: img.file });
     if (idx >= 0) this.activeImageIndex = idx;
   }
 
@@ -960,7 +1015,7 @@ export class ItemDetailsComponent implements OnInit {
 
           this.item.set(merged);
 
-          // ✅ reset carrusel al cargar item nuevo
+          // ✅ FIX: al cargar item nuevo, índice = 0
           this.activeImageIndex = 0;
 
           this.draftTagNames = normalizeTagNames(Array.isArray(tags) ? tags.map((t) => t.name) : []);
