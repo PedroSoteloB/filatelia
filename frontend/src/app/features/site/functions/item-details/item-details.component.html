@@ -100,33 +100,70 @@
               <!-- Columna izquierda: imagen -->
               <aside class="left-column">
                 <div class="image-card">
-                  <div class="image-inner">
-                    <img
-                      *ngIf="it.cover; else noCover"
-                      [src]="it.cover!"
-                      [alt]="it.title || 'Pieza filatélica'"
-                    />
-                    <ng-template #noCover>
-                      <div class="no-cover">Sin imagen</div>
-                    </ng-template>
-                  </div>
-
-                  <!-- ✅ NUEVO: THUMBNAILS (para ver/seleccionar TODAS las imágenes) -->
-                  <div class="thumbs" *ngIf="it.images?.length">
+                  <!-- ✅ GALERÍA / CARRUSEL (contenida, no rompe el layout) -->
+                  <div class="gallery" *ngIf="getGalleryUrls(it).length; else noCover">
                     <button
                       type="button"
-                      class="thumb"
-                      *ngFor="let im of it.images; trackBy: trackByImgId"
-                      (click)="setActiveImage(im)"
-                      [class.active]="im.file && it.cover === im.file"
-                      [disabled]="!im.file"
-                      aria-label="Seleccionar imagen"
-                      title="Seleccionar imagen"
+                      class="nav prev"
+                      (click)="prevImage(it)"
+                      [disabled]="getGalleryUrls(it).length <= 1"
+                      aria-label="Imagen anterior"
+                      title="Anterior"
                     >
-                      <img *ngIf="im.file" [src]="im.file" alt="Miniatura" />
-                      <span *ngIf="!im.file" class="thumb-empty">—</span>
+                      ‹
                     </button>
+
+                    <div class="stage">
+                      <img
+                        class="stage-img"
+                        [src]="getGalleryUrls(it)[activeImageIndex]"
+                        [alt]="it.title || 'Pieza filatélica'"
+                        loading="lazy"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      class="nav next"
+                      (click)="nextImage(it)"
+                      [disabled]="getGalleryUrls(it).length <= 1"
+                      aria-label="Imagen siguiente"
+                      title="Siguiente"
+                    >
+                      ›
+                    </button>
+
+                    <!-- Puntos -->
+                    <div class="dots" *ngIf="getGalleryUrls(it).length > 1">
+                      <button
+                        type="button"
+                        class="dot"
+                        *ngFor="let _ of getGalleryUrls(it); let i = index; trackBy: trackByIndex"
+                        [class.active]="i === activeImageIndex"
+                        (click)="goToImage(i)"
+                        aria-label="Ir a imagen"
+                      ></button>
+                    </div>
+
+                    <!-- Miniaturas -->
+                    <div class="thumbs" *ngIf="getGalleryUrls(it).length > 1">
+                      <button
+                        type="button"
+                        class="thumb"
+                        *ngFor="let url of getGalleryUrls(it); let i = index; trackBy: trackByIndex"
+                        (click)="goToImage(i)"
+                        [class.active]="i === activeImageIndex"
+                        aria-label="Seleccionar imagen"
+                        title="Seleccionar imagen"
+                      >
+                        <img [src]="url" alt="Miniatura" loading="lazy" />
+                      </button>
+                    </div>
                   </div>
+
+                  <ng-template #noCover>
+                    <div class="no-cover">Sin imagen</div>
+                  </ng-template>
 
                   <div class="image-caption">
                     <span class="badge">
@@ -139,28 +176,11 @@
                       {{ it.visibility === 'public' ? 'Público' : 'Privado' }}
                     </span>
 
-                    <!-- ✅ NUEVO: contador -->
-                    <span class="badge soft" *ngIf="it.images?.length">
-                      <!-- {{ it.images.length }} img -->
-                      {{ it.images?.length ?? 0 }} img
+                    <!-- Contador -->
+                    <span class="badge soft" *ngIf="getGalleryUrls(it).length">
+                      {{ getGalleryUrls(it).length }} img
                     </span>
                   </div>
-
-                  <!-- VISIBILIDAD (edit) -->
-                  <!--
-                  <div class="edit-block" *ngIf="isEditing()">
-                    <label class="field-label">Visibilidad</label>
-                    <select
-                      class="text-input"
-                      [ngModel]="draftValue.visibility"
-                      (ngModelChange)="patchDraft({ visibility: $event })"
-                      [disabled]="saving()"
-                    >
-                      <option value="public">Público</option>
-                      <option value="private">Privado</option>
-                    </select>
-                  </div>
-                  -->
                 </div>
               </aside>
 
@@ -328,23 +348,6 @@
                   <!-- EDIT -->
                   <ng-template #tagsEditTpl>
                     <form class="tags-edit-form" (submit)="addNewTagFromInput(); $event.preventDefault()">
-                      <!-- Agregar nuevo tag (texto) -->
-                      <!--
-                      <div class="inline-row">
-                        <input
-                          #newTagInput
-                          class="text-input"
-                          [ngModel]="newTagName"
-                          (ngModelChange)="newTagName = $event"
-                          name="newTagName"
-                          placeholder="Escribe un tag y Enter (ej: Personaje)"
-                          (keydown.enter)="addNewTagFromInput(); $event.preventDefault()"
-                          [disabled]="saving()"
-                          autocomplete="off"
-                        />
-                      </div>
-                      -->
-
                       <!-- Lista editable -->
                       <div class="tags-list" *ngIf="draftTagNames?.length; else noDraftTagsTpl">
                         <span

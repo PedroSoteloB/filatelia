@@ -88,6 +88,9 @@
 //       }))
 //     : [];
 
+//   // ✅ NUEVO: ordena para que primary salga primero (y luego el resto)
+//   images.sort((a, b) => Number(!!b.primary) - Number(!!a.primary));
+
 //   const hasCamel = Object.prototype.hasOwnProperty.call(raw, 'issueYear');
 //   if (hasCamel) {
 //     return {
@@ -236,6 +239,9 @@
 //   @ViewChildren('tagInput') tagInputs!: QueryList<ElementRef<HTMLInputElement>>;
 //   @ViewChild('newTagInput') newTagInput?: ElementRef<HTMLInputElement>;
 
+//   // ✅ NUEVO: trackBy para imágenes (para ngFor)
+//   trackByImgId = (_: number, im: ImageRef) => im?.id ?? im?.file ?? _;
+
 //   get draftValue(): ItemDraft {
 //     return (
 //       this.draft() ?? {
@@ -313,6 +319,12 @@
 //       .subscribe({
 //         next: ({ base, tags, attrs }) => {
 //           const merged = { ...base, tags, attributes: attrs };
+
+//           // ✅ NUEVO: si por alguna razón cover vino null pero hay imágenes, setearla
+//           if (!merged.cover) {
+//             merged.cover = pickCoverFromImages(merged.images, merged);
+//           }
+
 //           this.item.set(merged);
 
 //           this.draftTagNames = normalizeTagNames(Array.isArray(tags) ? tags.map((t) => t.name) : []);
@@ -372,8 +384,6 @@
 
 //   /** ===== TAGS helpers (solo renombrar) ===== */
 
-//   // ⚠️ Si tu regla es "solo renombrar", idealmente NO permitir agregar desde aquí.
-//   // Si quieres permitirlo, ya no es "solo renombrar" y se requiere backend /items/:id/tags.
 //   addNewTagFromInput() {
 //     const name = (this.newTagName ?? '').trim();
 //     if (!name) return;
@@ -393,18 +403,16 @@
 //   trackByIndex(index: number) {
 //     return index;
 //   }
-  
 
 //   renameDraftTagAt(index: number, newName: string) {
 //     if (index < 0 || index >= this.draftTagNames.length) return;
-  
+
 //     const arr = [...this.draftTagNames];
 //     arr[index] = newName; // ✅ NO normalizar aquí
 //     this.draftTagNames = arr;
-  
+
 //     this.tagsTouched = true;
 //   }
-  
 
 //   removeDraftTagAt(index: number) {
 //     const arr = [...this.draftTagNames];
@@ -425,22 +433,15 @@
 //     const currentTags = Array.isArray(it?.tags) ? (it!.tags as ItemTag[]) : [];
 //     const newNames = normalizeTagNames(this.draftTagNames);
 
-//     // Si cambió la cantidad, ya NO es renombrar (sería agregar/quitar)
 //     if (newNames.length !== currentTags.length) {
-//       throw new Error(
-//         'Solo se permite renombrar tags existentes. No se puede agregar/eliminar tags aquí.'
-//       );
+//       throw new Error('Solo se permite renombrar tags existentes. No se puede agregar/eliminar tags aquí.');
 //     }
 
 //     const calls = currentTags.map((t, idx) => {
 //       const newName = String(newNames[idx] ?? '').trim();
 //       if (!newName || newName === t.name) return of(null);
 
-//       return this.http.put<ItemTag>(
-//         `${API_BASE}/tags/${t.id}`,
-//         { name: newName },
-//         { headers: this.buildHeaders() }
-//       );
+//       return this.http.put<ItemTag>(`${API_BASE}/tags/${t.id}`, { name: newName }, { headers: this.buildHeaders() });
 //     });
 
 //     return forkJoin(calls); // (ItemTag | null)[]
@@ -454,7 +455,7 @@
 
 //     const cleaned = cleanDraft(d);
 //     cleaned.visibility = 'public';
-//    this.touched.add('visibility');
+//     this.touched.add('visibility');
 
 //     const effectiveTitle = (this.touched.has('title') ? cleaned.title : it.title) ?? '';
 //     if (!effectiveTitle.trim()) {
@@ -472,7 +473,6 @@
 //         ? this.http.put(`${API_BASE}/items/${id}`, payload, { headers: this.buildHeaders() })
 //         : of(null);
 
-//     // ✅ CAMBIO: antes era /items/:id/tags, ahora renombra con /tags/:id
 //     const saveTags$ = this.tagsTouched ? this.renameTagsOnly(id) : of(null);
 
 //     forkJoin({ itemRes: saveItem$, tagsRes: saveTags$ }).subscribe({
@@ -486,7 +486,6 @@
 //             throw new Error('No se pudo guardar tags (respuesta inválida).');
 //           }
 
-//           // tagsRes = (ItemTag | null)[]
 //           const updatedById = new Map<number, ItemTag>();
 //           for (const r of tagsRes as Array<ItemTag | null>) {
 //             if (r && typeof r.id === 'number') updatedById.set(r.id, r);
@@ -500,7 +499,7 @@
 //           ...baseUpdated,
 //           tags: finalTags,
 //           attributes: it.attributes,
-//           images: it.images,
+//           images: it.images, // ✅ se mantiene (no se edita aquí)
 //           cover: it.cover ?? baseUpdated.cover,
 //         };
 
@@ -527,6 +526,7 @@
 //     });
 //   }
 
+//   // ✅ esto es lo que usa tu HTML para cambiar la imagen principal (cover)
 //   setActiveImage(img: ImageRef) {
 //     const current = this.item();
 //     if (!current || !img?.file) return;
@@ -567,15 +567,11 @@
 //   selectAll(ev: Event) {
 //     const el = ev.target as HTMLInputElement | null;
 //     if (!el) return;
-//     // espera 0ms para que el focus termine de aplicarse
 //     setTimeout(() => {
 //       el.select();
 //     }, 0);
 //   }
-  
-
 // }
-
 import {
   Component,
   ViewEncapsulation,
@@ -666,7 +662,7 @@ function normalizeItem(raw: any): MyItem {
       }))
     : [];
 
-  // ✅ NUEVO: ordena para que primary salga primero (y luego el resto)
+  // ✅ ordena para que primary salga primero (y luego el resto)
   images.sort((a, b) => Number(!!b.primary) - Number(!!a.primary));
 
   const hasCamel = Object.prototype.hasOwnProperty.call(raw, 'issueYear');
@@ -817,8 +813,67 @@ export class ItemDetailsComponent implements OnInit {
   @ViewChildren('tagInput') tagInputs!: QueryList<ElementRef<HTMLInputElement>>;
   @ViewChild('newTagInput') newTagInput?: ElementRef<HTMLInputElement>;
 
-  // ✅ NUEVO: trackBy para imágenes (para ngFor)
+  // trackBy para imágenes
   trackByImgId = (_: number, im: ImageRef) => im?.id ?? im?.file ?? _;
+
+  /** ===== GALERÍA / CARRUSEL ===== */
+  activeImageIndex = 0;
+
+  getGalleryUrls(it: MyItem | null): string[] {
+    if (!it) return [];
+    const urls: string[] = [];
+
+    if (it.cover) urls.push(it.cover);
+
+    if (Array.isArray(it.images)) {
+      for (const im of it.images) {
+        if (im?.file) urls.push(im.file);
+      }
+    }
+
+    return Array.from(new Set(urls));
+  }
+
+  goToImage(i: number) {
+    this.activeImageIndex = i;
+
+    // sincroniza cover con la imagen activa (para consistencia con UI)
+    const current = this.item();
+    const urls = this.getGalleryUrls(current);
+    if (current && urls[i]) this.item.set({ ...current, cover: urls[i] });
+  }
+
+  prevImage(it: MyItem | null) {
+    const urls = this.getGalleryUrls(it);
+    if (urls.length <= 1) return;
+
+    this.activeImageIndex = (this.activeImageIndex - 1 + urls.length) % urls.length;
+
+    const current = this.item();
+    if (current) this.item.set({ ...current, cover: urls[this.activeImageIndex] });
+  }
+
+  nextImage(it: MyItem | null) {
+    const urls = this.getGalleryUrls(it);
+    if (urls.length <= 1) return;
+
+    this.activeImageIndex = (this.activeImageIndex + 1) % urls.length;
+
+    const current = this.item();
+    if (current) this.item.set({ ...current, cover: urls[this.activeImageIndex] });
+  }
+
+  // si quieres seguir usando setActiveImage en otros lados
+  setActiveImage(img: ImageRef) {
+    const current = this.item();
+    if (!current || !img?.file) return;
+
+    const urls = this.getGalleryUrls(current);
+    const idx = urls.indexOf(img.file);
+
+    this.item.set({ ...current, cover: img.file });
+    if (idx >= 0) this.activeImageIndex = idx;
+  }
 
   get draftValue(): ItemDraft {
     return (
@@ -898,12 +953,15 @@ export class ItemDetailsComponent implements OnInit {
         next: ({ base, tags, attrs }) => {
           const merged = { ...base, tags, attributes: attrs };
 
-          // ✅ NUEVO: si por alguna razón cover vino null pero hay imágenes, setearla
+          // si cover vino null pero hay imágenes, setearla
           if (!merged.cover) {
             merged.cover = pickCoverFromImages(merged.images, merged);
           }
 
           this.item.set(merged);
+
+          // ✅ reset carrusel al cargar item nuevo
+          this.activeImageIndex = 0;
 
           this.draftTagNames = normalizeTagNames(Array.isArray(tags) ? tags.map((t) => t.name) : []);
           this.tagsTouched = false;
@@ -986,7 +1044,7 @@ export class ItemDetailsComponent implements OnInit {
     if (index < 0 || index >= this.draftTagNames.length) return;
 
     const arr = [...this.draftTagNames];
-    arr[index] = newName; // ✅ NO normalizar aquí
+    arr[index] = newName; // NO normalizar aquí
     this.draftTagNames = arr;
 
     this.tagsTouched = true;
@@ -1005,7 +1063,7 @@ export class ItemDetailsComponent implements OnInit {
     else this.focusNewTagInput();
   }
 
-  /** ✅ SOLO RENOMBRAR TAGS EXISTENTES: PUT /tags/:id */
+  /** SOLO RENOMBRAR TAGS EXISTENTES: PUT /tags/:id */
   private renameTagsOnly(itemId: number) {
     const it = this.item();
     const currentTags = Array.isArray(it?.tags) ? (it!.tags as ItemTag[]) : [];
@@ -1077,7 +1135,7 @@ export class ItemDetailsComponent implements OnInit {
           ...baseUpdated,
           tags: finalTags,
           attributes: it.attributes,
-          images: it.images, // ✅ se mantiene (no se edita aquí)
+          images: it.images,
           cover: it.cover ?? baseUpdated.cover,
         };
 
@@ -1102,13 +1160,6 @@ export class ItemDetailsComponent implements OnInit {
         this.saving.set(false);
       },
     });
-  }
-
-  // ✅ esto es lo que usa tu HTML para cambiar la imagen principal (cover)
-  setActiveImage(img: ImageRef) {
-    const current = this.item();
-    if (!current || !img?.file) return;
-    this.item.set({ ...current, cover: img.file });
   }
 
   goEdit(id: number) {
