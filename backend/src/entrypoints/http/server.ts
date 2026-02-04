@@ -1507,200 +1507,6 @@ app.put('/collections/:id', { preHandler: authGuard }, async (req: any, reply: a
   } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
 });
 
-// app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) => {
-//   try {
-//     const ownerId = ensureAuth(req);
-//     const [rows]: any = await db.execute(
-//       `SELECT id,
-//               name,
-//               description,
-//               type,
-//               filter_json,
-//               sort_key,
-//               sort_dir,
-//               created_at,
-//               updated_at,
-//               parent_collection_id,
-//               cover_image_path
-//          FROM collections
-//         WHERE owner_user_id = ?
-//           AND parent_collection_id IS NULL
-//         ORDER BY created_at DESC`,
-//       [ownerId]
-//     );
-//     reply.send(rows);
-//   } catch (e:any) {
-//     reply.code(500).send({ message: e?.message || 'internal_error' });
-//   }
-// });
-
-
-// app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) => {
-//   try {
-//     const ownerId = ensureAuth(req);
-
-//     // Intentamos traer thumbs_json si existiera (si no existe, no pasa nada)
-//     const hasThumbsJson = await hasColumn('collections', 'thumbs_json');
-
-//     const [rows]: any = await db.execute(
-//       `
-//       SELECT id,
-//              name,
-//              description,
-//              type,
-//              filter_json,
-//              sort_key,
-//              sort_dir,
-//              created_at,
-//              updated_at,
-//              parent_collection_id,
-//              cover_image_path
-//              ${hasThumbsJson ? ', thumbs_json' : ''}
-//         FROM collections
-//        WHERE owner_user_id = ?
-//          AND parent_collection_id IS NULL
-//        ORDER BY created_at DESC
-//       `,
-//       [ownerId]
-//     );
-
-//     const out: any[] = [];
-
-//     for (const r of (rows || [])) {
-//       const coverAbs = toAbsFromFsOrUrl(r.cover_image_path);
-
-//       // 1) thumbs desde thumbs_json si existiera y estuviera lleno
-//       let thumbs: string[] = hasThumbsJson ? parseThumbsJson(r.thumbs_json) : [];
-
-//       // 2) fallback: calcular thumbs si no hay thumbs_json
-//       if (!thumbs.length) {
-//         if (String(r.type).toLowerCase() === 'static') {
-//           // ✅ FIX: QUITAR DISTINCT (porque tienes ORDER BY)
-//           const [trows]: any = await db.execute(
-//             `
-//             SELECT TOP 6 img.file_path AS filePath
-//               FROM collection_items ci
-//               JOIN philatelic_items i
-//                 ON i.id = ci.item_id
-//                AND i.owner_user_id = ?
-//               JOIN item_images img
-//                 ON img.item_id = i.id
-//              WHERE ci.collection_id = ?
-//              ORDER BY img.is_primary DESC, img.id ASC
-//             `,
-//             [ownerId, r.id]
-//           );
-
-//           thumbs = (trows || [])
-//             .map((x: any) => toAbsFromFsOrUrl(x.filePath))
-//             .filter(Boolean) as string[];
-//         } else {
-//           // type = smart: usar filter_json y traer TOP 6 covers
-//           let f: any = {};
-//           try {
-//             const raw = r.filter_json;
-//             if (raw == null || raw === '') f = {};
-//             else if (typeof raw === 'string') f = JSON.parse(raw);
-//             else if (Buffer.isBuffer(raw)) f = JSON.parse(raw.toString('utf8'));
-//             else if (typeof raw === 'object') f = raw;
-//           } catch {
-//             f = {};
-//           }
-
-//           const built = buildWhereFromFilter(ownerId, f);
-//           const { where, params, tagIds, tagNames, tagMode, attrFilters } = built;
-
-//           let join = '';
-//           const joinParams: any[] = [];
-
-//           // reutiliza tu lógica de tags (pero en mini)
-//           if ((tagIds.length + tagNames.length) > 0) {
-//             let allTagIds = [...tagIds];
-
-//             if (tagNames.length) {
-//               const placeholders = tagNames.map(() => '?').join(',');
-//               const ownerFilter = await tagsOwnerWhere(ownerId);
-//               const [trs]: any = await db.execute(
-//                 `SELECT id FROM tags WHERE ${ownerFilter.where} AND name IN (${placeholders})`,
-//                 [...ownerFilter.params, ...tagNames]
-//               );
-//               allTagIds = allTagIds.concat(trs.map((x: any) => x.id));
-//             }
-
-//             const uniqueIds = Array.from(
-//               new Set(allTagIds.map(Number).filter(Number.isFinite))
-//             );
-
-//             if (uniqueIds.length) {
-//               if (String(tagMode || 'OR').toUpperCase() === 'AND') {
-//                 join += `
-//                   JOIN (
-//                     SELECT it.item_id
-//                       FROM item_tags it
-//                      WHERE it.tag_id IN (${uniqueIds.map(() => '?').join(',')})
-//                      GROUP BY it.item_id
-//                     HAVING COUNT(DISTINCT it.tag_id) = ${uniqueIds.length}
-//                   ) tfilter ON tfilter.item_id = i.id`;
-//                 joinParams.push(...uniqueIds);
-//               } else {
-//                 join += `
-//                   JOIN item_tags itf
-//                     ON itf.item_id = i.id
-//                    AND itf.tag_id IN (${uniqueIds.map(() => '?').join(',')})`;
-//                 joinParams.push(...uniqueIds);
-//               }
-//             }
-//           }
-
-//           const { join: attrJoin, params: attrParams } = await buildAttrJoins(
-//             ownerId,
-//             attrFilters
-//           );
-//           join += attrJoin;
-//           joinParams.push(...attrParams);
-
-//           // ✅ FIX: QUITAR DISTINCT (porque tienes ORDER BY)
-//           const sqlThumbs = `
-//             SELECT TOP 6
-//               (
-//                 SELECT TOP 1 file_path
-//                   FROM item_images
-//                  WHERE item_id = i.id
-//                  ORDER BY is_primary DESC, id ASC
-//               ) AS cover
-//             FROM philatelic_items i
-//             ${join}
-//             WHERE ${where.join(' AND ')}
-//             ORDER BY i.${r.sort_key || 'issue_year'} ${String(r.sort_dir || 'asc').toUpperCase()}
-//           `;
-
-//           const [trows]: any = await db.execute(sqlThumbs, [...joinParams, ...params]);
-
-//           thumbs = (trows || [])
-//             .map((x: any) => toAbsFromFsOrUrl(x.cover))
-//             .filter(Boolean) as string[];
-//         }
-//       }
-
-//       // (opcional) asegurar que cover esté dentro de thumbs al inicio
-//       if (coverAbs) {
-//         thumbs = [coverAbs, ...thumbs.filter((u) => u !== coverAbs)].slice(0, 12);
-//       }
-
-//       out.push({
-//         ...r,
-//         cover_image_path: coverAbs, // ✅ ya listo
-//         thumbs, // ✅ carrusel
-//         thumb: coverAbs || (thumbs[0] || null), // ✅ compat/backward
-//       });
-//     }
-
-//     reply.send(out);
-//   } catch (e: any) {
-//     reply.code(500).send({ message: e?.message || 'internal_error' });
-//   }
-// });
-
 app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -2122,55 +1928,7 @@ app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, re
 });
 
 
-// app.post('/collections/:id/items', { preHandler: authGuard }, async (req: any, reply: any) => {
-//   try {
-//     const ownerId = ensureAuth(req);
-//     const colId = Number(req.params.id);
-//     const { itemId } = req.body || {};
 
-//     if (!Number.isFinite(colId) || !Number.isFinite(Number(itemId))) {
-//       return reply.code(400).send({ message: 'parámetros inválidos' });
-//     }
-
-//     // Colección (SQL Server: TOP 1 en vez de LIMIT 1)
-//     const [colRows]: any = await db.execute(
-//       'SELECT TOP 1 id, type FROM collections WHERE id = ? AND owner_user_id = ?',
-//       [colId, ownerId]
-//     );
-//     if (!colRows.length) {
-//       return reply.code(404).send({ message: 'collection_not_found' });
-//     }
-//     if (colRows[0].type !== 'static') {
-//       return reply.code(400).send({ message: 'solo para colecciones estáticas' });
-//     }
-
-//     // Item (también TOP 1)
-//     const [itemRows]: any = await db.execute(
-//       'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
-//       [itemId, ownerId]
-//     );
-//     if (!itemRows.length) {
-//       return reply.code(404).send({ message: 'item_not_found' });
-//     }
-
-//     // INSERT IGNORE versión SQL Server
-//     await db.execute(
-//       `INSERT INTO collection_items (collection_id, item_id)
-//        SELECT ?, ?
-//        WHERE NOT EXISTS (
-//          SELECT 1
-//            FROM collection_items
-//           WHERE collection_id = ? AND item_id = ?
-//        )`,
-//       [colId, itemId, colId, itemId]
-//     );
-
-//     return reply.send({ ok: true });
-//   } catch (e: any) {
-//     console.error('❌ POST /collections/:id/items error:', e);
-//     return reply.code(500).send({ message: e?.message || 'internal_error' });
-//   }
-// });
 app.post('/collections/:id/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -4111,6 +3869,239 @@ app.get('/items/conditions', { preHandler: authGuard }, async (req: any, reply: 
   }
 });
 
+
+app.get('/collections/:id/tags', { preHandler: authGuard }, async (req: any, reply: any) => {
+  try {
+    const ownerId = ensureAuth(req);
+    const colId = Number(req.params.id);
+    if (!Number.isFinite(colId)) return reply.code(400).send({ message: 'id inválido' });
+
+    const [crows]: any = await db.execute(
+      `SELECT TOP 1 id, type, filter_json
+         FROM collections
+        WHERE id = ? AND owner_user_id = ?`,
+      [colId, ownerId]
+    );
+    const col = crows?.[0];
+    if (!col) return reply.code(404).send({ message: 'collection_not_found' });
+
+    let join = '';
+    const params: any[] = [];
+
+    if (String(col.type).toLowerCase() === 'static') {
+      join = `
+        JOIN collection_items ci ON ci.item_id = i.id AND ci.collection_id = ?
+      `;
+      params.push(colId);
+    } else {
+      // SMART: usar tu filtro
+      let f: any = {};
+      try {
+        const raw = col.filter_json;
+        f = raw == null ? {} : (typeof raw === 'string' ? JSON.parse(raw) : (Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : raw));
+      } catch { f = {}; }
+
+      const built = buildWhereFromFilter(ownerId, f);
+      const { where, params: whereParams, tagIds, tagNames, tagMode, attrFilters } = built;
+
+      // join base por filtros (tags/attrs) usando TU lógica
+      let baseJoin = '';
+      const baseParams: any[] = [];
+
+      // tags filter (igual que en /collections/:id/items)
+      if ((tagIds.length + tagNames.length) > 0) {
+        let allTagIds = [...tagIds];
+
+        if (tagNames.length) {
+          const placeholders = tagNames.map(() => '?').join(',');
+          const ownerFilter = await tagsOwnerWhere(ownerId);
+          const [trs]: any = await db.execute(
+            `SELECT id FROM tags WHERE ${ownerFilter.where} AND name IN (${placeholders})`,
+            [...ownerFilter.params, ...tagNames]
+          );
+          allTagIds = allTagIds.concat(trs.map((r: any) => r.id));
+        }
+
+        const uniqueIds = Array.from(new Set(allTagIds.map(Number).filter(Number.isFinite)));
+        if (uniqueIds.length) {
+          if (String(tagMode || 'OR').toUpperCase() === 'AND') {
+            baseJoin += `
+              JOIN (
+                SELECT it.item_id
+                  FROM item_tags it
+                 WHERE it.tag_id IN (${uniqueIds.map(() => '?').join(',')})
+                 GROUP BY it.item_id
+                HAVING COUNT(DISTINCT it.tag_id) = ${uniqueIds.length}
+              ) tfilter ON tfilter.item_id = i.id
+            `;
+            baseParams.push(...uniqueIds);
+          } else {
+            baseJoin += `
+              JOIN item_tags itf
+                ON itf.item_id = i.id
+               AND itf.tag_id IN (${uniqueIds.map(() => '?').join(',')})
+            `;
+            baseParams.push(...uniqueIds);
+          }
+        }
+      }
+
+      const { join: attrJoin, params: attrParams } = await buildAttrJoins(ownerId, attrFilters);
+      baseJoin += attrJoin;
+      baseParams.push(...attrParams);
+
+      join = `
+        ${baseJoin}
+      `;
+
+      // en SMART necesitamos filtrar items por where
+      // lo haremos metiendo where en el query final
+      // entonces guardamos where+params para abajo
+      // (los pasamos por params al final)
+      // 👇
+      (req as any).__smartWhere = where;
+      (req as any).__smartWhereParams = whereParams;
+      params.push(...baseParams);
+    }
+
+    // owner scope en tags (si existe la columna)
+    const ownerFilter = await tagsOwnerWhere(ownerId);
+
+    const smartWhere: string[] = (req as any).__smartWhere || [];
+    const smartWhereParams: any[] = (req as any).__smartWhereParams || [];
+
+    const sql = `
+      SELECT DISTINCT t.id, t.name
+      FROM philatelic_items i
+      ${join}
+      JOIN item_tags it ON it.item_id = i.id
+      JOIN tags t ON t.id = it.tag_id
+      WHERE i.owner_user_id = ?
+        AND ${ownerFilter.where}
+        ${smartWhere.length ? `AND ${smartWhere.join(' AND ')}` : ''}
+      ORDER BY t.name ASC
+    `;
+
+    const allParams = [ownerId, ...ownerFilter.params, ...params, ...smartWhereParams];
+
+    const [rows]: any = await db.execute(sql, allParams);
+    return reply.send(rows || []);
+  } catch (e: any) {
+    return reply.code(500).send({ message: e?.message || 'internal_error' });
+  }
+});
+
+app.get('/collections/:id/attributes', { preHandler: authGuard }, async (req: any, reply: any) => {
+  try {
+    const ownerId = ensureAuth(req);
+    const colId = Number(req.params.id);
+    if (!Number.isFinite(colId)) return reply.code(400).send({ message: 'id inválido' });
+
+    const [crows]: any = await db.execute(
+      `SELECT TOP 1 id, type, filter_json
+         FROM collections
+        WHERE id = ? AND owner_user_id = ?`,
+      [colId, ownerId]
+    );
+    const col = crows?.[0];
+    if (!col) return reply.code(404).send({ message: 'collection_not_found' });
+
+    let join = '';
+    const params: any[] = [];
+
+    if (String(col.type).toLowerCase() === 'static') {
+      join = `JOIN collection_items ci ON ci.item_id = i.id AND ci.collection_id = ?`;
+      params.push(colId);
+    } else {
+      let f: any = {};
+      try {
+        const raw = col.filter_json;
+        f = raw == null ? {} : (typeof raw === 'string' ? JSON.parse(raw) : (Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : raw));
+      } catch { f = {}; }
+
+      const built = buildWhereFromFilter(ownerId, f);
+      const { where, params: whereParams, tagIds, tagNames, tagMode, attrFilters } = built;
+
+      let baseJoin = '';
+      const baseParams: any[] = [];
+
+      // tags filter (copiado de tu lógica)
+      if ((tagIds.length + tagNames.length) > 0) {
+        let allTagIds = [...tagIds];
+
+        if (tagNames.length) {
+          const placeholders = tagNames.map(() => '?').join(',');
+          const ownerFilter = await tagsOwnerWhere(ownerId);
+          const [trs]: any = await db.execute(
+            `SELECT id FROM tags WHERE ${ownerFilter.where} AND name IN (${placeholders})`,
+            [...ownerFilter.params, ...tagNames]
+          );
+          allTagIds = allTagIds.concat(trs.map((r: any) => r.id));
+        }
+
+        const uniqueIds = Array.from(new Set(allTagIds.map(Number).filter(Number.isFinite)));
+        if (uniqueIds.length) {
+          if (String(tagMode || 'OR').toUpperCase() === 'AND') {
+            baseJoin += `
+              JOIN (
+                SELECT it.item_id
+                  FROM item_tags it
+                 WHERE it.tag_id IN (${uniqueIds.map(() => '?').join(',')})
+                 GROUP BY it.item_id
+                HAVING COUNT(DISTINCT it.tag_id) = ${uniqueIds.length}
+              ) tfilter ON tfilter.item_id = i.id
+            `;
+            baseParams.push(...uniqueIds);
+          } else {
+            baseJoin += `
+              JOIN item_tags itf
+                ON itf.item_id = i.id
+               AND itf.tag_id IN (${uniqueIds.map(() => '?').join(',')})
+            `;
+            baseParams.push(...uniqueIds);
+          }
+        }
+      }
+
+      const { join: aj, params: ap } = await buildAttrJoins(ownerId, attrFilters);
+      baseJoin += aj;
+      baseParams.push(...ap);
+
+      join = `${baseJoin}`;
+
+      (req as any).__smartWhere = where;
+      (req as any).__smartWhereParams = whereParams;
+      params.push(...baseParams);
+    }
+
+    const smartWhere: string[] = (req as any).__smartWhere || [];
+    const smartWhereParams: any[] = (req as any).__smartWhereParams || [];
+
+    const sql = `
+      SELECT DISTINCT
+        ad.id,
+        ad.name,
+        ad.attr_type AS attrType,
+        ad.options_json AS optionsJson,
+        ad.created_at AS createdAt
+      FROM philatelic_items i
+      ${join}
+      JOIN item_attributes ia ON ia.item_id = i.id
+      JOIN attribute_definitions ad ON ad.id = ia.attribute_id
+      WHERE i.owner_user_id = ?
+        AND ad.owner_user_id = ?
+        ${smartWhere.length ? `AND ${smartWhere.join(' AND ')}` : ''}
+      ORDER BY ad.name ASC
+    `;
+
+    const allParams = [ownerId, ownerId, ...params, ...smartWhereParams];
+
+    const [rows]: any = await db.execute(sql, allParams);
+    return reply.send(rows || []);
+  } catch (e: any) {
+    return reply.code(500).send({ message: e?.message || 'internal_error' });
+  }
+});
 
 //en azure
 const PORT = Number(process.env.PORT || 3000);

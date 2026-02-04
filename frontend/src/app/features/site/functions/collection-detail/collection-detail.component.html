@@ -76,15 +76,23 @@
           [ngModel]="tagSearch()"
           (ngModelChange)="setTagSearch($event)" />
 
-        <!-- sugerencias -->
-        <div class="tag-suggest" *ngIf="filteredTags().length">
-          <button
-            type="button"
-            class="tag-suggest-item"
-            *ngFor="let t of filteredTags()"
-            (click)="onTagClick(t.name)">
-            {{ t.name }}
-          </button>
+        <!-- sugerencias (mejorado: muestra vacío si no hay match) -->
+        <div class="tag-suggest" *ngIf="tagSearch().trim().length">
+          <ng-container *ngIf="filteredTags().length; else noTagResults">
+            <button
+              type="button"
+              class="tag-suggest-item"
+              *ngFor="let t of filteredTags()"
+              (click)="onTagClick(t.name)">
+              {{ t.name }}
+            </button>
+          </ng-container>
+
+          <ng-template #noTagResults>
+            <div class="muted" style="padding: 8px 0;">
+              No se encontraron tags.
+            </div>
+          </ng-template>
         </div>
 
         <!-- chips -->
@@ -114,22 +122,24 @@
       </div>
     </div>
 
-    <!-- ATRIBUTOS DINÁMICOS (ACTUALIZADO PARA VERCEL/STRICT) -->
+    <!-- ATRIBUTOS DINÁMICOS (MEJORADO) -->
     <div class="row row-3">
       <div class="field full">
         <label>Atributos dinámicos</label>
 
         <div class="attr-builder">
-          <!-- selector atributo -->
-          <select class="inp" [(ngModel)]="attrDraftId">
-            <option [ngValue]="null">— seleccionar —</option>
+          <!-- selector atributo (usa [ngValue] + disabled si aún no cargó /attributes) -->
+          <select class="inp" [(ngModel)]="attrDraftId" [disabled]="!allAttrDefs().length">
+            <option [ngValue]="null">
+              {{ allAttrDefs().length ? '— seleccionar —' : 'Cargando atributos…' }}
+            </option>
             <option *ngFor="let a of allAttrDefs()" [ngValue]="a.id">
               {{ a.name }}
             </option>
           </select>
 
           <!-- operador -->
-          <select class="inp" [(ngModel)]="attrDraftOp">
+          <select class="inp" [(ngModel)]="attrDraftOp" [disabled]="!allAttrDefs().length">
             <option value="=">=</option>
             <option value="like">like</option>
             <option value="between">between</option>
@@ -140,52 +150,45 @@
             class="inp"
             placeholder="Valor…"
             *ngIf="attrDraftOp !== 'between'"
-            [(ngModel)]="attrDraftValue" />
+            [(ngModel)]="attrDraftValue"
+            [disabled]="!allAttrDefs().length" />
 
           <!-- between -->
           <input
             class="inp"
             placeholder="Desde"
             *ngIf="attrDraftOp === 'between'"
-            [(ngModel)]="attrDraftFrom" />
+            [(ngModel)]="attrDraftFrom"
+            [disabled]="!allAttrDefs().length" />
 
           <input
             class="inp"
             placeholder="Hasta"
             *ngIf="attrDraftOp === 'between'"
-            [(ngModel)]="attrDraftTo" />
+            [(ngModel)]="attrDraftTo"
+            [disabled]="!allAttrDefs().length" />
 
           <button
             type="button"
             class="btn"
-            (click)="onAddAttrClick()">
+            (click)="onAddAttrClick()"
+            [disabled]="!allAttrDefs().length">
             Añadir
           </button>
         </div>
 
-        <!-- <div class="attr-chips" *ngIf="attrFilters().length">
-          <span class="chip" *ngFor="let af of attrFilters(); let i = index">
-            <ng-container *ngIf="af.op === 'between'; else singleAttr">
-              {{ af.name || ('Attr #' + af.id) }}: {{ af.from }} – {{ af.to }}
-            </ng-container>
+        <!-- mensaje cuando no hay atributos (opcional pero útil) -->
+        <div class="muted" style="padding-top: 6px;" *ngIf="allAttrDefs().length === 0">
+          No hay atributos disponibles (o aún están cargando).
+        </div>
 
-            <ng-template #singleAttr>
-              {{ af.name || ('Attr #' + af.id) }} {{ af.op }} {{ af.value }}
-            </ng-template>
-
-            <button
-              type="button"
-              class="chip-x"
-              (click)="removeAttrFilter(i)">×</button>
-          </span>
-        </div> -->
         <div class="attr-chips" *ngIf="attrFilters().length">
           <span class="chip" *ngFor="let af of attrFilters(); let i = index">
             {{ formatAttrFilter(af) }}
             <button type="button" class="chip-x" (click)="removeAttrFilter(i)">×</button>
           </span>
         </div>
-        
+
       </div>
     </div>
   </section>
