@@ -207,6 +207,7 @@ export class CollectionDetailComponent implements OnInit {
       this.loadItems(idNum),
       this.loadTagsForCollection(idNum),
       this.loadAttrDefsForCollection(idNum),
+      this.loadCountriesForCollection(idNum),
     ]);
   }
 
@@ -252,6 +253,26 @@ export class CollectionDetailComponent implements OnInit {
     }
   }
 
+  async loadCountriesForCollection(colId: number) {
+    try {
+      const rows = await firstValueFrom(
+        this.http.get<string[]>(
+          `${API_BASE}/collections/${colId}/countries`,
+          { headers: this.authHeaders() }
+        )
+      );
+  
+      // normaliza y ordena
+      const uniq = Array.from(
+        new Set((rows || []).map(x => String(x || '').trim()).filter(Boolean))
+      ).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  
+      this.countries.set(uniq);
+    } catch {
+      this.countries.set([]);
+    }
+  }
+  
   // =========================
   // ✅ Países SCOPED: derivado de los items de la colección (no global)
   // =========================
@@ -283,7 +304,8 @@ export class CollectionDetailComponent implements OnInit {
       const safeRows = rows || [];
 
       this.items.set(safeRows);
-      this.setCountriesFromItems(safeRows);
+      // this.setCountriesFromItems(safeRows);
+      this.items.set(safeRows);
 
       this.viewingSub = false;
       this.selectedIds.clear();
@@ -308,6 +330,7 @@ export class CollectionDetailComponent implements OnInit {
       // opcional: refrescar catálogos por si cambió la colección
       this.loadTagsForCollection(id),
       this.loadAttrDefsForCollection(id),
+      this.loadCountriesForCollection(id), 
     ]);
   }
 

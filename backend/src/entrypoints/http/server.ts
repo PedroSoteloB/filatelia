@@ -4417,6 +4417,116 @@ app.get('/collections/:id/attributes', { preHandler: authGuard }, async (req: an
   }
 });
 
+
+app.get('/collections/:id/countries', { preHandler: authGuard }, async (req: any, reply: any) => {
+  try {
+    const ownerId = ensureAuth(req);
+    const colId = Number(req.params.id);
+    if (!Number.isFinite(colId)) return reply.code(400).send({ message: 'id inválido' });
+
+    const [crows]: any = await db.execute(
+      `SELECT TOP 1 id, type, filter_json
+         FROM collections
+        WHERE id = ? AND owner_user_id = ?`,
+      [colId, ownerId]
+    );
+    const col = crows?.[0];
+    if (!col) return reply.code(404).send({ message: 'collection_not_found' });
+
+    let join = '';
+    const joinParams: any[] = [];
+    let smartWhere: string[] = [];
+    let smartWhereParams: any[] = [];
+
+    if (String(col.type).toLowerCase() === 'static') {
+      join = `JOIN collection_items ci ON ci.item_id = i.id AND ci.collection_id = ?`;
+      joinParams.push(colId);
+    } else {
+      let f: any = {};
+      try {
+        const raw = col.filter_json;
+        f = raw == null ? {} : (typeof raw === 'string'
+          ? JSON.parse(raw)
+          : (Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : raw));
+      } catch { f = {}; }
+
+      const built = buildWhereFromFilter(ownerId, f);
+      const { where, params: whereParams, tagIds, tagNames, tagMode, attrFilters } = built;
+
+      smartWhere = where || [];
+      smartWhereParams = whereParams || [];
+
+      let baseJoin = '';
+      const baseParams: any[] = [];
+
+      // Si el filtro SMART incluye tags, aplica el mismo join-filter
+      if ((tagIds.length + tagNames.length) > 0) {
+        let allTagIds = [...tagIds];
+
+        if (tagNames.length) {
+          const placeholders = tagNames.map(() => '?').join(',');
+          const [trs]: any = await db.execute(
+            `SELECT id FROM tags WHERE owner_user_id = ? AND name IN (${placeholders})`,
+            [ownerId, ...tagNames]
+          );
+          allTagIds.push(...(trs || []).map((r: any) => r.id));
+        }
+
+        const uniqueIds = Array.from(new Set(allTagIds.map(Number).filter(Number.isFinite)));
+        if (uniqueIds.length) {
+          if (String(tagMode || 'OR').toUpperCase() === 'AND') {
+            baseJoin += `
+              JOIN (
+                SELECT it.item_id
+                  FROM item_tags it
+                 WHERE it.tag_id IN (${uniqueIds.map(() => '?').join(',')})
+                 GROUP BY it.item_id
+                HAVING COUNT(DISTINCT it.tag_id) = ${uniqueIds.length}
+              ) tfilter ON tfilter.item_id = i.id
+            `;
+            baseParams.push(...uniqueIds);
+          } else {
+            baseJoin += `
+              JOIN item_tags itf
+                ON itf.item_id = i.id
+               AND itf.tag_id IN (${uniqueIds.map(() => '?').join(',')})
+            `;
+            baseParams.push(...uniqueIds);
+          }
+        }
+      }
+
+      // Si el filtro SMART incluye attrs, usa tus joins (ojo: que buildAttrJoins esté alineado a tu esquema)
+      const { join: attrJoin, params: attrParams } = await buildAttrJoins(ownerId, attrFilters);
+      baseJoin += attrJoin;
+      baseParams.push(...attrParams);
+
+      join = baseJoin;
+      joinParams.push(...baseParams);
+    }
+
+    const sql = `
+      SELECT DISTINCT i.country AS country
+      FROM philatelic_items i
+      ${join}
+      WHERE i.owner_user_id = ?
+        AND i.country IS NOT NULL
+        AND LTRIM(RTRIM(i.country)) <> ''
+        ${smartWhere.length ? `AND ${smartWhere.join(' AND ')}` : ''}
+      ORDER BY i.country ASC
+    `;
+
+    const allParams = [...joinParams, ownerId, ...smartWhereParams];
+    const [rows]: any = await db.execute(sql, allParams);
+
+    // devolver solo string[]
+    return reply.send((rows || []).map((r: any) => r.country));
+  } catch (e: any) {
+    req.log?.error(e, 'Error en GET /collections/:id/countries');
+    return reply.code(500).send({ message: e?.message || 'internal_error' });
+  }
+});
+
 //en azure
 const PORT = Number(process.env.PORT || 3000);
 const HOST = '0.0.0.0';
