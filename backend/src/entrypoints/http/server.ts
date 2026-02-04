@@ -3886,43 +3886,49 @@ app.get('/collections/:id/tags', { preHandler: authGuard }, async (req: any, rep
     if (!col) return reply.code(404).send({ message: 'collection_not_found' });
 
     let join = '';
-    const params: any[] = [];
+    const joinParams: any[] = [];
+
+    let smartWhere: string[] = [];
+    let smartWhereParams: any[] = [];
 
     if (String(col.type).toLowerCase() === 'static') {
-      join = `
-        JOIN collection_items ci ON ci.item_id = i.id AND ci.collection_id = ?
-      `;
-      params.push(colId);
+      join = `JOIN collection_items ci ON ci.item_id = i.id AND ci.collection_id = ?`;
+      joinParams.push(colId);
     } else {
-      // SMART: usar tu filtro
       let f: any = {};
       try {
         const raw = col.filter_json;
-        f = raw == null ? {} : (typeof raw === 'string' ? JSON.parse(raw) : (Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : raw));
+        f = raw == null ? {} : (typeof raw === 'string'
+          ? JSON.parse(raw)
+          : (Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : raw));
       } catch { f = {}; }
 
       const built = buildWhereFromFilter(ownerId, f);
       const { where, params: whereParams, tagIds, tagNames, tagMode, attrFilters } = built;
 
-      // join base por filtros (tags/attrs) usando TU lógica
+      smartWhere = where || [];
+      smartWhereParams = whereParams || [];
+
       let baseJoin = '';
       const baseParams: any[] = [];
 
-      // tags filter (igual que en /collections/:id/items)
+      // filtros de tags del SMART (si existieran)
       if ((tagIds.length + tagNames.length) > 0) {
         let allTagIds = [...tagIds];
 
         if (tagNames.length) {
           const placeholders = tagNames.map(() => '?').join(',');
-          const ownerFilter = await tagsOwnerWhere(ownerId);
+          // OJO: aquí también puede romper si tagsOwnerWhere no usa alias.
+          // Mejor: resolver tags por owner directamente
           const [trs]: any = await db.execute(
-            `SELECT id FROM tags WHERE ${ownerFilter.where} AND name IN (${placeholders})`,
-            [...ownerFilter.params, ...tagNames]
+            `SELECT id FROM tags WHERE owner_user_id = ? AND name IN (${placeholders})`,
+            [ownerId, ...tagNames]
           );
           allTagIds = allTagIds.concat(trs.map((r: any) => r.id));
         }
 
         const uniqueIds = Array.from(new Set(allTagIds.map(Number).filter(Number.isFinite)));
+
         if (uniqueIds.length) {
           if (String(tagMode || 'OR').toUpperCase() === 'AND') {
             baseJoin += `
@@ -3950,26 +3956,11 @@ app.get('/collections/:id/tags', { preHandler: authGuard }, async (req: any, rep
       baseJoin += attrJoin;
       baseParams.push(...attrParams);
 
-      join = `
-        ${baseJoin}
-      `;
-
-      // en SMART necesitamos filtrar items por where
-      // lo haremos metiendo where en el query final
-      // entonces guardamos where+params para abajo
-      // (los pasamos por params al final)
-      // 👇
-      (req as any).__smartWhere = where;
-      (req as any).__smartWhereParams = whereParams;
-      params.push(...baseParams);
+      join = baseJoin;
+      joinParams.push(...baseParams);
     }
 
-    // owner scope en tags (si existe la columna)
-    const ownerFilter = await tagsOwnerWhere(ownerId);
-
-    const smartWhere: string[] = (req as any).__smartWhere || [];
-    const smartWhereParams: any[] = (req as any).__smartWhereParams || [];
-
+    // ✅ IMPORTANTE: filtro correcto por owner en tags usando alias "t"
     const sql = `
       SELECT DISTINCT t.id, t.name
       FROM philatelic_items i
@@ -3977,16 +3968,19 @@ app.get('/collections/:id/tags', { preHandler: authGuard }, async (req: any, rep
       JOIN item_tags it ON it.item_id = i.id
       JOIN tags t ON t.id = it.tag_id
       WHERE i.owner_user_id = ?
-        AND ${ownerFilter.where}
+        AND t.owner_user_id = ?
         ${smartWhere.length ? `AND ${smartWhere.join(' AND ')}` : ''}
       ORDER BY t.name ASC
     `;
 
-    const allParams = [ownerId, ...ownerFilter.params, ...params, ...smartWhereParams];
+    // ✅ orden: params del JOIN primero (porque aparecen antes en el SQL), luego WHERE
+    const allParams = [...joinParams, ownerId, ownerId, ...smartWhereParams];
 
     const [rows]: any = await db.execute(sql, allParams);
     return reply.send(rows || []);
   } catch (e: any) {
+    // para ver el error real en Azure logs:
+    // console.error('[GET /collections/:id/tags]', e);
     return reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });
