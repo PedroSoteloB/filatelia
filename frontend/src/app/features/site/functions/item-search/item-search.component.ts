@@ -548,110 +548,145 @@ export class ItemSearchComponent implements OnInit {
     this.createStaticSnapshot(name, howMany);
   }
 
-  // async createStaticSnapshot(name: string, howMany: number) {
-  //   if (!this.requireAuthOrLogin()) return;
 
-  //   const nm = (name || '').trim();
-  //   if (!nm) { this.error.set('Nombre requerido para SNAPSHOT'); return; }
+//   async createStaticSnapshot(name: string, howMany: number) {
+//   if (!this.requireAuthOrLogin()) return;
 
-  //   try {
-  //     this.busy.set(true);
-  //     this.error.set(null);
+//   const nm = (name || '').trim();
+//   if (!nm) { this.error.set('Nombre requerido para SNAPSHOT'); return; }
 
-  //     const payload = {
-  //       name: nm,
-  //       description: 'snapshot estático de resultados (IDs referenciados)',
-  //       type: 'static',
-  //       filter_json: null,
-  //       sort_key: 'issue_year',
-  //       sort_dir: 'asc'
-  //     };
+//   try {
+//     this.busy.set(true);
+//     this.error.set(null);
 
-  //     // 1) Crear colección (via ApiService)
-  //     const created: any = await firstValueFrom(
-  //       this.api.post(
-  //         '/collections',
-  //         payload,
-  //         this.authHeaders()
-  //       )
-  //     );
-  //     const collectionId = created?.id;
-  //     if (!collectionId) throw new Error('No se obtuvo id de la colección');
+//     const payload = {
+//       name: nm,
+//       description: 'snapshot estático de resultados (IDs referenciados)',
+//       type: 'static',
+//       filter_json: this.currentFilterJson(),
+//       sort_key: 'issue_year',
+//       sort_dir: 'asc'
+//     };
 
-  //     // 2) Asegurar resultados
-  //     if (!this.results().length) await this.search();
+//     // 1) Crear colección
+//     const created: any = await firstValueFrom(
+//       this.api.post('/collections', payload, this.authHeaders())
+//     );
 
-  //     // 3) Vincular items
-  //     const items = this.results().slice(0, howMany);
-  //     for (const it of items) {
-  //       await firstValueFrom(
-  //         this.api.post(
-  //           `/collections/${collectionId}/items`,
-  //           { itemId: it.id },
-  //           this.authHeaders()
-  //         )
-  //       );
-  //     }
-  //   } catch (e: any) {
-  //     this.error.set(e?.message || 'No se pudo crear el snapshot estático');
-  //   } finally {
-  //     this.busy.set(false);
-  //   }
-  // }
+//     const collectionId = created?.id;
+//     if (!collectionId) throw new Error('No se obtuvo id de la colección');
 
-  async createStaticSnapshot(name: string, howMany: number) {
-  if (!this.requireAuthOrLogin()) return;
+//     // 2) Asegurar resultados
+//     if (!this.results().length) await this.search();
 
-  const nm = (name || '').trim();
-  if (!nm) { this.error.set('Nombre requerido para SNAPSHOT'); return; }
+//     // 3) Vincular items
+//     const items = this.results().slice(0, howMany);
+//     for (const it of items) {
+//       await firstValueFrom(
+//         this.api.post(
+//           `/collections/${collectionId}/items`,
+//           { itemId: it.id },
+//           this.authHeaders()
+//         )
+//       );
+//     }
 
-  try {
-    this.busy.set(true);
-    this.error.set(null);
+//     // ✅ 4) Redirigir al listado de colecciones
+//     this.router.navigateByUrl('/collections');
 
-    const payload = {
-      name: nm,
-      description: 'snapshot estático de resultados (IDs referenciados)',
-      type: 'static',
-      filter_json: null,
-      sort_key: 'issue_year',
-      sort_dir: 'asc'
-    };
-
-    // 1) Crear colección
-    const created: any = await firstValueFrom(
-      this.api.post('/collections', payload, this.authHeaders())
-    );
-
-    const collectionId = created?.id;
-    if (!collectionId) throw new Error('No se obtuvo id de la colección');
-
-    // 2) Asegurar resultados
-    if (!this.results().length) await this.search();
-
-    // 3) Vincular items
-    const items = this.results().slice(0, howMany);
-    for (const it of items) {
-      await firstValueFrom(
-        this.api.post(
-          `/collections/${collectionId}/items`,
-          { itemId: it.id },
-          this.authHeaders()
-        )
-      );
-    }
-
-    // ✅ 4) Redirigir al listado de colecciones
-    this.router.navigateByUrl('/collections');
-
-  } catch (e: any) {
-    this.error.set(e?.message || 'No se pudo crear el snapshot estático');
-  } finally {
-    this.busy.set(false);
-  }
-}
+//   } catch (e: any) {
+//     this.error.set(e?.message || 'No se pudo crear el snapshot estático');
+//   } finally {
+//     this.busy.set(false);
+//   }
+// }
 
   // -------- util: serializar filtro actual
+ 
+  async createStaticSnapshot(name: string, howMany: number) {
+    if (!this.requireAuthOrLogin()) return;
+  
+    const nm = (name || '').trim();
+    if (!nm) { this.error.set('Nombre requerido para SNAPSHOT'); return; }
+  
+    try {
+      this.busy.set(true);
+      this.error.set(null);
+  
+      console.group('[snapshot] createStaticSnapshot');
+      console.log('[snapshot] name:', nm, 'howMany:', howMany);
+  
+      // ✅ 0) Asegurar que results refleje el filtro actual
+      console.log('[snapshot] running search() to sync results with current filters...');
+      await this.search();
+      console.log('[snapshot] search done. results length:', this.results().length);
+  
+      const filter = this.currentFilterJson();
+      console.log('[snapshot] currentFilterJson (object):', filter);
+  
+      const filterJson = JSON.stringify(filter);
+      console.log('[snapshot] filter_json (string):', filterJson);
+  
+      const payload = {
+        name: nm,
+        description: 'snapshot estático de resultados (IDs referenciados)',
+        type: 'static',
+        filter_json: filterJson,
+        sort_key: 'issue_year',
+        sort_dir: 'asc'
+      };
+  
+      console.log('[snapshot] payload to POST /collections:', payload);
+  
+      // 1) Crear colección
+      const created: any = await firstValueFrom(
+        this.api.post('/collections', payload, this.authHeaders())
+      );
+  
+      console.log('[snapshot] /collections response:', created);
+  
+      const collectionId = created?.id;
+      console.log('[snapshot] created collectionId:', collectionId);
+  
+      if (!collectionId) throw new Error('No se obtuvo id de la colección');
+  
+      // 2) Vincular items (IDs del resultado)
+      const items = this.results().slice(0, howMany);
+      console.log('[snapshot] items to link count:', items.length);
+      console.log('[snapshot] itemIds to link:', items.map(x => x.id));
+  
+      for (const it of items) {
+        console.debug('[snapshot] linking item ->', { collectionId, itemId: it.id });
+  
+        try {
+          const resp = await firstValueFrom(
+            this.api.post(
+              `/collections/${collectionId}/items`,
+              { itemId: it.id },
+              this.authHeaders()
+            )
+          );
+          console.debug('[snapshot] linked OK itemId:', it.id, 'resp:', resp);
+        } catch (linkErr) {
+          console.error('[snapshot] FAILED linking itemId:', it.id, linkErr);
+          throw linkErr; // si prefieres que siga con los demás, quita este throw
+        }
+      }
+  
+      console.log('[snapshot] all items linked. navigating to /collections');
+      console.groupEnd();
+  
+      this.router.navigateByUrl('/collections');
+  
+    } catch (e: any) {
+      console.error('[snapshot] ERROR:', e);
+      this.error.set(e?.message || 'No se pudo crear el snapshot estático');
+    } finally {
+      this.busy.set(false);
+    }
+  }
+  
+ 
   private currentFilterJson() {
     const f: any = {};
     if (this.q().trim()) f.q = this.q().trim();
