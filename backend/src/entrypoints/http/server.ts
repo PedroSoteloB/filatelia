@@ -624,7 +624,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   } catch (e: any) {
     console.error('[POST /items] ERROR:', e);
     return reply.code(500).send({
-      message: 'internal_error',
+      message: 'Ha ocurrido un error, por favor contactar con soporte',
       detail: String(e?.message || ''),
     });
   }
@@ -670,7 +670,7 @@ const out = rows.map((r: any) => {
 
 reply.send(out);
 
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 
@@ -792,7 +792,7 @@ reply.send(out);
 //     if (e.message === 'UNAUTHORIZED') {
 //       return reply.code(401).send({ message: 'unauthorized' });
 //     }
-//     reply.code(500).send({ message: e?.message || 'internal_error' });
+//     reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
 //   }
 // });
 
@@ -966,7 +966,7 @@ app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any)
     if (e.message === 'UNAUTHORIZED') {
       return reply.code(401).send({ message: 'unauthorized' });
     }
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -1015,7 +1015,7 @@ app.get('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) =>
 
     reply.send(item);
   } catch (e: any) {
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -1043,7 +1043,7 @@ app.put('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) =>
     );
     if (r.affectedRows === 0) return reply.code(404).send({ message: 'not_found' });
     reply.send({ ok: true });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 app.delete('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -1075,7 +1075,7 @@ app.delete('/items/:id', { preHandler: authGuard }, async (req: any, reply: any)
 
     if (r.affectedRows === 0) return reply.code(404).send({ message: 'not_found' });
     reply.send({ ok: true });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 // ------------------- TAGS -------------------
@@ -1100,7 +1100,7 @@ app.post('/tags', { preHandler: authGuard }, async (req: any, reply: any) => {
       haveOwner ? [name, ownerId] : [name]
     );
     reply.send({ id: r.insertId, name });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 app.get('/tags', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -1115,7 +1115,7 @@ app.get('/tags', { preHandler: authGuard }, async (req: any, reply: any) => {
       ownerFilter.params
     );
     reply.send(rows);
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 app.delete('/tags/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -1127,7 +1127,7 @@ app.delete('/tags/:id', { preHandler: authGuard }, async (req: any, reply: any) 
     await db.execute('DELETE FROM item_tags WHERE tag_id = ?', [id]);
     await db.execute('DELETE FROM tags WHERE id = ?', [id]);
     reply.send({ ok: true });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 app.post('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -1184,7 +1184,7 @@ app.post('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: a
       );
     }
     reply.send({ ok: true, added: ids.length });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 app.delete('/items/:id/tags/:tagId', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -1205,7 +1205,7 @@ app.delete('/items/:id/tags/:tagId', { preHandler: authGuard }, async (req: any,
       [itemId, tagId]
     );
     reply.send({ ok: true });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 // ------------------- ATTRIBUTES -------------------
@@ -1230,7 +1230,7 @@ app.post('/attributes', { preHandler: authGuard }, async (req: any, reply: any) 
        options_json ? JSON.stringify(options_json) : null]
     );
     reply.send({ id: r.insertId, name, attr_type });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 // app.get('/attributes', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -1248,7 +1248,7 @@ app.post('/attributes', { preHandler: authGuard }, async (req: any, reply: any) 
 //       [ownerId]
 //     );
 //     reply.send(rows);
-//   } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+//   } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 // });
 
 app.get('/attributes', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -1319,7 +1319,7 @@ app.get('/attributes', { preHandler: authGuard }, async (req: any, reply: any) =
 
     reply.send(safe);
   } catch (e: any) {
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -1364,7 +1364,7 @@ app.put('/attributes/:id', { preHandler: authGuard }, async (req: any, reply: an
       ]
     );
     reply.send({ ok: true });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 app.delete('/attributes/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -1384,7 +1384,7 @@ app.delete('/attributes/:id', { preHandler: authGuard }, async (req: any, reply:
     await db.execute('DELETE FROM item_attributes WHERE attribute_id = ?', [id]);
     await db.execute('DELETE FROM attribute_definitions WHERE id = ?', [id]);
     reply.send({ ok: true });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 app.post('/items/:id/attributes', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -1444,7 +1444,7 @@ app.post('/items/:id/attributes', { preHandler: authGuard }, async (req: any, re
     }
 
     reply.send({ ok: true, count: upserted });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 app.get('/items/:id/attributes', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -1472,7 +1472,7 @@ app.get('/items/:id/attributes', { preHandler: authGuard }, async (req: any, rep
       [itemId]
     );
     reply.send(rows);
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 app.delete('/items/:id/attributes/:attributeId', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -1494,7 +1494,7 @@ app.delete('/items/:id/attributes/:attributeId', { preHandler: authGuard }, asyn
       [itemId, attributeId]
     );
     reply.send({ ok: true });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 // ------------------- COLLECTIONS -------------------
@@ -1542,7 +1542,7 @@ app.post('/collections', { preHandler: authGuard }, async (req: any, reply: any)
       ]
     );
     reply.send({ id: r.insertId });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 app.put('/collections/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -1578,7 +1578,7 @@ app.put('/collections/:id', { preHandler: authGuard }, async (req: any, reply: a
       ]
     );
     reply.send({ ok: true });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -1859,7 +1859,7 @@ app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) 
 
     reply.send(out);
   } catch (e: any) {
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -1997,12 +1997,15 @@ app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) 
 //     reply.send(out);
 //   } catch (e: any) {
 //     req.log?.error(e, 'Error en GET /collections/:id/items');
-//     reply.code(500).send({ message: e?.message || 'internal_error' });
+//     reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
 //   }
 // });
 
 
 // ✅ helper: ponlo arriba del endpoint (o en utils)
+
+
+// ✅ helper (déjalo tal cual)
 function safeJsonArray(x: any) {
   try {
     if (!x) return [];
@@ -2039,7 +2042,7 @@ app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, re
     let items: any[] = [];
 
     if (col.type === 'static') {
-      // ✅ STATIC: trae tagsJson y attrsJson
+      // ✅ STATIC: trae tagsJson y attrsJson (FIX para tu esquema real)
       const [is]: any = await db.execute(
         `SELECT
             i.id,
@@ -2063,12 +2066,20 @@ app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, re
               FOR JSON PATH
             ) AS tagsJson,
 
-            -- ✅ ATTRIBUTES (JSON)
+            -- ✅ ATTRIBUTES (JSON)  ✅ FIX: em_id, attribute_id, value_text/value_number/value_date
             (
-              SELECT ad.id, ad.name, ia.value
+              SELECT
+                ad.id,
+                ad.name,
+                COALESCE(
+                  ia.value_text,
+                  CAST(ia.value_number AS varchar(50)),
+                  CONVERT(varchar(10), ia.value_date, 23)
+                ) AS value
               FROM item_attributes ia
-              JOIN attribute_definitions ad ON ad.id = ia.attribute_definition_id
-              WHERE ia.item_id = i.id
+              JOIN attribute_definitions ad
+                ON ad.id = ia.attribute_id
+              WHERE ia.em_id = i.id
                 AND ad.owner_user_id = ?
               FOR JSON PATH
             ) AS attrsJson
@@ -2082,6 +2093,7 @@ app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, re
         [ownerId, ownerId, ownerId, id]
       );
       items = is;
+
     } else {
       let f: any = {};
       try {
@@ -2136,11 +2148,13 @@ app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, re
         }
       }
 
+      // ⚠️ OJO: si tu buildAttrJoins usa columnas viejas (item_id / attribute_definition_id / value),
+      // también debes actualizarlo a: em_id / attribute_id / value_text/value_number/value_date.
       const { join: attrJoin, params: attrParams } = await buildAttrJoins(ownerId, attrFilters);
       join += attrJoin;
       params.push(...attrParams);
 
-      // ✅ SMART/DYNAMIC: trae tagsJson y attrsJson
+      // ✅ SMART/DYNAMIC: trae tagsJson y attrsJson (FIX para tu esquema real)
       const sql = `
         SELECT DISTINCT
                i.id,
@@ -2164,12 +2178,20 @@ app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, re
                  FOR JSON PATH
                ) AS tagsJson,
 
-               -- ✅ ATTRIBUTES (JSON)
+               -- ✅ ATTRIBUTES (JSON) ✅ FIX: em_id, attribute_id, value_text/value_number/value_date
                (
-                 SELECT ad.id, ad.name, ia.value
+                 SELECT
+                   ad.id,
+                   ad.name,
+                   COALESCE(
+                     ia.value_text,
+                     CAST(ia.value_number AS varchar(50)),
+                     CONVERT(varchar(10), ia.value_date, 23)
+                   ) AS value
                  FROM item_attributes ia
-                 JOIN attribute_definitions ad ON ad.id = ia.attribute_definition_id
-                 WHERE ia.item_id = i.id
+                 JOIN attribute_definitions ad
+                   ON ad.id = ia.attribute_id
+                 WHERE ia.em_id = i.id
                    AND ad.owner_user_id = ?
                  FOR JSON PATH
                ) AS attrsJson
@@ -2179,7 +2201,7 @@ app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, re
          WHERE ${where.join(' AND ')}
          ORDER BY i.${col.sort_key || 'issue_year'} ${String(col.sort_dir || 'asc').toUpperCase()}`;
 
-      // 👇 OJO: prepend de ownerId,ownerId por los 2 subselects JSON
+      // 👇 prepend de ownerId,ownerId por los 2 subselects JSON
       const [is]: any = await db.execute(sql, [ownerId, ownerId, ...params]);
       items = is;
     }
@@ -2195,15 +2217,15 @@ app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, re
         country: r.country ?? null,
         issueYear: r.issueYear ?? null,
         cover: abs || rel || null,
-        tags: safeJsonArray(r.tagsJson),            // [{id,name}]
-        attributes: safeJsonArray(r.attrsJson),     // [{id,name,value}]
+        tags: safeJsonArray(r.tagsJson),        // [{id,name}]
+        attributes: safeJsonArray(r.attrsJson), // [{id,name,value}]
       };
     });
 
     reply.send(out);
   } catch (e: any) {
     req.log?.error(e, 'Error en GET /collections/:id/items');
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -2284,7 +2306,7 @@ app.post('/collections/:id/items', { preHandler: authGuard }, async (req: any, r
     return reply.send({ ok: true });
   } catch (e: any) {
     console.error('❌ POST /collections/:id/items error:', e);
-    return reply.code(500).send({ message: e?.message || 'internal_error' });
+    return reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -2310,7 +2332,7 @@ app.delete('/collections/:id/items/:itemId', { preHandler: authGuard }, async (r
       [id, itemId]
     );
     reply.send({ ok: true });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 app.delete('/collections/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -2328,7 +2350,7 @@ app.delete('/collections/:id', { preHandler: authGuard }, async (req: any, reply
     await db.execute('DELETE FROM collection_items WHERE collection_id = ?', [id]);
     await db.execute('DELETE FROM collections WHERE id = ?', [id]);
     reply.send({ ok: true });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 // ------------------- SAVED SEARCHES -------------------
@@ -2344,7 +2366,7 @@ app.post('/saved-searches', { preHandler: authGuard }, async (req: any, reply: a
       [ownerId, name, JSON.stringify(filter_json)]
     );
     reply.send({ id: r.insertId });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 app.get('/saved-searches', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -2358,7 +2380,7 @@ app.get('/saved-searches', { preHandler: authGuard }, async (req: any, reply: an
       [ownerId]
     );
     reply.send(rows);
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
 app.delete('/saved-searches/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -2376,7 +2398,7 @@ app.delete('/saved-searches/:id', { preHandler: authGuard }, async (req: any, re
     await db.execute('DELETE FROM saved_searches WHERE id = ?', [id]);
     reply.send({ ok: true });
   } catch (e:any) {
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -2402,7 +2424,7 @@ app.get('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: an
     );
     reply.send(rows);
   } catch (e:any) {
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -2588,7 +2610,7 @@ app.get('/collections/:id/items/search-sub', { preHandler: authGuard }, async (r
   } catch (e:any) {
     if (e?.message === 'UNAUTHORIZED') return reply.code(401).send({ message: 'unauthorized' });
     req.log?.error(e);
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -2903,7 +2925,7 @@ app.post(
 
       reply
         .code(500)
-        .send({ message: e?.message || 'internal_error' });
+        .send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
     } finally {
       try { (conn as any).release(); } catch {}
     }
@@ -2972,7 +2994,7 @@ app.post('/presentations', { preHandler: authGuard }, async (req: any, reply: an
   } catch (e: any) {
     if (e?.message === 'UNAUTHORIZED') return reply.code(401).send({ message: 'unauthorized' });
     req.log?.error(e, 'POST /presentations');
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -2999,7 +3021,7 @@ app.post('/presentations', { preHandler: authGuard }, async (req: any, reply: an
 //     );
 //     reply.send(rows);
 //   } catch (e:any) {
-//     reply.code(500).send({ message: e?.message || 'internal_error' });
+//     reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
 //   }
 // });
 
@@ -3028,7 +3050,7 @@ app.post('/presentations', { preHandler: authGuard }, async (req: any, reply: an
 //     if (!rows.length) return reply.code(404).send({ message: 'not_found' });
 //     reply.send(rows[0]);
 //   } catch (e:any) {
-//     reply.code(500).send({ message: e?.message || 'internal_error' });
+//     reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
 //   }
 // });
 app.get('/presentations', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -3061,7 +3083,7 @@ app.get('/presentations', { preHandler: authGuard }, async (req: any, reply: any
 
     reply.send(out);
   } catch (e:any) {
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -3099,7 +3121,7 @@ app.get('/presentations/:id', { preHandler: authGuard }, async (req: any, reply:
 
     reply.send(out);
   } catch (e:any) {
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -3174,7 +3196,7 @@ app.put('/presentations/:id', { preHandler: authGuard }, async (req: any, reply:
 
     reply.send({ ok: true });
   } catch (e:any) {
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -3191,7 +3213,7 @@ app.delete('/presentations/:id', { preHandler: authGuard }, async (req: any, rep
     if (r.affectedRows === 0) return reply.code(404).send({ message: 'not_found' });
     reply.send({ ok: true });
   } catch (e:any) {
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -3333,7 +3355,7 @@ app.post('/presentations/:id/assets', { preHandler: authGuard }, async (req:any,
     );
     reply.send({ id: r.insertId });
   } catch (e:any) {
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -3365,7 +3387,7 @@ app.delete('/presentations/:id/assets/:assetId', { preHandler: authGuard }, asyn
 
     reply.send({ ok: true });
   } catch (e:any) {
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -3556,7 +3578,7 @@ app.post('/auth/register', async (req: any, reply: any) => {
       user: { id: userId, email: cleanEmail, displayName: cleanName || cleanEmail }
     });
   } catch (e: any) {
-    return reply.code(500).send({ message: e?.message || 'internal_error' });
+    return reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -4099,7 +4121,7 @@ app.put(
 
       return reply.send(rows[0]);
     } catch (e: any) {
-      return reply.code(500).send({ message: e?.message || 'internal_error' });
+      return reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
     } finally {
       try { conn.release?.(); } catch {}
     }
@@ -4123,7 +4145,7 @@ app.get('/items/countries', { preHandler: authGuard }, async (req:any, reply:any
 
     reply.send(rows.map((r:any) => r.country));
   } catch (e:any) {
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -4144,7 +4166,7 @@ app.get('/items/conditions', { preHandler: authGuard }, async (req: any, reply: 
 
     reply.send(rows.map((r: any) => r.condition_code));
   } catch (e: any) {
-    reply.code(500).send({ message: e?.message || 'internal_error' });
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -4260,7 +4282,7 @@ app.get('/collections/:id/tags', { preHandler: authGuard }, async (req: any, rep
   } catch (e: any) {
     // para ver el error real en Azure logs:
     // console.error('[GET /collections/:id/tags]', e);
-    return reply.code(500).send({ message: e?.message || 'internal_error' });
+    return reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
@@ -4375,7 +4397,7 @@ app.get('/collections/:id/attributes', { preHandler: authGuard }, async (req: an
     const [rows]: any = await db.execute(sql, allParams);
     return reply.send(rows || []);
   } catch (e: any) {
-    return reply.code(500).send({ message: e?.message || 'internal_error' });
+    return reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
