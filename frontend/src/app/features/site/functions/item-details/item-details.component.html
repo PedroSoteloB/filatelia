@@ -141,7 +141,8 @@
 
                     <!-- ✅ NUEVO: contador -->
                     <span class="badge soft" *ngIf="it.images?.length">
-                      {{ it.images.length }} img
+                      <!-- {{ it.images.length }} img -->
+                      {{ it.images?.length ?? 0 }} img
                     </span>
                   </div>
 
