@@ -1864,6 +1864,157 @@ app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) 
 });
 
 
+// app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     if (req.method === 'GET' && req.body != null) {
+//       try { req.log?.warn({ bodyType: typeof req.body }, 'GET con body recibido; se ignora'); } catch {}
+//       // @ts-ignore
+//       req.body = undefined;
+//     }
+
+//     const ownerId = ensureAuth(req);
+//     const id = Number(req.params.id);
+//     if (!Number.isFinite(id)) return reply.code(400).send({ message: 'id inválido' });
+
+//     const [rows]: any = await db.execute(
+//       `SELECT TOP 1 id, type, filter_json, sort_key, sort_dir
+//          FROM collections
+//         WHERE id = ? AND owner_user_id = ?`,
+//       [id, ownerId]
+//     );
+//     const col = rows?.[0];
+//     if (!col) return reply.code(404).send({ message: 'not_found' });
+
+//     let items: any[] = [];
+
+//     if (col.type === 'static') {
+//       const [is]: any = await db.execute(
+//         `SELECT i.id,
+//                 i.title,
+//                 i.country,
+//                 i.issue_year AS issueYear,
+//                 (
+//                   SELECT TOP 1 file_path
+//                   FROM item_images
+//                   WHERE item_id = i.id
+//                   ORDER BY is_primary DESC, id ASC
+//                 ) AS cover
+//            FROM collection_items ci
+//            JOIN philatelic_items i
+//              ON i.id = ci.item_id
+//             AND i.owner_user_id = ?
+//           WHERE ci.collection_id = ?
+//           ORDER BY i.${col.sort_key || 'issue_year'} ${String(col.sort_dir || 'asc').toUpperCase()}`,
+//         [ownerId, id]
+//       );
+//       items = is;
+//     } else {
+//       let f: any = {};
+//       try {
+//         const raw = col.filter_json;
+//         if (raw == null || raw === '') f = {};
+//         else if (typeof raw === 'string') f = JSON.parse(raw);
+//         else if (Buffer.isBuffer(raw)) f = JSON.parse(raw.toString('utf8'));
+//         else if (typeof raw === 'object') f = raw;
+//         else f = {};
+//       } catch {
+//         f = {};
+//       }
+
+//       const { where, params, tagIds, tagNames, tagMode, attrFilters } = buildWhereFromFilter(ownerId, f);
+//       let join = '';
+
+//       if ((tagIds.length + tagNames.length) > 0) {
+//         let allTagIds = [...tagIds];
+
+//         if (tagNames.length) {
+//           const placeholders = tagNames.map(() => '?').join(',');
+//           const ownerFilter = await tagsOwnerWhere(ownerId);
+//           const [trs]: any = await db.execute(
+//             `SELECT id
+//                FROM tags
+//               WHERE ${ownerFilter.where}
+//                 AND name IN (${placeholders})`,
+//             [...ownerFilter.params, ...tagNames]
+//           );
+//           allTagIds = allTagIds.concat(trs.map((r: any) => r.id));
+//         }
+
+//         const uniqueIds = Array.from(new Set(allTagIds.map(Number).filter(Number.isFinite)));
+//         if (uniqueIds.length) {
+//           if (tagMode === 'AND') {
+//             join += `
+//               JOIN (
+//                 SELECT it.item_id
+//                   FROM item_tags it
+//                  WHERE it.tag_id IN (${uniqueIds.map(() => '?').join(',')})
+//                  GROUP BY it.item_id
+//                 HAVING COUNT(DISTINCT it.tag_id) = ${uniqueIds.length}
+//               ) tfilter ON tfilter.item_id = i.id`;
+//             params.push(...uniqueIds);
+//           } else {
+//             join += `
+//               JOIN item_tags itf
+//                 ON itf.item_id = i.id
+//                AND itf.tag_id IN (${uniqueIds.map(() => '?').join(',')})`;
+//             params.push(...uniqueIds);
+//           }
+//         }
+//       }
+
+//       const { join: attrJoin, params: attrParams } = await buildAttrJoins(ownerId, attrFilters);
+//       join += attrJoin;
+//       params.push(...attrParams);
+
+//       const sql = `
+//         SELECT DISTINCT
+//                i.id,
+//                i.title,
+//                i.country,
+//                i.issue_year AS issueYear,
+//                (
+//                  SELECT TOP 1 file_path
+//                  FROM item_images
+//                  WHERE item_id = i.id
+//                  ORDER BY is_primary DESC, id ASC
+//                ) AS cover
+//           FROM philatelic_items i
+//           ${join}
+//          WHERE ${where.join(' AND ')}
+//          ORDER BY i.${col.sort_key || 'issue_year'} ${String(col.sort_dir || 'asc').toUpperCase()}`;
+
+//       const [is]: any = await db.execute(sql, params);
+//       items = is;
+//     }
+
+//     // 🔹 AQUÍ el cambio importante
+//     const out = items.map((r: any) => {
+//       const rel = toPublicUrl(r.cover);   // "/uploads/..."
+//       const abs = toAbsoluteUrl(rel);     // "https://filatelia-api.../uploads/..."
+//       return { ...r, cover: abs || rel };
+//     });
+
+//     reply.send(out);
+//   } catch (e: any) {
+//     req.log?.error(e, 'Error en GET /collections/:id/items');
+//     reply.code(500).send({ message: e?.message || 'internal_error' });
+//   }
+// });
+
+
+// ✅ helper: ponlo arriba del endpoint (o en utils)
+function safeJsonArray(x: any) {
+  try {
+    if (!x) return [];
+    if (Array.isArray(x)) return x;
+    if (Buffer.isBuffer(x)) return JSON.parse(x.toString('utf8'));
+    if (typeof x === 'string') return JSON.parse(x);
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     if (req.method === 'GET' && req.body != null) {
@@ -1888,24 +2039,47 @@ app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, re
     let items: any[] = [];
 
     if (col.type === 'static') {
+      // ✅ STATIC: trae tagsJson y attrsJson
       const [is]: any = await db.execute(
-        `SELECT i.id,
-                i.title,
-                i.country,
-                i.issue_year AS issueYear,
-                (
-                  SELECT TOP 1 file_path
-                  FROM item_images
-                  WHERE item_id = i.id
-                  ORDER BY is_primary DESC, id ASC
-                ) AS cover
-           FROM collection_items ci
-           JOIN philatelic_items i
-             ON i.id = ci.item_id
-            AND i.owner_user_id = ?
-          WHERE ci.collection_id = ?
-          ORDER BY i.${col.sort_key || 'issue_year'} ${String(col.sort_dir || 'asc').toUpperCase()}`,
-        [ownerId, id]
+        `SELECT
+            i.id,
+            i.title,
+            i.country,
+            i.issue_year AS issueYear,
+            (
+              SELECT TOP 1 file_path
+              FROM item_images
+              WHERE item_id = i.id
+              ORDER BY is_primary DESC, id ASC
+            ) AS cover,
+
+            -- ✅ TAGS (JSON)
+            (
+              SELECT t.id, t.name
+              FROM item_tags it
+              JOIN tags t ON t.id = it.tag_id
+              WHERE it.item_id = i.id
+                AND t.owner_user_id = ?
+              FOR JSON PATH
+            ) AS tagsJson,
+
+            -- ✅ ATTRIBUTES (JSON)
+            (
+              SELECT ad.id, ad.name, ia.value
+              FROM item_attributes ia
+              JOIN attribute_definitions ad ON ad.id = ia.attribute_definition_id
+              WHERE ia.item_id = i.id
+                AND ad.owner_user_id = ?
+              FOR JSON PATH
+            ) AS attrsJson
+
+          FROM collection_items ci
+          JOIN philatelic_items i
+            ON i.id = ci.item_id
+           AND i.owner_user_id = ?
+         WHERE ci.collection_id = ?
+         ORDER BY i.${col.sort_key || 'issue_year'} ${String(col.sort_dir || 'asc').toUpperCase()}`,
+        [ownerId, ownerId, ownerId, id]
       );
       items = is;
     } else {
@@ -1966,6 +2140,7 @@ app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, re
       join += attrJoin;
       params.push(...attrParams);
 
+      // ✅ SMART/DYNAMIC: trae tagsJson y attrsJson
       const sql = `
         SELECT DISTINCT
                i.id,
@@ -1977,21 +2152,52 @@ app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, re
                  FROM item_images
                  WHERE item_id = i.id
                  ORDER BY is_primary DESC, id ASC
-               ) AS cover
+               ) AS cover,
+
+               -- ✅ TAGS (JSON)
+               (
+                 SELECT t.id, t.name
+                 FROM item_tags it
+                 JOIN tags t ON t.id = it.tag_id
+                 WHERE it.item_id = i.id
+                   AND t.owner_user_id = ?
+                 FOR JSON PATH
+               ) AS tagsJson,
+
+               -- ✅ ATTRIBUTES (JSON)
+               (
+                 SELECT ad.id, ad.name, ia.value
+                 FROM item_attributes ia
+                 JOIN attribute_definitions ad ON ad.id = ia.attribute_definition_id
+                 WHERE ia.item_id = i.id
+                   AND ad.owner_user_id = ?
+                 FOR JSON PATH
+               ) AS attrsJson
+
           FROM philatelic_items i
           ${join}
          WHERE ${where.join(' AND ')}
          ORDER BY i.${col.sort_key || 'issue_year'} ${String(col.sort_dir || 'asc').toUpperCase()}`;
 
-      const [is]: any = await db.execute(sql, params);
+      // 👇 OJO: prepend de ownerId,ownerId por los 2 subselects JSON
+      const [is]: any = await db.execute(sql, [ownerId, ownerId, ...params]);
       items = is;
     }
 
-    // 🔹 AQUÍ el cambio importante
+    // ✅ OUT: cover absoluto + parseo de tags/attrs
     const out = items.map((r: any) => {
-      const rel = toPublicUrl(r.cover);   // "/uploads/..."
-      const abs = toAbsoluteUrl(rel);     // "https://filatelia-api.../uploads/..."
-      return { ...r, cover: abs || rel };
+      const rel = toPublicUrl(r.cover);
+      const abs = toAbsoluteUrl(rel);
+
+      return {
+        id: r.id,
+        title: r.title,
+        country: r.country ?? null,
+        issueYear: r.issueYear ?? null,
+        cover: abs || rel || null,
+        tags: safeJsonArray(r.tagsJson),            // [{id,name}]
+        attributes: safeJsonArray(r.attrsJson),     // [{id,name,value}]
+      };
     });
 
     reply.send(out);
@@ -2000,7 +2206,6 @@ app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, re
     reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });
-
 
 
 app.post('/collections/:id/items', { preHandler: authGuard }, async (req: any, reply: any) => {
