@@ -67,31 +67,29 @@
       </div>
     </div>
 
-    <!-- TAGS (SCOPED A LA COLECCIÓN) -->
+    <!-- TAGS (SCOPED A LA COLECCIÓN) - COMBOBOX -->
     <div class="row row-2">
       <div class="field">
         <label>Tags</label>
 
+        <!-- COMBOBOX NATIVO -->
         <input
           class="inp"
-          placeholder="Escribe parte del tag…"
+          placeholder="Escribe o elige un tag…"
+          list="tagList"
           [ngModel]="tagSearch()"
-          (ngModelChange)="setTagSearch($event)" />
+          (ngModelChange)="setTagSearch($event)"
+          (change)="onTagClick(tagSearch())" />
+
+        <datalist id="tagList">
+          <option *ngFor="let t of filteredTags()" [value]="t.name"></option>
+        </datalist>
 
         <div class="hint" *ngIf="!allTags().length">
           Esta colección no tiene tags asociados (o no hay coincidencias).
         </div>
 
-        <div class="tag-suggest" *ngIf="filteredTags().length">
-          <button
-            type="button"
-            class="tag-suggest-item"
-            *ngFor="let t of filteredTags()"
-            (click)="onTagClick(t.name)">
-            {{ t.name }}
-          </button>
-        </div>
-
+        <!-- chips -->
         <div class="tag-chips" *ngIf="selectedTagNames().length">
           <span class="chip" *ngFor="let n of selectedTagNames()">
             {{ n }}
