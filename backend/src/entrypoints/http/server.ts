@@ -1250,6 +1250,7 @@ app.post('/attributes', { preHandler: authGuard }, async (req: any, reply: any) 
 //     reply.send(rows);
 //   } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
 // });
+
 app.get('/attributes', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -1266,21 +1267,39 @@ app.get('/attributes', { preHandler: authGuard }, async (req: any, reply: any) =
     );
 
     const safe = (rows || []).map((r: any) => {
+      let raw = r.optionsJson;
+
+      // ✅ si viene como Buffer (mysql driver)
+      if (raw && typeof raw === 'object' && raw.type === 'Buffer' && Array.isArray(raw.data)) {
+        raw = Buffer.from(raw.data).toString('utf8');
+      }
+
       let options: string[] = [];
 
-      const raw = r.optionsJson;
-
-      // raw puede ser string JSON, array, null
+      // si ya es array
       if (Array.isArray(raw)) {
         options = raw.map((x: any) => String(x).trim()).filter(Boolean);
-      } else if (typeof raw === 'string' && raw.trim()) {
+      }
+      // si es string JSON o "A,B,C"
+      else if (typeof raw === 'string' && raw.trim()) {
         const s = raw.trim();
         try {
           const parsed = JSON.parse(s);
           if (Array.isArray(parsed)) {
             options = parsed.map((x: any) => String(x).trim()).filter(Boolean);
+          } else if (typeof parsed === 'string') {
+            // doble-encode: "\"[\"A\",\"B\"]\""
+            try {
+              const parsed2 = JSON.parse(parsed);
+              if (Array.isArray(parsed2)) {
+                options = parsed2.map((x: any) => String(x).trim()).filter(Boolean);
+              } else {
+                options = parsed.split(',').map((x) => x.trim()).filter(Boolean);
+              }
+            } catch {
+              options = parsed.split(',').map((x) => x.trim()).filter(Boolean);
+            }
           } else {
-            // fallback si viene "A,B,C"
             options = s.split(',').map((x) => x.trim()).filter(Boolean);
           }
         } catch {
@@ -1293,8 +1312,8 @@ app.get('/attributes', { preHandler: authGuard }, async (req: any, reply: any) =
         name: r.name,
         attrType: r.attrType,
         createdAt: r.createdAt,
-        optionsJson: r.optionsJson, // lo dejas si quieres para debug
-        options,                   // ✅ lo importante
+        options, // ✅ lo que el front necesita
+        optionsJson: r.optionsJson, // opcional: para debug
       };
     });
 
@@ -1303,6 +1322,7 @@ app.get('/attributes', { preHandler: authGuard }, async (req: any, reply: any) =
     reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });
+
 
 
 app.put('/attributes/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
