@@ -114,53 +114,51 @@
       </div>
     </div>
 
-    <!-- ATRIBUTOS DINÁMICOS -->
+    <!-- ATRIBUTOS DINÁMICOS (ACTUALIZADO PARA VERCEL/STRICT) -->
     <div class="row row-3">
       <div class="field full">
         <label>Atributos dinámicos</label>
 
         <div class="attr-builder">
-          <select class="inp" #attrSel>
-            <option value="">— seleccionar —</option>
-            <option *ngFor="let a of allAttrDefs()" [value]="a.id">
+          <!-- selector atributo -->
+          <select class="inp" [(ngModel)]="attrDraftId">
+            <option [ngValue]="null">— seleccionar —</option>
+            <option *ngFor="let a of allAttrDefs()" [ngValue]="a.id">
               {{ a.name }}
             </option>
           </select>
 
-          <select class="inp" #opSel>
+          <!-- operador -->
+          <select class="inp" [(ngModel)]="attrDraftOp">
             <option value="=">=</option>
             <option value="like">like</option>
             <option value="between">between</option>
           </select>
 
+          <!-- valor simple -->
           <input
             class="inp"
-            #val1
             placeholder="Valor…"
-            *ngIf="opSel.value !== 'between'" />
+            *ngIf="attrDraftOp !== 'between'"
+            [(ngModel)]="attrDraftValue" />
 
+          <!-- between -->
           <input
             class="inp"
-            #fromVal
             placeholder="Desde"
-            *ngIf="opSel.value === 'between'" />
+            *ngIf="attrDraftOp === 'between'"
+            [(ngModel)]="attrDraftFrom" />
 
           <input
             class="inp"
-            #toVal
             placeholder="Hasta"
-            *ngIf="opSel.value === 'between'" />
+            *ngIf="attrDraftOp === 'between'"
+            [(ngModel)]="attrDraftTo" />
 
           <button
             type="button"
             class="btn"
-            (click)="onAddAttrClick(
-              +attrSel.value,
-              opSel.value,
-              val1?.value,
-              fromVal?.value,
-              toVal?.value
-            )">
+            (click)="onAddAttrClick()">
             Añadir
           </button>
         </div>
@@ -170,6 +168,7 @@
             <ng-container *ngIf="af.op === 'between'; else singleAttr">
               {{ af.name || ('Attr #' + af.id) }}: {{ af.from }} – {{ af.to }}
             </ng-container>
+
             <ng-template #singleAttr>
               {{ af.name || ('Attr #' + af.id) }} {{ af.op }} {{ af.value }}
             </ng-template>
