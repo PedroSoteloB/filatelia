@@ -21,15 +21,25 @@ export type CollectionRow = {
   name: string;
   description: string | null;
   type: 'smart' | 'static';
-  filter_json: any;           // puede venir string, objeto o null
+  filter_json: any;
   sort_key: string | null;
   sort_dir: 'asc' | 'desc' | null;
   created_at: string;
   updated_at: string;
-  cover_image_path?: string | null; // viene del backend
-  thumb?: string | null;            // lo usamos en el template
+  parent_collection_id?: number | null;
+  cover_image_path?: string | null;
+
+  thumb?: string | null;
   thumbs?: string[];
+
+  // ✅ NUEVO (lo que ahora devuelve el backend)
+  filter_tag_ids?: number[];
+  filter_tags?: string[];
+  filter_tag_mode?: string | null;
+  filter_attrs?: any[];
+  filter_chips?: string[];
 };
+
 
 // ==== Helpers JWT (roles y expiración) ====
 function getRoleFromToken(token: string): any {
