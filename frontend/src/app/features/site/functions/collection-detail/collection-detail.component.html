@@ -78,7 +78,9 @@
           placeholder="Escribe o elige un tag…"
           list="tagList"
           [ngModel]="tagSearch()"
-          (ngModelChange)="setTagSearch($event)"
+
+          (ngModelChange)="setTagSearch($event || '')"
+
           (change)="onTagClick(tagSearch())" />
 
         <datalist id="tagList">
@@ -237,29 +239,54 @@
       class="card"
       *ngFor="let it of items()"
       [class.selected]="selectedIds.has(it.id)">
-      <label class="sel">
+  
+      <!-- checkbox -->
+      <label class="sel" (click)="$event.stopPropagation()">
         <input
           type="checkbox"
           [checked]="selectedIds.has(it.id)"
           (change)="toggleSelect(it.id, ($any($event.target)).checked)" />
       </label>
-
-      <div class="thumb" [class.placeholder]="!it.cover" (click)="goItemDetail(it.id)">
+  
+      <!-- imagen (YA NO NAVEGA) -->
+      <div
+        class="thumb"
+        [class.placeholder]="!it.cover"
+        (click)="$event.stopPropagation()">
         <img *ngIf="it.cover" [src]="it.cover" />
         <span *ngIf="!it.cover">Sin imagen</span>
       </div>
-
-      <div class="body" (click)="goItemDetail(it.id)">
+  
+      <!-- cuerpo -->
+      <div class="body" (click)="$event.stopPropagation()">
         <div class="stamp-title">{{ it.title }}</div>
         <div class="meta">{{ buildMeta(it) }}</div>
+  
+        <!-- TAGS DEL ÍTEM -->
+        <div class="item-tags" *ngIf="it.tags?.length">
+          <span class="chip tiny" *ngFor="let t of it.tags">
+            {{ t.name }}
+          </span>
+        </div>
+  
+        <!-- ATRIBUTOS DEL ÍTEM -->
+        <div class="item-attrs" *ngIf="it.attributes?.length">
+          <div class="attr-row" *ngFor="let a of it.attributes">
+            <span class="attr-name">{{ a.name }}:</span>
+            <span class="attr-val">{{ a.value }}</span>
+          </div>
+        </div>
       </div>
-
+  
+      <!-- botón portada -->
       <button
         class="btn tiny cover-btn"
         (click)="setCover(it.id); $event.stopPropagation()"
         [class.primary]="coverCandidateId === it.id">
         {{ coverCandidateId === it.id ? 'Portada seleccionada' : 'Usar como portada' }}
       </button>
+  
     </article>
   </section>
+  
 </div>
