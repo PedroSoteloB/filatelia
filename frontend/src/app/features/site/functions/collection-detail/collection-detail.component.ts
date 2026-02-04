@@ -1833,4 +1833,13 @@ export class CollectionDetailComponent implements OnInit {
       return `${base} ${stamp}`;
     }
   }
+
+  formatAttrFilter(af: AttrFilter): string {
+    const label = af.name || `Attr #${af.id}`;
+    if (af.op === 'between') {
+      return `${label}: ${af.from} – ${af.to}`;
+    }
+    return `${label} ${af.op} ${af.value}`;
+  }
+  
 }

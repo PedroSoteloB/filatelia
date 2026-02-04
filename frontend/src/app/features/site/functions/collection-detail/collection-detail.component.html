@@ -163,7 +163,7 @@
           </button>
         </div>
 
-        <div class="attr-chips" *ngIf="attrFilters().length">
+        <!-- <div class="attr-chips" *ngIf="attrFilters().length">
           <span class="chip" *ngFor="let af of attrFilters(); let i = index">
             <ng-container *ngIf="af.op === 'between'; else singleAttr">
               {{ af.name || ('Attr #' + af.id) }}: {{ af.from }} – {{ af.to }}
@@ -178,7 +178,14 @@
               class="chip-x"
               (click)="removeAttrFilter(i)">×</button>
           </span>
+        </div> -->
+        <div class="attr-chips" *ngIf="attrFilters().length">
+          <span class="chip" *ngFor="let af of attrFilters(); let i = index">
+            {{ formatAttrFilter(af) }}
+            <button type="button" class="chip-x" (click)="removeAttrFilter(i)">×</button>
+          </span>
         </div>
+        
       </div>
     </div>
   </section>
