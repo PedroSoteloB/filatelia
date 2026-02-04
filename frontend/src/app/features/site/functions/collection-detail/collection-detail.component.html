@@ -5,7 +5,9 @@
 
     <div class="top-info">
       <div class="title">Colección #{{ collectionId() }}</div>
-      <div class="subtitle">Refina, selecciona y define la portada de este grupo de piezas.</div>
+      <div class="subtitle">
+        Refina, selecciona y define la portada de este grupo de piezas.
+      </div>
     </div>
 
     <div class="spacer"></div>
@@ -20,35 +22,81 @@
       </p>
     </header>
 
+    <!-- FILTROS BÁSICOS -->
     <div class="row row-1">
       <div class="field">
         <label>Texto libre</label>
-        <input class="inp" placeholder="Título, descripción, catálogo…" [(ngModel)]="form.q" />
+        <input
+          class="inp"
+          placeholder="Título, descripción, catálogo…"
+          [(ngModel)]="form.q" />
       </div>
 
+      <!-- PAÍS (igual a búsqueda) -->
       <div class="field">
         <label>País</label>
-        <input class="inp" placeholder="Country" [(ngModel)]="form.country" />
+        <input
+          class="inp"
+          placeholder="Perú, Chile…"
+          list="countryList"
+          [(ngModel)]="form.country" />
+        <datalist id="countryList">
+          <option *ngFor="let c of countries()" [value]="c"></option>
+        </datalist>
       </div>
 
       <div class="field">
         <label>Año desde</label>
-        <input class="inp" type="number" placeholder="Ej. 1900" [(ngModel)]="form.yearFrom" />
+        <input
+          class="inp"
+          type="number"
+          placeholder="Ej. 1900"
+          [(ngModel)]="form.yearFrom" />
       </div>
 
       <div class="field">
         <label>Año hasta</label>
-        <input class="inp" type="number" placeholder="Ej. 1950" [(ngModel)]="form.yearTo" />
+        <input
+          class="inp"
+          type="number"
+          placeholder="Ej. 1950"
+          [(ngModel)]="form.yearTo" />
       </div>
     </div>
 
+    <!-- TAGS -->
     <div class="row row-2">
       <div class="field">
         <label>Tags</label>
+
+        <!-- buscador -->
         <input
           class="inp"
-          placeholder="Temática, color… (separados por coma)"
-          [(ngModel)]="tagsComma" />
+          placeholder="Escribe parte del tag…"
+          [ngModel]="tagSearch()"
+          (ngModelChange)="setTagSearch($event)" />
+
+        <!-- sugerencias -->
+        <div class="tag-suggest" *ngIf="filteredTags().length">
+          <button
+            type="button"
+            class="tag-suggest-item"
+            *ngFor="let t of filteredTags()"
+            (click)="onTagClick(t.name)">
+            {{ t.name }}
+          </button>
+        </div>
+
+        <!-- chips -->
+        <div class="tag-chips" *ngIf="selectedTagNames().length">
+          <span class="chip" *ngFor="let n of selectedTagNames()">
+            {{ n }}
+            <button
+              type="button"
+              class="chip-x"
+              (click)="toggleTagName(n)">×</button>
+          </span>
+        </div>
       </div>
 
       <div class="field narrow">
@@ -66,15 +114,72 @@
       </div>
     </div>
 
+    <!-- ATRIBUTOS DINÁMICOS -->
     <div class="row row-3">
       <div class="field full">
-        <label>Atributos avanzados (JSON opcional)</label>
-        <textarea
-          class="inp"
-          rows="3"
-          placeholder='Ej.: [{"name":"color","op":"like","value":"azul"}]'
-          [(ngModel)]="attrsJson">
-        </textarea>
+        <label>Atributos dinámicos</label>
+
+        <div class="attr-builder">
+          <select class="inp" #attrSel>
+            <option value="">— seleccionar —</option>
+            <option *ngFor="let a of allAttrDefs()" [value]="a.id">
+              {{ a.name }}
+            </option>
+          </select>
+
+          <select class="inp" #opSel>
+            <option value="=">=</option>
+            <option value="like">like</option>
+            <option value="between">between</option>
+          </select>
+
+          <input
+            class="inp"
+            #val1
+            placeholder="Valor…"
+            *ngIf="opSel.value !== 'between'" />
+
+          <input
+            class="inp"
+            #fromVal
+            placeholder="Desde"
+            *ngIf="opSel.value === 'between'" />
+
+          <input
+            class="inp"
+            #toVal
+            placeholder="Hasta"
+            *ngIf="opSel.value === 'between'" />
+
+          <button
+            type="button"
+            class="btn"
+            (click)="onAddAttrClick(
+              +attrSel.value,
+              opSel.value,
+              val1?.value,
+              fromVal?.value,
+              toVal?.value
+            )">
+            Añadir
+          </button>
+        </div>
+
+        <div class="attr-chips" *ngIf="attrFilters().length">
+          <span class="chip" *ngFor="let af of attrFilters(); let i = index">
+            <ng-container *ngIf="af.op === 'between'; else singleAttr">
+              {{ af.name || ('Attr #' + af.id) }}: {{ af.from }} – {{ af.to }}
+            </ng-container>
+            <ng-template #singleAttr>
+              {{ af.name || ('Attr #' + af.id) }} {{ af.op }} {{ af.value }}
+            </ng-template>
+
+            <button
+              type="button"
+              class="chip-x"
+              (click)="removeAttrFilter(i)">×</button>
+          </span>
+        </div>
       </div>
     </div>
   </section>
@@ -83,7 +188,7 @@
   <div *ngIf="error()" class="status error">{{ error() }}</div>
   <div *ngIf="busy()" class="status busy">Cargando…</div>
 
-  <!-- HISTORIA OPCIONAL -->
+  <!-- HISTORIA -->
   <section class="history-panel" *ngIf="items().length">
     <header class="history-head">
       <div class="pill soft">Historia de la colección (opcional)</div>
@@ -108,8 +213,11 @@
       <span class="chip">
         Resultados: <b>{{ items().length }}</b>
       </span>
-      <span class="chip" [class.chip-ok]="selectedIds.size >= 10 && selectedIds.size <= 15">
-        Seleccionados: <b>{{ selectedIds.size }}</b> <span class="hint-mini">(ideal 10–15)</span>
+      <span
+        class="chip"
+        [class.chip-ok]="selectedIds.size >= 10 && selectedIds.size <= 15">
+        Seleccionados: <b>{{ selectedIds.size }}</b>
+        <span class="hint-mini">(ideal 10–15)</span>
       </span>
     </div>
 
@@ -119,7 +227,7 @@
       class="btn primary"
       [disabled]="selectedIds.size === 0 || busy()"
       (click)="createSnapshot(true)">
-      Crear Presentacion con seleccionados
+      Crear Presentación con seleccionados
     </button>
   </section>
 
@@ -131,13 +239,12 @@
     </div>
   </section>
 
-  <!-- GRID DE PIEZAS -->
+  <!-- GRID -->
   <section class="grid" *ngIf="items().length">
     <article
       class="card"
       *ngFor="let it of items()"
       [class.selected]="selectedIds.has(it.id)">
-      <!-- Checkbox de selección -->
       <label class="sel">
         <input
           type="checkbox"
@@ -145,28 +252,21 @@
           (change)="toggleSelect(it.id, ($any($event.target)).checked)" />
       </label>
 
-      <!-- Imagen -->
       <div class="thumb" [class.placeholder]="!it.cover" (click)="goItemDetail(it.id)">
-        <img *ngIf="it.cover" [src]="it.cover" alt="" />
+        <img *ngIf="it.cover" [src]="it.cover" />
         <span *ngIf="!it.cover">Sin imagen</span>
       </div>
 
-      <!-- Información -->
       <div class="body" (click)="goItemDetail(it.id)">
-        <div class="stamp-title" [title]="it.title">{{ it.title }}</div>
-
-        <div class="meta">
-          {{ buildMeta(it) }}
-        </div>
+        <div class="stamp-title">{{ it.title }}</div>
+        <div class="meta">{{ buildMeta(it) }}</div>
       </div>
 
-      <!-- Botón de portada -->
       <button
         class="btn tiny cover-btn"
         (click)="setCover(it.id); $event.stopPropagation()"
         [class.primary]="coverCandidateId === it.id">
-        <span *ngIf="coverCandidateId === it.id">Portada seleccionada</span>
-        <span *ngIf="coverCandidateId !== it.id">Usar como portada</span>
+        {{ coverCandidateId === it.id ? 'Portada seleccionada' : 'Usar como portada' }}
       </button>
     </article>
   </section>
