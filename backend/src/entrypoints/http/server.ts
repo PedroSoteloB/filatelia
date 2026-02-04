@@ -1233,6 +1233,23 @@ app.post('/attributes', { preHandler: authGuard }, async (req: any, reply: any) 
   } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
 });
 
+// app.get('/attributes', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+//     const [rows]: any = await db.execute(
+//       `SELECT id,
+//               name,
+//               attr_type AS attrType,
+//               options_json AS optionsJson,
+//               created_at AS createdAt
+//          FROM attribute_definitions
+//         WHERE owner_user_id = ?
+//         ORDER BY name ASC`,
+//       [ownerId]
+//     );
+//     reply.send(rows);
+//   } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+// });
 app.get('/attributes', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -1247,9 +1264,46 @@ app.get('/attributes', { preHandler: authGuard }, async (req: any, reply: any) =
         ORDER BY name ASC`,
       [ownerId]
     );
-    reply.send(rows);
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'internal_error' }); }
+
+    const safe = (rows || []).map((r: any) => {
+      let options: string[] = [];
+
+      const raw = r.optionsJson;
+
+      // raw puede ser string JSON, array, null
+      if (Array.isArray(raw)) {
+        options = raw.map((x: any) => String(x).trim()).filter(Boolean);
+      } else if (typeof raw === 'string' && raw.trim()) {
+        const s = raw.trim();
+        try {
+          const parsed = JSON.parse(s);
+          if (Array.isArray(parsed)) {
+            options = parsed.map((x: any) => String(x).trim()).filter(Boolean);
+          } else {
+            // fallback si viene "A,B,C"
+            options = s.split(',').map((x) => x.trim()).filter(Boolean);
+          }
+        } catch {
+          options = s.split(',').map((x) => x.trim()).filter(Boolean);
+        }
+      }
+
+      return {
+        id: r.id,
+        name: r.name,
+        attrType: r.attrType,
+        createdAt: r.createdAt,
+        optionsJson: r.optionsJson, // lo dejas si quieres para debug
+        options,                   // ✅ lo importante
+      };
+    });
+
+    reply.send(safe);
+  } catch (e: any) {
+    reply.code(500).send({ message: e?.message || 'internal_error' });
+  }
 });
+
 
 app.put('/attributes/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
