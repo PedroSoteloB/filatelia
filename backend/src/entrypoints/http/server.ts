@@ -3991,117 +3991,6 @@ app.get('/collections/:id/tags', { preHandler: authGuard }, async (req: any, rep
   }
 });
 
-app.get('/collections/:id/attributes', { preHandler: authGuard }, async (req: any, reply: any) => {
-  try {
-    const ownerId = ensureAuth(req);
-    const colId = Number(req.params.id);
-    if (!Number.isFinite(colId)) return reply.code(400).send({ message: 'id inválido' });
-
-    const [crows]: any = await db.execute(
-      `SELECT TOP 1 id, type, filter_json
-         FROM collections
-        WHERE id = ? AND owner_user_id = ?`,
-      [colId, ownerId]
-    );
-    const col = crows?.[0];
-    if (!col) return reply.code(404).send({ message: 'collection_not_found' });
-
-    let join = '';
-    const params: any[] = [];
-
-    if (String(col.type).toLowerCase() === 'static') {
-      join = `JOIN collection_items ci ON ci.item_id = i.id AND ci.collection_id = ?`;
-      params.push(colId);
-    } else {
-      let f: any = {};
-      try {
-        const raw = col.filter_json;
-        f = raw == null ? {} : (typeof raw === 'string' ? JSON.parse(raw) : (Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : raw));
-      } catch { f = {}; }
-
-      const built = buildWhereFromFilter(ownerId, f);
-      const { where, params: whereParams, tagIds, tagNames, tagMode, attrFilters } = built;
-
-      let baseJoin = '';
-      const baseParams: any[] = [];
-
-      // tags filter (copiado de tu lógica)
-      if ((tagIds.length + tagNames.length) > 0) {
-        let allTagIds = [...tagIds];
-
-        if (tagNames.length) {
-          const placeholders = tagNames.map(() => '?').join(',');
-          const ownerFilter = await tagsOwnerWhere(ownerId);
-          const [trs]: any = await db.execute(
-            `SELECT id FROM tags WHERE ${ownerFilter.where} AND name IN (${placeholders})`,
-            [...ownerFilter.params, ...tagNames]
-          );
-          allTagIds = allTagIds.concat(trs.map((r: any) => r.id));
-        }
-
-        const uniqueIds = Array.from(new Set(allTagIds.map(Number).filter(Number.isFinite)));
-        if (uniqueIds.length) {
-          if (String(tagMode || 'OR').toUpperCase() === 'AND') {
-            baseJoin += `
-              JOIN (
-                SELECT it.item_id
-                  FROM item_tags it
-                 WHERE it.tag_id IN (${uniqueIds.map(() => '?').join(',')})
-                 GROUP BY it.item_id
-                HAVING COUNT(DISTINCT it.tag_id) = ${uniqueIds.length}
-              ) tfilter ON tfilter.item_id = i.id
-            `;
-            baseParams.push(...uniqueIds);
-          } else {
-            baseJoin += `
-              JOIN item_tags itf
-                ON itf.item_id = i.id
-               AND itf.tag_id IN (${uniqueIds.map(() => '?').join(',')})
-            `;
-            baseParams.push(...uniqueIds);
-          }
-        }
-      }
-
-      const { join: aj, params: ap } = await buildAttrJoins(ownerId, attrFilters);
-      baseJoin += aj;
-      baseParams.push(...ap);
-
-      join = `${baseJoin}`;
-
-      (req as any).__smartWhere = where;
-      (req as any).__smartWhereParams = whereParams;
-      params.push(...baseParams);
-    }
-
-    const smartWhere: string[] = (req as any).__smartWhere || [];
-    const smartWhereParams: any[] = (req as any).__smartWhereParams || [];
-
-    const sql = `
-      SELECT DISTINCT
-        ad.id,
-        ad.name,
-        ad.attr_type AS attrType,
-        ad.options_json AS optionsJson,
-        ad.created_at AS createdAt
-      FROM philatelic_items i
-      ${join}
-      JOIN item_attributes ia ON ia.item_id = i.id
-      JOIN attribute_definitions ad ON ad.id = ia.attribute_id
-      WHERE i.owner_user_id = ?
-        AND ad.owner_user_id = ?
-        ${smartWhere.length ? `AND ${smartWhere.join(' AND ')}` : ''}
-      ORDER BY ad.name ASC
-    `;
-
-    const allParams = [ownerId, ownerId, ...params, ...smartWhereParams];
-
-    const [rows]: any = await db.execute(sql, allParams);
-    return reply.send(rows || []);
-  } catch (e: any) {
-    return reply.code(500).send({ message: e?.message || 'internal_error' });
-  }
-});
 
 app.get('/collections/:id/attributes', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
@@ -4216,6 +4105,120 @@ app.get('/collections/:id/attributes', { preHandler: authGuard }, async (req: an
     return reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });
+
+app.get('/collections/:id/tags', { preHandler: authGuard }, async (req: any, reply: any) => {
+  try {
+    const ownerId = ensureAuth(req);
+    const colId = Number(req.params.id);
+    if (!Number.isFinite(colId)) return reply.code(400).send({ message: 'id inválido' });
+
+    const [crows]: any = await db.execute(
+      `SELECT TOP 1 id, type, filter_json
+         FROM collections
+        WHERE id = ? AND owner_user_id = ?`,
+      [colId, ownerId]
+    );
+    const col = crows?.[0];
+    if (!col) return reply.code(404).send({ message: 'collection_not_found' });
+
+    let join = '';
+    const params: any[] = [];
+
+    if (String(col.type).toLowerCase() === 'static') {
+      join = `
+        JOIN collection_items ci ON ci.item_id = i.id AND ci.collection_id = ?
+      `;
+      params.push(colId);
+    } else {
+      let f: any = {};
+      try {
+        const raw = col.filter_json;
+        f = raw == null ? {} : (typeof raw === 'string'
+          ? JSON.parse(raw)
+          : (Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : raw));
+      } catch { f = {}; }
+
+      const built = buildWhereFromFilter(ownerId, f);
+      const { where, params: whereParams, tagIds, tagNames, tagMode, attrFilters } = built;
+
+      let baseJoin = '';
+      const baseParams: any[] = [];
+
+      if ((tagIds.length + tagNames.length) > 0) {
+        let allTagIds = [...tagIds];
+
+        if (tagNames.length) {
+          const placeholders = tagNames.map(() => '?').join(',');
+          const ownerFilter = await tagsOwnerWhere(ownerId);
+          const [trs]: any = await db.execute(
+            `SELECT id FROM tags WHERE ${ownerFilter.where} AND name IN (${placeholders})`,
+            [...ownerFilter.params, ...tagNames]
+          );
+          allTagIds = allTagIds.concat(trs.map((r: any) => r.id));
+        }
+
+        const uniqueIds = Array.from(new Set(allTagIds.map(Number).filter(Number.isFinite)));
+        if (uniqueIds.length) {
+          if (String(tagMode || 'OR').toUpperCase() === 'AND') {
+            baseJoin += `
+              JOIN (
+                SELECT it.item_id
+                  FROM item_tags it
+                 WHERE it.tag_id IN (${uniqueIds.map(() => '?').join(',')})
+                 GROUP BY it.item_id
+                HAVING COUNT(DISTINCT it.tag_id) = ${uniqueIds.length}
+              ) tfilter ON tfilter.item_id = i.id
+            `;
+            baseParams.push(...uniqueIds);
+          } else {
+            baseJoin += `
+              JOIN item_tags itf
+                ON itf.item_id = i.id
+               AND itf.tag_id IN (${uniqueIds.map(() => '?').join(',')})
+            `;
+            baseParams.push(...uniqueIds);
+          }
+        }
+      }
+
+      const { join: attrJoin, params: attrParams } = await buildAttrJoins(ownerId, attrFilters);
+      baseJoin += attrJoin;
+      baseParams.push(...attrParams);
+
+      join = `${baseJoin}`;
+
+      (req as any).__smartWhere = where;
+      (req as any).__smartWhereParams = whereParams;
+      params.push(...baseParams);
+    }
+
+    const ownerFilter = await tagsOwnerWhere(ownerId);
+
+    const smartWhere: string[] = (req as any).__smartWhere || [];
+    const smartWhereParams: any[] = (req as any).__smartWhereParams || [];
+
+    const sql = `
+      SELECT DISTINCT t.id, t.name
+      FROM philatelic_items i
+      ${join}
+      JOIN item_tags it ON it.item_id = i.id
+      JOIN tags t ON t.id = it.tag_id
+      WHERE i.owner_user_id = ?
+        AND ${ownerFilter.where}
+        ${smartWhere.length ? `AND ${smartWhere.join(' AND ')}` : ''}
+      ORDER BY t.name ASC
+    `;
+
+    // ✅ FIX: params del JOIN van primero (porque aparecen antes en el SQL)
+    const allParams = [...params, ownerId, ...ownerFilter.params, ...smartWhereParams];
+
+    const [rows]: any = await db.execute(sql, allParams);
+    return reply.send(rows || []);
+  } catch (e: any) {
+    return reply.code(500).send({ message: e?.message || 'internal_error' });
+  }
+});
+
 
 //en azure
 const PORT = Number(process.env.PORT || 3000);
