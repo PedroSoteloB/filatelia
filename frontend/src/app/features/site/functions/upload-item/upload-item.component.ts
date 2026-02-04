@@ -194,36 +194,7 @@ export class UploadItemComponent implements OnInit {
     this.tags.set([...base].slice(0, 50));
   }
 
-  // private buildCategories(): CategoryPayload[] {
-  //   // 🔍 log de lo que hay en attrs antes de mapear
-  //   console.log('[UPLOAD] buildCategories() raw attrs =', this.attrs());
-
-  //   const out: (CategoryPayload | null)[] = this.attrs().map(a => {
-  //     const name = a.name?.trim();
-  //     if (!name) return null;
-
-  //     if (a.type === 'number') {
-  //       const n = Number(String(a.value).replace(',', '.').trim());
-  //       if (!Number.isFinite(n)) return null;
-  //       return { name, attrType: 'number', value: n } as const;
-  //     }
-
-  //     if (a.type === 'date') {
-  //       const v = String(a.value || '').trim();
-  //       if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
-  //       return { name, attrType: 'date', value: v } as const;
-  //     }
-
-  //     const v = String(a.value || '').trim();
-  //     if (!v) return null;
-  //     return { name, attrType: a.type, value: v } as const;
-  //   });
-
-  //   const filtered = out.filter((x): x is CategoryPayload => !!x);
-
-  //   console.log('[UPLOAD] buildCategories() filtered =', filtered);
-  //   return filtered;
-  // }
+ 
   private buildCategories(): CategoryPayload[] {
     const seen = new Set<string>();
   
@@ -335,21 +306,6 @@ export class UploadItemComponent implements OnInit {
     this.attrValueDraft.set(v);
   }
 
-  // addAttr() {
-  //   const name = this.attrNameDraft().trim();
-  //   if (!name) return;
-  //   const entry: DynAttr = {
-  //     name,
-  //     type: this.attrTypeDraft(),
-  //     value: this.attrValueDraft().trim(),
-  //   };
-  //   this.attrs.set([...this.attrs(), entry]);
-  //   this.attrNameDraft.set('');
-  //   this.attrValueDraft.set('');
-  //   this.attrTypeDraft.set('text');
-
-  //   console.log('[UPLOAD] addAttr() attrs =', this.attrs());
-  // }
   addAttr() {
     this.error.set(null);
   
@@ -391,96 +347,7 @@ export class UploadItemComponent implements OnInit {
   }
 
   // ======= Submit =======
-  // async submit() {
-  //   this.error.set(null);
-  //   this.successId.set(null);
-
-  //   if (this.form.invalid) {
-  //     this.form.markAllAsTouched();
-  //     this.error.set('Completa los campos obligatorios.');
-  //     return;
-  //   }
-  //   if (this.files().length === 0) {
-  //     this.error.set('Sube al menos una imagen.');
-  //     return;
-  //   }
-
-  //   const csv = (this.form.get('tagsCsv')?.value || '') as string;
-  //   if (csv.trim()) this.pushTags(csv.split(','));
-
-  //   const v = this.form.getRawValue();
-  //   const tags = this.tags();
-  //   const categories = this.buildCategories();
-
-  //   // 🔍 LOGS CLAVE ANTES DE ENVIAR
-  //   console.log('[UPLOAD] attrs UI (antes de enviar) =', this.attrs());
-  //   console.log('[UPLOAD] categories payload =', categories);
-  //   console.log('[UPLOAD] tags =', tags);
-
-  //   const metadata: any = {
-  //     title: v.title?.trim(),
-  //     description: v.description || null,
-  //     country: v.country || null,
-  //     issueYear: v.issueYear ?? null,
-  //     condition: v.condition || null,
-  //     catalogCode: v.catalogCode || null,
-  //     faceValue: v.faceValue ?? null,
-  //     currency: v.currency || null,
-  //     acquisitionDate: v.acquisitionDate || null,
-  //     visibility: 'public',
-  //     tags,
-  //     categories
-  //   };
-
-  //   console.log('[UPLOAD] metadata enviado =', metadata);
-
-  //   const fd = new FormData();
-  //   fd.append('metadata', JSON.stringify(metadata));
-  //   this.files().forEach((file, idx) =>
-  //     fd.append(`image${idx + 1}`, file, file.name)
-  //   );
-
-  //   console.log('[UPLOAD] FormData metadata =', fd.get('metadata'));
-
-  //   const token =
-  //     (this.isBrowser &&
-  //       (localStorage.getItem('accessToken') ||
-  //         sessionStorage.getItem('accessToken'))) ||
-  //     '';
-
-  //   const headers = new HttpHeaders(
-  //     token ? { Authorization: `Bearer ${token}` } : {}
-  //   );
-
-  //   this.busy.set(true);
-  //   try {
-  //     console.log('[UPLOAD] Enviando POST', ENDPOINT_ITEMS);
-  //     const res = await firstValueFrom(
-  //       this.api.post<{ id: number }>(ENDPOINT_ITEMS, fd, headers)
-  //     );
-  //     console.log('[UPLOAD] Respuesta /items =', res);
-
-  //     this.successId.set(res?.id ?? null);
-
-  //     this.files.set([]);
-  //     this.tags.set([]);
-  //     this.tagDraft.set('');
-  //     this.attrs.set([]);
-  //     this.attrNameDraft.set('');
-  //     this.attrValueDraft.set('');
-  //     this.attrTypeDraft.set('text');
-
-  //     this.form.reset({ visibility: 'public', tagsCsv: '' });
-  //     this.form.get('visibility')?.disable({ emitEvent: false, onlySelf: true });
-  //   } catch (e: any) {
-  //     console.error('[UPLOAD] ERROR /items =', e);
-  //     this.error.set(
-  //       e?.error?.message || e?.message || 'Error subiendo la pieza'
-  //     );
-  //   } finally {
-  //     this.busy.set(false);
-  //   }
-  // }
+  
   async submit() {
     this.error.set(null);
     this.successId.set(null);

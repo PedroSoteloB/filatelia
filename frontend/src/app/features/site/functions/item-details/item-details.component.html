@@ -1,178 +1,3 @@
-<!-- <div class="item-details-page">
-  <div class="details-inner">
-    <a routerLink="/items/mine" class="back-link">
-      ← Volver al listado
-    </a>
-
-    <ng-container *ngIf="busy(); else contentTpl">
-      <div class="loading">Cargando detalles…</div>
-    </ng-container>
-
-    <ng-template #contentTpl>
-      <ng-container *ngIf="!error(); else errorTpl">
-        <ng-container *ngIf="item() as it">
-
-       
-          <section class="details-card">
-
-         
-            <header class="details-header">
-              <div class="title-block">
-                <span class="eyebrow">Ficha filatélica</span>
-                <h1>{{ it.title || 'Sin título' }}</h1>
-                <p class="subtitle" *ngIf="it.country || it.issueYear">
-                  <span *ngIf="it.country">{{ it.country | titlecase }}</span>
-                  <span *ngIf="it.country && it.issueYear"> • </span>
-                  <span *ngIf="it.issueYear">{{ it.issueYear }}</span>
-                </p>
-              </div>
-
-              <div class="header-meta" *ngIf="it.createdAt || it.updatedAt">
-                <div *ngIf="it.createdAt">
-                  <span class="meta-label">Creado</span>
-                  <span class="meta-value">
-                    {{ it.createdAt | date:'dd/MM/yyyy HH:mm':'UTC' }}
-                  </span>
-                </div>
-                <div *ngIf="it.updatedAt">
-                  <span class="meta-label">Actualizado</span>
-                  <span class="meta-value">
-                    {{ it.updatedAt | date:'dd/MM/yyyy HH:mm':'UTC' }}
-                  </span>
-                </div>
-              </div>
-            </header>
-
-          
-            <div class="details-layout">
-          
-              <aside class="left-column">
-                <div class="image-card">
-                  <div class="image-inner">
-                    <img
-                      *ngIf="it.cover; else noCover"
-                      [src]="it.cover!"
-                      [alt]="it.title || 'Pieza filatélica'"
-                    />
-                    <ng-template #noCover>
-                      <div class="no-cover">Sin imagen</div>
-                    </ng-template>
-                  </div>
-
-                  <div class="image-caption">
-                    <span class="badge">
-                      {{ it.country ? (it.country | titlecase) : 'País no definido' }}
-                    </span>
-                    <span class="badge" *ngIf="it.issueYear">
-                      Año {{ it.issueYear }}
-                    </span>
-                    <span class="badge soft" *ngIf="it.visibility">
-                      {{ it.visibility === 'public' ? 'Público' : 'Privado' }}
-                    </span>
-                  </div>
-                </div>
-              </aside>
-
-          
-              <section class="right-column">
-
-          
-                <section class="section-card">
-                  <h2 class="section-title">Datos principales</h2>
-                  <dl class="meta-grid">
-                    <div>
-                      <dt>País</dt>
-                      <dd>{{ it.country ? (it.country | titlecase) : '—' }}</dd>
-                    </div>
-
-                    <div>
-                      <dt>Año de emisión</dt>
-                      <dd>{{ it.issueYear || '—' }}</dd>
-                    </div>
-
-                    <div>
-                      <dt>Condición</dt>
-                      <dd>{{ it.conditionCode || '—' }}</dd>
-                    </div>
-
-                    <div>
-                      <dt>Código de catálogo</dt>
-                      <dd>{{ it.catalogCode || '—' }}</dd>
-                    </div>
-
-                    <div>
-                      <dt>Valor facial</dt>
-                      <dd>
-                        <ng-container
-                          *ngIf="it.faceValue !== null && it.faceValue !== undefined; else dash"
-                        >
-                          {{ it.faceValue }}
-                          <span *ngIf="it.currency">({{ it.currency }})</span>
-                        </ng-container>
-                        <ng-template #dash>—</ng-template>
-                      </dd>
-                    </div>
-
-                    <div>
-                      <dt>Fecha de adquisición</dt>
-                      <dd>
-                        {{
-                          it.acquisitionDate
-                            ? (it.acquisitionDate | date:'dd/MM/yyyy':'UTC')
-                            : '—'
-                        }}
-                      </dd>
-                    </div>
-                  </dl>
-                </section>
-
-          
-                <section class="section-card" *ngIf="it.description">
-                  <h2 class="section-title">Descripción</h2>
-                  <p class="description-text">
-                    {{ it.description }}
-                  </p>
-                </section>
-
-          
-                <section class="section-card" *ngIf="it.tags?.length">
-                  <h2 class="section-title">Tags</h2>
-                  <div class="tags-list">
-                    <span class="tag-pill" *ngFor="let t of it.tags">
-                      #{{ t.name }}
-                    </span>
-                  </div>
-                </section>
-
-          
-                <section class="section-card" *ngIf="it.attributes?.length">
-                  <h2 class="section-title">Atributos adicionales</h2>
-                  <div class="attrs-grid">
-                    <article class="attr-box" *ngFor="let a of it.attributes">
-                      <div class="attr-header">
-                        <span class="attr-chip">{{ a.attrType || 'Texto' }}</span>
-                        <span class="attr-name">{{ a.name }}</span>
-                      </div>
-                      <p class="attr-value">
-                        {{ a.value ?? '—' }}
-                      </p>
-                    </article>
-                  </div>
-                </section>
-
-              </section>
-            </div>
-          </section>
-
-        </ng-container>
-      </ng-container>
-
-      <ng-template #errorTpl>
-        <div class="error-box">{{ error() }}</div>
-      </ng-template>
-    </ng-template>
-  </div>
-</div> -->
 <!-- item-details.component.html (COMPLETO) -->
 <div class="item-details-page">
   <div class="details-inner">
@@ -204,10 +29,7 @@
                 />
 
                 <!-- SUBTÍTULO (País • Año) -->
-                <p
-                  class="subtitle"
-                  *ngIf="!isEditing() && (it.country || it.issueYear)"
-                >
+                <p class="subtitle" *ngIf="!isEditing() && (it.country || it.issueYear)">
                   <span *ngIf="it.country">{{ it.country | titlecase }}</span>
                   <span *ngIf="it.country && it.issueYear"> • </span>
                   <span *ngIf="it.issueYear">{{ it.issueYear }}</span>
@@ -253,20 +75,11 @@
                 </div>
 
                 <div class="actions">
-                  <button
-                    class="btn sm"
-                    *ngIf="!isEditing()"
-                    (click)="startEdit()"
-                  >
+                  <button class="btn sm" *ngIf="!isEditing()" (click)="startEdit()">
                     Editar
                   </button>
 
-                  <button
-                    class="btn sm"
-                    *ngIf="isEditing()"
-                    (click)="saveEdit()"
-                    [disabled]="saving()"
-                  >
+                  <button class="btn sm" *ngIf="isEditing()" (click)="saveEdit()" [disabled]="saving()">
                     {{ saving() ? 'Guardando…' : 'Guardar' }}
                   </button>
 
@@ -298,25 +111,42 @@
                     </ng-template>
                   </div>
 
+                  <!-- ✅ NUEVO: THUMBNAILS (para ver/seleccionar TODAS las imágenes) -->
+                  <div class="thumbs" *ngIf="it.images?.length">
+                    <button
+                      type="button"
+                      class="thumb"
+                      *ngFor="let im of it.images; trackBy: trackByImgId"
+                      (click)="setActiveImage(im)"
+                      [class.active]="im.file && it.cover === im.file"
+                      [disabled]="!im.file"
+                      aria-label="Seleccionar imagen"
+                      title="Seleccionar imagen"
+                    >
+                      <img *ngIf="im.file" [src]="im.file" alt="Miniatura" />
+                      <span *ngIf="!im.file" class="thumb-empty">—</span>
+                    </button>
+                  </div>
+
                   <div class="image-caption">
                     <span class="badge">
-                      {{
-                        it.country
-                          ? (it.country | titlecase)
-                          : 'País no definido'
-                      }}
+                      {{ it.country ? (it.country | titlecase) : 'País no definido' }}
                     </span>
 
-                    <span class="badge" *ngIf="it.issueYear">
-                      Año {{ it.issueYear }}
-                    </span>
+                    <span class="badge" *ngIf="it.issueYear">Año {{ it.issueYear }}</span>
 
                     <span class="badge soft" *ngIf="it.visibility">
                       {{ it.visibility === 'public' ? 'Público' : 'Privado' }}
                     </span>
+
+                    <!-- ✅ NUEVO: contador -->
+                    <span class="badge soft" *ngIf="it.images?.length">
+                      {{ it.images.length }} img
+                    </span>
                   </div>
 
                   <!-- VISIBILIDAD (edit) -->
+                  <!--
                   <div class="edit-block" *ngIf="isEditing()">
                     <label class="field-label">Visibilidad</label>
                     <select
@@ -329,6 +159,7 @@
                       <option value="private">Privado</option>
                     </select>
                   </div>
+                  -->
                 </div>
               </aside>
 
@@ -359,9 +190,7 @@
                     <!-- Año de emisión -->
                     <div>
                       <dt>Año de emisión</dt>
-                      <dd *ngIf="!isEditing()">
-                        {{ it.issueYear || '—' }}
-                      </dd>
+                      <dd *ngIf="!isEditing()">{{ it.issueYear || '—' }}</dd>
                       <dd *ngIf="isEditing()">
                         <input
                           class="text-input"
@@ -378,9 +207,7 @@
                     <!-- Condición -->
                     <div>
                       <dt>Condición</dt>
-                      <dd *ngIf="!isEditing()">
-                        {{ it.conditionCode || '—' }}
-                      </dd>
+                      <dd *ngIf="!isEditing()">{{ it.conditionCode || '—' }}</dd>
                       <dd *ngIf="isEditing()">
                         <input
                           class="text-input"
@@ -395,9 +222,7 @@
                     <!-- Código de catálogo -->
                     <div>
                       <dt>Código de catálogo</dt>
-                      <dd *ngIf="!isEditing()">
-                        {{ it.catalogCode || '—' }}
-                      </dd>
+                      <dd *ngIf="!isEditing()">{{ it.catalogCode || '—' }}</dd>
                       <dd *ngIf="isEditing()">
                         <input
                           class="text-input"
@@ -415,10 +240,7 @@
 
                       <dd *ngIf="!isEditing()">
                         <ng-container
-                          *ngIf="
-                            it.faceValue !== null && it.faceValue !== undefined;
-                            else dash
-                          "
+                          *ngIf="it.faceValue !== null && it.faceValue !== undefined; else dash"
                         >
                           {{ it.faceValue }}
                           <span *ngIf="it.currency">({{ it.currency }})</span>
@@ -454,12 +276,7 @@
                       <dt>Fecha de adquisición</dt>
 
                       <dd *ngIf="!isEditing()">
-                        {{
-                          it.acquisitionDate
-                            ? (it.acquisitionDate
-                              | date: 'dd/MM/yyyy':'UTC')
-                            : '—'
-                        }}
+                        {{ it.acquisitionDate ? (it.acquisitionDate | date: 'dd/MM/yyyy':'UTC') : '—' }}
                       </dd>
 
                       <dd *ngIf="isEditing()">
@@ -479,9 +296,7 @@
                 <section class="section-card">
                   <h2 class="section-title">Descripción</h2>
 
-                  <p class="description-text" *ngIf="!isEditing()">
-                    {{ it.description || '—' }}
-                  </p>
+                  <p class="description-text" *ngIf="!isEditing()">{{ it.description || '—' }}</p>
 
                   <textarea
                     *ngIf="isEditing()"
@@ -501,9 +316,7 @@
                   <!-- VIEW -->
                   <ng-container *ngIf="!isEditing(); else tagsEditTpl">
                     <div class="tags-list" *ngIf="it.tags?.length; else noTagsTpl">
-                      <span class="tag-pill" *ngFor="let t of it.tags">
-                        #{{ t.name }}
-                      </span>
+                      <span class="tag-pill" *ngFor="let t of it.tags">#{{ t.name }}</span>
                     </div>
 
                     <ng-template #noTagsTpl>
@@ -512,88 +325,71 @@
                   </ng-container>
 
                   <!-- EDIT -->
-         <!-- EDIT -->
-<ng-template #tagsEditTpl>
-  <form
-    class="tags-edit-form"
-    (submit)="addNewTagFromInput(); $event.preventDefault()"
-  >
-    <!-- Agregar nuevo tag (texto) -->
-    <!-- <div class="inline-row">
-      <input
-        #newTagInput
-        class="text-input"
-        [ngModel]="newTagName"
-        (ngModelChange)="newTagName = $event"
-        name="newTagName"
-        placeholder="Escribe un tag y Enter (ej: Personaje)"
-        (keydown.enter)="addNewTagFromInput(); $event.preventDefault()"
-        [disabled]="saving()"
-        autocomplete="off"
-      />
-    </div> -->
+                  <ng-template #tagsEditTpl>
+                    <form class="tags-edit-form" (submit)="addNewTagFromInput(); $event.preventDefault()">
+                      <!-- Agregar nuevo tag (texto) -->
+                      <!--
+                      <div class="inline-row">
+                        <input
+                          #newTagInput
+                          class="text-input"
+                          [ngModel]="newTagName"
+                          (ngModelChange)="newTagName = $event"
+                          name="newTagName"
+                          placeholder="Escribe un tag y Enter (ej: Personaje)"
+                          (keydown.enter)="addNewTagFromInput(); $event.preventDefault()"
+                          [disabled]="saving()"
+                          autocomplete="off"
+                        />
+                      </div>
+                      -->
 
-    <!-- Lista editable -->
-    <div class="tags-list" *ngIf="draftTagNames?.length; else noDraftTagsTpl">
-      <span
-      class="tag-pill editable"
-      *ngFor="let name of draftTagNames; let i = index; trackBy: trackByIndex"
-      (click)="focusTag(i)"
-      >
-        #
+                      <!-- Lista editable -->
+                      <div class="tags-list" *ngIf="draftTagNames?.length; else noDraftTagsTpl">
+                        <span
+                          class="tag-pill editable"
+                          *ngFor="let name of draftTagNames; let i = index; trackBy: trackByIndex"
+                          (click)="focusTag(i)"
+                        >
+                          #
+                          <input
+                            #tagInput
+                            class="tag-edit-input"
+                            [ngModel]="name"
+                            (ngModelChange)="renameDraftTagAt(i, $event)"
+                            [name]="'tag_' + i"
+                            placeholder="Tag"
+                            (keydown.enter)="$event.preventDefault()"
+                            [disabled]="saving()"
+                            autocomplete="off"
+                            spellcheck="false"
+                            (focus)="selectAll($event)"
+                            (click)="$event.stopPropagation()"
+                          />
 
-        <!-- <input
-          #tagInput
-          class="tag-edit-input"
-          [ngModel]="name"
-          (ngModelChange)="renameDraftTagAt(i, $event)"
-          [name]="'tag_' + i"
-          placeholder="Tag"
-          (keydown.enter)="$event.preventDefault()"
-          [disabled]="saving()"
-          autocomplete="off"
-          spellcheck="false"
-          (click)="$event.stopPropagation()"
-        /> -->
-        <input
-  #tagInput
-  class="tag-edit-input"
-  [ngModel]="name"
-  (ngModelChange)="renameDraftTagAt(i, $event)"
-  [name]="'tag_' + i"
-  placeholder="Tag"
-  (keydown.enter)="$event.preventDefault()"
-  [disabled]="saving()"
-  autocomplete="off"
-  spellcheck="false"
-  (focus)="selectAll($event)"
-  (click)="$event.stopPropagation()"
-/>
+                          <button
+                            type="button"
+                            class="tag-x"
+                            (click)="removeDraftTagAt(i); $event.stopPropagation()"
+                            aria-label="Quitar tag"
+                            [disabled]="saving()"
+                            title="Eliminar"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      </div>
 
+                      <ng-template #noDraftTagsTpl>
+                        <p class="hint">No has agregado tags.</p>
+                      </ng-template>
 
-        <button
-          type="button"
-          class="tag-x"
-          (click)="removeDraftTagAt(i); $event.stopPropagation()"
-          aria-label="Quitar tag"
-          [disabled]="saving()"
-          title="Eliminar"
-        >
-          ×
-        </button>
-      </span>
-    </div>
-
-    <ng-template #noDraftTagsTpl>
-      <p class="hint">No has agregado tags.</p>
-    </ng-template>
-
-    <p class="hint">
-      Tip: haz click en cualquier parte del pill para editar. Se guardará el set completo al presionar “Guardar”.
-    </p>
-  </form>
-</ng-template>
-
+                      <p class="hint">
+                        Tip: haz click en cualquier parte del pill para editar. Se guardará el set completo al presionar
+                        “Guardar”.
+                      </p>
+                    </form>
+                  </ng-template>
                 </section>
 
                 <!-- Card atributos (solo lectura por ahora) -->
