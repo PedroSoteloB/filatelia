@@ -210,7 +210,7 @@
 
 
       <!-- Panel de atributos dinámicos -->
-      <section class="panel panel-attrs">
+      <!-- <section class="panel panel-attrs">
         <h2 class="panel-title">Atributos dinámicos</h2>
 
         <div class="attr-builder">
@@ -288,7 +288,124 @@
             </div>
           </div>
         </div>
-      </section>
+      </section> -->
+   
+   <!-- ✅ REEMPLAZA SOLO ESTA SECCIÓN COMPLETA: "Panel de atributos dinámicos" -->
+<section class="panel panel-attrs">
+  <h2 class="panel-title">Atributos dinámicos</h2>
+
+  <div class="attr-builder">
+    <div class="row compact">
+      <!-- Atributo -->
+      <div class="field grow">
+        <label>Atributo</label>
+        <select
+          [value]="attrDraftId ?? ''"
+          (change)="onAttrChange($event)">
+          <option [value]="''">— seleccionar —</option>
+          <option *ngFor="let a of allAttrDefs()" [value]="a.id">
+            {{ a.name }} ({{ a.attrType }})
+          </option>
+        </select>
+      </div>
+
+      <!-- Operador -->
+      <div class="field">
+        <label>Operador</label>
+        <select
+          [value]="attrDraftOp"
+          (change)="onAttrOpChange($event)">
+          <option value="=">=</option>
+          <option value="like">like</option>
+          <option value="between">between</option>
+        </select>
+      </div>
+
+      <!-- Valor (NO between) -->
+      <div class="field" [class.hidden]="attrDraftOp === 'between'">
+        <label>Valor</label>
+
+        <!-- ✅ si tiene opciones: SELECT -->
+        <select
+          *ngIf="hasValueOptions(); else valueTextInput"
+          [value]="attrDraftValue"
+          (change)="onAttrValueChange($event)"
+          [disabled]="attrDraftOp === 'between'">
+          <option [value]="''">— seleccionar —</option>
+          <option *ngFor="let opt of valueOptions()" [value]="opt">
+            {{ opt }}
+          </option>
+        </select>
+
+        <!-- ✅ si NO tiene opciones: INPUT -->
+        <ng-template #valueTextInput>
+          <input
+            type="text"
+            placeholder="valor…"
+            [value]="attrDraftValue"
+            (input)="onAttrValueChange($event)"
+            [disabled]="attrDraftOp === 'between'"
+            (keydown.enter)="search()" />
+        </ng-template>
+      </div>
+
+      <!-- Desde (between) -->
+      <div class="field" [class.hidden]="attrDraftOp !== 'between'">
+        <label>Desde</label>
+        <input
+          type="text"
+          placeholder="número o YYYY-MM-DD"
+          [value]="attrDraftFrom"
+          (input)="onAttrFromChange($event)"
+          [disabled]="attrDraftOp !== 'between'"
+          (keydown.enter)="search()" />
+      </div>
+
+      <!-- Hasta (between) -->
+      <div class="field" [class.hidden]="attrDraftOp !== 'between'">
+        <label>Hasta</label>
+        <input
+          type="text"
+          placeholder="número o YYYY-MM-DD"
+          [value]="attrDraftTo"
+          (input)="onAttrToChange($event)"
+          [disabled]="attrDraftOp !== 'between'"
+          (keydown.enter)="search()" />
+      </div>
+
+      <!-- Añadir -->
+      <div class="actions">
+        <button
+          class="btn"
+          (click)="onAddAttrClick()"
+          [disabled]="!attrDraftId">
+          Añadir
+        </button>
+      </div>
+    </div>
+
+    <!-- Pills activos -->
+    <div class="active-attrs" *ngIf="attrFilters().length">
+      <div class="attr-pill" *ngFor="let f of attrFilters(); index as i">
+        <code>
+          {{ f['name'] ? f['name'] : ('#' + f['id']) }}
+          &nbsp;{{ f['op'] || '=' }}&nbsp;
+          <ng-container [ngSwitch]="f['op']">
+            <span *ngSwitchCase="'between'">
+              {{ $any(f).from }} ~ {{ $any(f).to }}
+            </span>
+            <span *ngSwitchDefault>{{ $any(f).value }}</span>
+          </ng-container>
+        </code>
+
+        <button class="x" (click)="removeAttrFilter(i)" aria-label="Quitar filtro">
+          ×
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
     </div>
 
     <!-- Acciones de búsqueda y materialización -->
@@ -334,45 +451,7 @@
         </div>
         <button class="btn" (click)="search()">Reintentar</button>
       </div>
-<!-- 
-      <div class="grid" *ngIf="results().length">
-        <article class="card" *ngFor="let it of results()">
-      
-          <div class="overlay" (click)="$event.preventDefault(); $event.stopPropagation()"></div>
-      
-          <div class="thumb" [class.placeholder]="!it.cover">
-            <img *ngIf="it.cover" [src]="it.cover" alt="" />
-            <span *ngIf="!it.cover">Sin imagen</span>
-          </div>
-      
-          <div class="body">
-            <h3 class="title" [title]="it.title">{{ it.title }}</h3>
-      
-            <div class="meta">
-              <span *ngIf="it.country">{{ it.country }}</span>
-              <span *ngIf="it.issueYear"> · {{ it.issueYear }}</span>
-              <span class="muted"> · #{{ it.id }}</span>
-            </div>
-      
-          
-            <div class="tags" *ngIf="it.tags?.length">
-              <span class="tag" *ngFor="let t of it.tags">
-                {{ t }}
-              </span>
-            </div>
-      
-          
-            <div class="attrs" *ngIf="it.attrs?.length">
-              <div class="attr" *ngFor="let a of it.attrs">
-                <span class="attr-name">{{ a.name }}:</span>
-                <span class="attr-value">{{ a.value }}</span>
-              </div>
-            </div>
-      
-          </div>
-      
-        </article>
-      </div> -->
+
   <!-- ✅ TAGS estilo #Venezuela Castilla -->
   <div class="grid" *ngIf="results().length">
     <article class="card" *ngFor="let it of results()">
