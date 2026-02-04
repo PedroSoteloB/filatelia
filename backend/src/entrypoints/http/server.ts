@@ -1534,49 +1534,177 @@ app.put('/collections/:id', { preHandler: authGuard }, async (req: any, reply: a
 //   }
 // });
 
+
 // app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) => {
 //   try {
 //     const ownerId = ensureAuth(req);
 
+//     // Intentamos traer thumbs_json si existiera (si no existe, no pasa nada)
+//     const hasThumbsJson = await hasColumn('collections', 'thumbs_json');
+
 //     const [rows]: any = await db.execute(
-//       `SELECT id,
-//               name,
-//               description,
-//               type,
-//               filter_json,
-//               sort_key,
-//               sort_dir,
-//               created_at,
-//               updated_at,
-//               parent_collection_id,
-//               cover_image_path
-//          FROM collections
-//         WHERE owner_user_id = ?
-//           AND parent_collection_id IS NULL
-//         ORDER BY created_at DESC`,
+//       `
+//       SELECT id,
+//              name,
+//              description,
+//              type,
+//              filter_json,
+//              sort_key,
+//              sort_dir,
+//              created_at,
+//              updated_at,
+//              parent_collection_id,
+//              cover_image_path
+//              ${hasThumbsJson ? ', thumbs_json' : ''}
+//         FROM collections
+//        WHERE owner_user_id = ?
+//          AND parent_collection_id IS NULL
+//        ORDER BY created_at DESC
+//       `,
 //       [ownerId]
 //     );
 
-//     // ✅ normalizar cover_image_path a URL pública/absoluta
-//     const out = (rows || []).map((r: any) => {
-//       const rel = toPublicUrl(r.cover_image_path);  // "/uploads/..."
-//       const abs = toAbsoluteUrl(rel);               // "https://tu-api.../uploads/..."
-//       return {
+//     const out: any[] = [];
+
+//     for (const r of (rows || [])) {
+//       const coverAbs = toAbsFromFsOrUrl(r.cover_image_path);
+
+//       // 1) thumbs desde thumbs_json si existiera y estuviera lleno
+//       let thumbs: string[] = hasThumbsJson ? parseThumbsJson(r.thumbs_json) : [];
+
+//       // 2) fallback: calcular thumbs si no hay thumbs_json
+//       if (!thumbs.length) {
+//         if (String(r.type).toLowerCase() === 'static') {
+//           // ✅ FIX: QUITAR DISTINCT (porque tienes ORDER BY)
+//           const [trows]: any = await db.execute(
+//             `
+//             SELECT TOP 6 img.file_path AS filePath
+//               FROM collection_items ci
+//               JOIN philatelic_items i
+//                 ON i.id = ci.item_id
+//                AND i.owner_user_id = ?
+//               JOIN item_images img
+//                 ON img.item_id = i.id
+//              WHERE ci.collection_id = ?
+//              ORDER BY img.is_primary DESC, img.id ASC
+//             `,
+//             [ownerId, r.id]
+//           );
+
+//           thumbs = (trows || [])
+//             .map((x: any) => toAbsFromFsOrUrl(x.filePath))
+//             .filter(Boolean) as string[];
+//         } else {
+//           // type = smart: usar filter_json y traer TOP 6 covers
+//           let f: any = {};
+//           try {
+//             const raw = r.filter_json;
+//             if (raw == null || raw === '') f = {};
+//             else if (typeof raw === 'string') f = JSON.parse(raw);
+//             else if (Buffer.isBuffer(raw)) f = JSON.parse(raw.toString('utf8'));
+//             else if (typeof raw === 'object') f = raw;
+//           } catch {
+//             f = {};
+//           }
+
+//           const built = buildWhereFromFilter(ownerId, f);
+//           const { where, params, tagIds, tagNames, tagMode, attrFilters } = built;
+
+//           let join = '';
+//           const joinParams: any[] = [];
+
+//           // reutiliza tu lógica de tags (pero en mini)
+//           if ((tagIds.length + tagNames.length) > 0) {
+//             let allTagIds = [...tagIds];
+
+//             if (tagNames.length) {
+//               const placeholders = tagNames.map(() => '?').join(',');
+//               const ownerFilter = await tagsOwnerWhere(ownerId);
+//               const [trs]: any = await db.execute(
+//                 `SELECT id FROM tags WHERE ${ownerFilter.where} AND name IN (${placeholders})`,
+//                 [...ownerFilter.params, ...tagNames]
+//               );
+//               allTagIds = allTagIds.concat(trs.map((x: any) => x.id));
+//             }
+
+//             const uniqueIds = Array.from(
+//               new Set(allTagIds.map(Number).filter(Number.isFinite))
+//             );
+
+//             if (uniqueIds.length) {
+//               if (String(tagMode || 'OR').toUpperCase() === 'AND') {
+//                 join += `
+//                   JOIN (
+//                     SELECT it.item_id
+//                       FROM item_tags it
+//                      WHERE it.tag_id IN (${uniqueIds.map(() => '?').join(',')})
+//                      GROUP BY it.item_id
+//                     HAVING COUNT(DISTINCT it.tag_id) = ${uniqueIds.length}
+//                   ) tfilter ON tfilter.item_id = i.id`;
+//                 joinParams.push(...uniqueIds);
+//               } else {
+//                 join += `
+//                   JOIN item_tags itf
+//                     ON itf.item_id = i.id
+//                    AND itf.tag_id IN (${uniqueIds.map(() => '?').join(',')})`;
+//                 joinParams.push(...uniqueIds);
+//               }
+//             }
+//           }
+
+//           const { join: attrJoin, params: attrParams } = await buildAttrJoins(
+//             ownerId,
+//             attrFilters
+//           );
+//           join += attrJoin;
+//           joinParams.push(...attrParams);
+
+//           // ✅ FIX: QUITAR DISTINCT (porque tienes ORDER BY)
+//           const sqlThumbs = `
+//             SELECT TOP 6
+//               (
+//                 SELECT TOP 1 file_path
+//                   FROM item_images
+//                  WHERE item_id = i.id
+//                  ORDER BY is_primary DESC, id ASC
+//               ) AS cover
+//             FROM philatelic_items i
+//             ${join}
+//             WHERE ${where.join(' AND ')}
+//             ORDER BY i.${r.sort_key || 'issue_year'} ${String(r.sort_dir || 'asc').toUpperCase()}
+//           `;
+
+//           const [trows]: any = await db.execute(sqlThumbs, [...joinParams, ...params]);
+
+//           thumbs = (trows || [])
+//             .map((x: any) => toAbsFromFsOrUrl(x.cover))
+//             .filter(Boolean) as string[];
+//         }
+//       }
+
+//       // (opcional) asegurar que cover esté dentro de thumbs al inicio
+//       if (coverAbs) {
+//         thumbs = [coverAbs, ...thumbs.filter((u) => u !== coverAbs)].slice(0, 12);
+//       }
+
+//       out.push({
 //         ...r,
-//         thumb: abs || rel || null   // ✅ campo listo para el front
-//       };
-//     });
+//         cover_image_path: coverAbs, // ✅ ya listo
+//         thumbs, // ✅ carrusel
+//         thumb: coverAbs || (thumbs[0] || null), // ✅ compat/backward
+//       });
+//     }
 
 //     reply.send(out);
 //   } catch (e: any) {
 //     reply.code(500).send({ message: e?.message || 'internal_error' });
 //   }
 // });
+
 app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
 
-    // Intentamos traer thumbs_json si existiera (si no existe, no pasa nada)
     const hasThumbsJson = await hasColumn('collections', 'thumbs_json');
 
     const [rows]: any = await db.execute(
@@ -1601,18 +1729,130 @@ app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) 
       [ownerId]
     );
 
+    // helpers locales (no rompen tu estructura actual)
+    const parseFilterJson = (raw: any) => {
+      try {
+        if (raw == null || raw === '') return {};
+        if (typeof raw === 'string') return JSON.parse(raw);
+        if (Buffer.isBuffer(raw)) return JSON.parse(raw.toString('utf8'));
+        if (typeof raw === 'object') return raw;
+      } catch {}
+      return {};
+    };
+
+    const uniqNum = (arr: any[]) =>
+      Array.from(new Set((arr || []).map(Number).filter(Number.isFinite)));
+
+    const buildAttrChip = (a: any) => {
+      // intentamos “adivinar” estructura común: { key/name/field, op/operator, value/val/values }
+      const k = a?.key ?? a?.name ?? a?.field ?? a?.attr ?? a?.attribute ?? null;
+      const op = (a?.op ?? a?.operator ?? '').toString().toUpperCase();
+      const v = a?.value ?? a?.val ?? a?.values ?? a?.v ?? null;
+
+      if (!k) return '';
+      const key = String(k).replace(/_/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
+
+      if (Array.isArray(v)) {
+        const short = v.slice(0, 3).map(x => String(x)).join(', ');
+        return `${key}${op ? ` ${op}` : ''}: ${short}${v.length > 3 ? '…' : ''}`;
+      }
+      if (v === null || v === undefined || v === '') return `${key}${op ? ` ${op}` : ''}`;
+      return `${key}${op ? ` ${op}` : ''}: ${String(v)}`;
+    };
+
     const out: any[] = [];
 
     for (const r of (rows || [])) {
       const coverAbs = toAbsFromFsOrUrl(r.cover_image_path);
 
-      // 1) thumbs desde thumbs_json si existiera y estuviera lleno
+      // =========================
+      // ✅ 0) ARMAR TAGS/ATTRS para UI (solo SMART)
+      // =========================
+      let filter_tag_ids: number[] = [];
+      let filter_tags: string[] = [];
+      let filter_tag_mode: string | null = null;
+      let filter_attrs: any[] = [];
+      let filter_chips: string[] = [];
+
+      if (String(r.type).toLowerCase() === 'smart') {
+        const f = parseFilterJson(r.filter_json);
+
+        // usa TU builder como fuente de verdad
+        const built = buildWhereFromFilter(ownerId, f);
+        const { tagIds, tagNames, tagMode, attrFilters } = built;
+
+        filter_tag_mode = (tagMode || 'OR').toString().toUpperCase();
+        filter_attrs = Array.isArray(attrFilters) ? attrFilters : [];
+
+        // 1) resolver tag names -> ids (si vinieron nombres)
+        let idsFromNames: number[] = [];
+        if (Array.isArray(tagNames) && tagNames.length) {
+          const placeholders = tagNames.map(() => '?').join(',');
+          const ownerFilter = await tagsOwnerWhere(ownerId);
+
+          const [trs]: any = await db.execute(
+            `SELECT id FROM tags WHERE ${ownerFilter.where} AND name IN (${placeholders})`,
+            [...ownerFilter.params, ...tagNames]
+          );
+
+          idsFromNames = (trs || []).map((x: any) => x.id);
+        }
+
+        // 2) ids finales
+        filter_tag_ids = uniqNum([...(tagIds || []), ...idsFromNames]);
+
+        // 3) resolver ids -> nombres (PARA MOSTRAR)
+        if (filter_tag_ids.length) {
+          const placeholders = filter_tag_ids.map(() => '?').join(',');
+          const ownerFilter = await tagsOwnerWhere(ownerId);
+
+          const [tns]: any = await db.execute(
+            `SELECT id, name FROM tags WHERE ${ownerFilter.where} AND id IN (${placeholders})`,
+            [...ownerFilter.params, ...filter_tag_ids]
+          );
+
+          // orden estable según ids
+          const map = new Map<number, string>((tns || []).map((x: any) => [Number(x.id), x.name]));
+          filter_tags = filter_tag_ids.map(id => map.get(id)).filter(Boolean) as string[];
+        }
+
+        // 4) chips listos para UI (máx 10)
+        // - tags
+        if (filter_tags.length) {
+          // “Tags (AND): A, B”
+          const head = `Tags (${filter_tag_mode}):`;
+          const body = filter_tags.slice(0, 5).join(', ') + (filter_tags.length > 5 ? '…' : '');
+          filter_chips.push(`${head} ${body}`);
+        }
+
+        // - attrs (cada uno como chip)
+        if (filter_attrs.length) {
+          for (const a of filter_attrs.slice(0, 6)) {
+            const cchip = buildAttrChip(a);
+            if (cchip) filter_chips.push(cchip);
+          }
+        }
+
+        // - rangos comunes (si tu filter_json los tiene)
+        if (f?.country) filter_chips.push(`País: ${String(f.country)}`);
+        if (f?.condition) filter_chips.push(`Condición: ${String(f.condition)}`);
+        if (f?.yearFrom != null || f?.yearTo != null) {
+          filter_chips.push(`Año: ${f.yearFrom ?? '—'}–${f.yearTo ?? '—'}`);
+        }
+
+        filter_chips = filter_chips.slice(0, 10);
+      }
+
+      // =========================
+      // ✅ 1) thumbs desde thumbs_json si existiera y estuviera lleno
+      // =========================
       let thumbs: string[] = hasThumbsJson ? parseThumbsJson(r.thumbs_json) : [];
 
-      // 2) fallback: calcular thumbs si no hay thumbs_json
+      // =========================
+      // ✅ 2) fallback: calcular thumbs si no hay thumbs_json
+      // =========================
       if (!thumbs.length) {
         if (String(r.type).toLowerCase() === 'static') {
-          // ✅ FIX: QUITAR DISTINCT (porque tienes ORDER BY)
           const [trows]: any = await db.execute(
             `
             SELECT TOP 6 img.file_path AS filePath
@@ -1632,7 +1872,7 @@ app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) 
             .map((x: any) => toAbsFromFsOrUrl(x.filePath))
             .filter(Boolean) as string[];
         } else {
-          // type = smart: usar filter_json y traer TOP 6 covers
+          // SMART: usar filter_json y traer TOP 6 covers (tu lógica actual)
           let f: any = {};
           try {
             const raw = r.filter_json;
@@ -1650,7 +1890,6 @@ app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) 
           let join = '';
           const joinParams: any[] = [];
 
-          // reutiliza tu lógica de tags (pero en mini)
           if ((tagIds.length + tagNames.length) > 0) {
             let allTagIds = [...tagIds];
 
@@ -1696,7 +1935,6 @@ app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) 
           join += attrJoin;
           joinParams.push(...attrParams);
 
-          // ✅ FIX: QUITAR DISTINCT (porque tienes ORDER BY)
           const sqlThumbs = `
             SELECT TOP 6
               (
@@ -1726,9 +1964,16 @@ app.get('/collections', { preHandler: authGuard }, async (req: any, reply: any) 
 
       out.push({
         ...r,
-        cover_image_path: coverAbs, // ✅ ya listo
-        thumbs, // ✅ carrusel
-        thumb: coverAbs || (thumbs[0] || null), // ✅ compat/backward
+        cover_image_path: coverAbs,
+        thumbs,
+        thumb: coverAbs || (thumbs[0] || null),
+
+        // ✅ NUEVO: lo que necesitas para mostrar en cards
+        filter_tag_ids,
+        filter_tags,
+        filter_tag_mode,
+        filter_attrs,
+        filter_chips,
       });
     }
 

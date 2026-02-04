@@ -152,10 +152,10 @@
           </div>
 
           <!-- ✅ CHIPS de filtros (solo SMART) -->
-<div class="filter-chips" *ngIf="c.type === 'smart' && filterChips(c).length">
-  <span class="chip" *ngFor="let x of filterChips(c)">{{ x }}</span>
-</div>
-
+          <div class="filter-chips" *ngIf="c.type === 'smart' && (c.filter_chips?.length || 0)">
+            <span class="chip" *ngFor="let x of c.filter_chips">{{ x }}</span>
+          </div>
+          
 
           <dl class="info">
             <div class="info-block" *ngIf="c.type === 'smart'">
