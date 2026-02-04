@@ -2020,15 +2020,11 @@ function safeJsonArray(x: any) {
 
 app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
-    if (req.method === 'GET' && req.body != null) {
-      try { req.log?.warn({ bodyType: typeof req.body }, 'GET con body recibido; se ignora'); } catch {}
-      // @ts-ignore
-      req.body = undefined;
-    }
-
     const ownerId = ensureAuth(req);
     const id = Number(req.params.id);
-    if (!Number.isFinite(id)) return reply.code(400).send({ message: 'id inválido' });
+    if (!Number.isFinite(id)) {
+      return reply.code(400).send({ message: 'id inválido' });
+    }
 
     const [rows]: any = await db.execute(
       `SELECT TOP 1 id, type, filter_json, sort_key, sort_dir
@@ -2036,78 +2032,93 @@ app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, re
         WHERE id = ? AND owner_user_id = ?`,
       [id, ownerId]
     );
+
     const col = rows?.[0];
-    if (!col) return reply.code(404).send({ message: 'not_found' });
+    if (!col) {
+      return reply.code(404).send({ message: 'not_found' });
+    }
 
     let items: any[] = [];
 
+    /* =====================================================
+       STATIC COLLECTION
+    ===================================================== */
     if (col.type === 'static') {
-      // ✅ STATIC: trae tagsJson y attrsJson (FIX para tu esquema real)
       const [is]: any = await db.execute(
-        `SELECT
-            i.id,
-            i.title,
-            i.country,
-            i.issue_year AS issueYear,
-            (
-              SELECT TOP 1 file_path
-              FROM item_images
-              WHERE item_id = i.id
-              ORDER BY is_primary DESC, id ASC
-            ) AS cover,
+        `
+        SELECT
+          i.id,
+          i.title,
+          i.country,
+          i.issue_year AS issueYear,
+          (
+            SELECT TOP 1 file_path
+            FROM item_images
+            WHERE item_id = i.id
+            ORDER BY is_primary DESC, id ASC
+          ) AS cover,
 
-            -- ✅ TAGS (JSON)
-            (
-              SELECT t.id, t.name
-              FROM item_tags it
-              JOIN tags t ON t.id = it.tag_id
-              WHERE it.item_id = i.id
-                AND t.owner_user_id = ?
-              FOR JSON PATH
-            ) AS tagsJson,
+          -- TAGS
+          (
+            SELECT t.id, t.name
+            FROM item_tags it
+            JOIN tags t ON t.id = it.tag_id
+            WHERE it.item_id = i.id
+              AND t.owner_user_id = ?
+            FOR JSON PATH
+          ) AS tagsJson,
 
-            -- ✅ ATTRIBUTES (JSON)  ✅ FIX: em_id, attribute_id, value_text/value_number/value_date
-            (
-              SELECT
-                ad.id,
-                ad.name,
-                COALESCE(
-                  ia.value_text,
-                  CAST(ia.value_number AS varchar(50)),
-                  CONVERT(varchar(10), ia.value_date, 23)
-                ) AS value
-              FROM item_attributes ia
-              JOIN attribute_definitions ad
-                ON ad.id = ia.attribute_id
-              WHERE ia.em_id = i.id
-                AND ad.owner_user_id = ?
-              FOR JSON PATH
-            ) AS attrsJson
+          -- ATTRIBUTES (SEGÚN TU ESQUEMA REAL)
+          (
+            SELECT
+              ad.id,
+              ad.name,
+              COALESCE(
+                ia.value_text,
+                CAST(ia.value_number AS varchar(50)),
+                CONVERT(varchar(10), ia.value_date, 23)
+              ) AS value
+            FROM item_attributes ia
+            JOIN attribute_definitions ad
+              ON ad.id = ia.attribute_id
+            WHERE ia.item_id = i.id
+              AND ad.owner_user_id = ?
+            FOR JSON PATH
+          ) AS attrsJson
 
-          FROM collection_items ci
-          JOIN philatelic_items i
-            ON i.id = ci.item_id
-           AND i.owner_user_id = ?
-         WHERE ci.collection_id = ?
-         ORDER BY i.${col.sort_key || 'issue_year'} ${String(col.sort_dir || 'asc').toUpperCase()}`,
+        FROM collection_items ci
+        JOIN philatelic_items i
+          ON i.id = ci.item_id
+         AND i.owner_user_id = ?
+        WHERE ci.collection_id = ?
+        ORDER BY i.${col.sort_key || 'issue_year'} ${String(col.sort_dir || 'asc').toUpperCase()}
+        `,
         [ownerId, ownerId, ownerId, id]
       );
-      items = is;
 
-    } else {
+      items = is;
+    }
+
+    /* =====================================================
+       SMART / DYNAMIC COLLECTION
+    ===================================================== */
+    else {
       let f: any = {};
       try {
-        const raw = col.filter_json;
-        if (raw == null || raw === '') f = {};
-        else if (typeof raw === 'string') f = JSON.parse(raw);
-        else if (Buffer.isBuffer(raw)) f = JSON.parse(raw.toString('utf8'));
-        else if (typeof raw === 'object') f = raw;
-        else f = {};
+        f = col.filter_json
+          ? JSON.parse(
+              Buffer.isBuffer(col.filter_json)
+                ? col.filter_json.toString('utf8')
+                : col.filter_json
+            )
+          : {};
       } catch {
         f = {};
       }
 
-      const { where, params, tagIds, tagNames, tagMode, attrFilters } = buildWhereFromFilter(ownerId, f);
+      const { where, params, tagIds, tagNames, tagMode, attrFilters } =
+        buildWhereFromFilter(ownerId, f);
+
       let join = '';
 
       if ((tagIds.length + tagNames.length) > 0) {
@@ -2116,118 +2127,123 @@ app.get('/collections/:id/items', { preHandler: authGuard }, async (req: any, re
         if (tagNames.length) {
           const placeholders = tagNames.map(() => '?').join(',');
           const ownerFilter = await tagsOwnerWhere(ownerId);
+
           const [trs]: any = await db.execute(
-            `SELECT id
-               FROM tags
+            `SELECT id FROM tags
               WHERE ${ownerFilter.where}
                 AND name IN (${placeholders})`,
             [...ownerFilter.params, ...tagNames]
           );
-          allTagIds = allTagIds.concat(trs.map((r: any) => r.id));
+
+          allTagIds.push(...trs.map((r: any) => r.id));
         }
 
-        const uniqueIds = Array.from(new Set(allTagIds.map(Number).filter(Number.isFinite)));
+        const uniqueIds = [...new Set(allTagIds)];
+
         if (uniqueIds.length) {
           if (tagMode === 'AND') {
             join += `
               JOIN (
-                SELECT it.item_id
-                  FROM item_tags it
-                 WHERE it.tag_id IN (${uniqueIds.map(() => '?').join(',')})
-                 GROUP BY it.item_id
-                HAVING COUNT(DISTINCT it.tag_id) = ${uniqueIds.length}
-              ) tfilter ON tfilter.item_id = i.id`;
-            params.push(...uniqueIds);
+                SELECT item_id
+                FROM item_tags
+                WHERE tag_id IN (${uniqueIds.map(() => '?').join(',')})
+                GROUP BY item_id
+                HAVING COUNT(DISTINCT tag_id) = ${uniqueIds.length}
+              ) tfilter ON tfilter.item_id = i.id
+            `;
           } else {
             join += `
               JOIN item_tags itf
                 ON itf.item_id = i.id
-               AND itf.tag_id IN (${uniqueIds.map(() => '?').join(',')})`;
-            params.push(...uniqueIds);
+               AND itf.tag_id IN (${uniqueIds.map(() => '?').join(',')})
+            `;
           }
+
+          params.push(...uniqueIds);
         }
       }
 
-      // ⚠️ OJO: si tu buildAttrJoins usa columnas viejas (item_id / attribute_definition_id / value),
-      // también debes actualizarlo a: em_id / attribute_id / value_text/value_number/value_date.
-      const { join: attrJoin, params: attrParams } = await buildAttrJoins(ownerId, attrFilters);
+      const { join: attrJoin, params: attrParams } =
+        await buildAttrJoins(ownerId, attrFilters);
+
       join += attrJoin;
       params.push(...attrParams);
 
-      // ✅ SMART/DYNAMIC: trae tagsJson y attrsJson (FIX para tu esquema real)
       const sql = `
         SELECT DISTINCT
-               i.id,
-               i.title,
-               i.country,
-               i.issue_year AS issueYear,
-               (
-                 SELECT TOP 1 file_path
-                 FROM item_images
-                 WHERE item_id = i.id
-                 ORDER BY is_primary DESC, id ASC
-               ) AS cover,
+          i.id,
+          i.title,
+          i.country,
+          i.issue_year AS issueYear,
+          (
+            SELECT TOP 1 file_path
+            FROM item_images
+            WHERE item_id = i.id
+            ORDER BY is_primary DESC, id ASC
+          ) AS cover,
 
-               -- ✅ TAGS (JSON)
-               (
-                 SELECT t.id, t.name
-                 FROM item_tags it
-                 JOIN tags t ON t.id = it.tag_id
-                 WHERE it.item_id = i.id
-                   AND t.owner_user_id = ?
-                 FOR JSON PATH
-               ) AS tagsJson,
+          (
+            SELECT t.id, t.name
+            FROM item_tags it
+            JOIN tags t ON t.id = it.tag_id
+            WHERE it.item_id = i.id
+              AND t.owner_user_id = ?
+            FOR JSON PATH
+          ) AS tagsJson,
 
-               -- ✅ ATTRIBUTES (JSON) ✅ FIX: em_id, attribute_id, value_text/value_number/value_date
-               (
-                 SELECT
-                   ad.id,
-                   ad.name,
-                   COALESCE(
-                     ia.value_text,
-                     CAST(ia.value_number AS varchar(50)),
-                     CONVERT(varchar(10), ia.value_date, 23)
-                   ) AS value
-                 FROM item_attributes ia
-                 JOIN attribute_definitions ad
-                   ON ad.id = ia.attribute_id
-                 WHERE ia.em_id = i.id
-                   AND ad.owner_user_id = ?
-                 FOR JSON PATH
-               ) AS attrsJson
+          (
+            SELECT
+              ad.id,
+              ad.name,
+              COALESCE(
+                ia.value_text,
+                CAST(ia.value_number AS varchar(50)),
+                CONVERT(varchar(10), ia.value_date, 23)
+              ) AS value
+            FROM item_attributes ia
+            JOIN attribute_definitions ad
+              ON ad.id = ia.attribute_id
+            WHERE ia.item_id = i.id
+              AND ad.owner_user_id = ?
+            FOR JSON PATH
+          ) AS attrsJson
 
-          FROM philatelic_items i
-          ${join}
-         WHERE ${where.join(' AND ')}
-         ORDER BY i.${col.sort_key || 'issue_year'} ${String(col.sort_dir || 'asc').toUpperCase()}`;
+        FROM philatelic_items i
+        ${join}
+        WHERE ${where.join(' AND ')}
+        ORDER BY i.${col.sort_key || 'issue_year'} ${String(col.sort_dir || 'asc').toUpperCase()}
+      `;
 
-      // 👇 prepend de ownerId,ownerId por los 2 subselects JSON
       const [is]: any = await db.execute(sql, [ownerId, ownerId, ...params]);
       items = is;
     }
 
-    // ✅ OUT: cover absoluto + parseo de tags/attrs
-    const out = items.map((r: any) => {
-      const rel = toPublicUrl(r.cover);
-      const abs = toAbsoluteUrl(rel);
+    /* =====================================================
+       OUTPUT
+    ===================================================== */
+    reply.send(
+      items.map((r: any) => {
+        const rel = toPublicUrl(r.cover);
+        const abs = toAbsoluteUrl(rel);
 
-      return {
-        id: r.id,
-        title: r.title,
-        country: r.country ?? null,
-        issueYear: r.issueYear ?? null,
-        cover: abs || rel || null,
-        tags: safeJsonArray(r.tagsJson),        // [{id,name}]
-        attributes: safeJsonArray(r.attrsJson), // [{id,name,value}]
-      };
-    });
+        return {
+          id: r.id,
+          title: r.title,
+          country: r.country ?? null,
+          issueYear: r.issueYear ?? null,
+          cover: abs || rel || null,
+          tags: safeJsonArray(r.tagsJson),
+          attributes: safeJsonArray(r.attrsJson)
+        };
+      })
+    );
 
-    reply.send(out);
   } catch (e: any) {
     req.log?.error(e, 'Error en GET /collections/:id/items');
-    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
+    reply.code(500).send({ message: e?.message || 'internal_error' });
   }
 });
+
 
 
 app.post('/collections/:id/items', { preHandler: authGuard }, async (req: any, reply: any) => {
