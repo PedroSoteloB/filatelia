@@ -667,20 +667,13 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
             await p.file?.resume?.();
             continue;
           }
-
           const buf = await p.toBuffer();
           if (!buf?.length) continue;
 
           const mime = String(p.mimetype ?? '');
-          if (!allowed.has(mime)) {
-            return reply.code(400).send({ message: 'Formato no soportado' });
-          }
+          if (!allowed.has(mime)) return reply.code(400).send({ message: 'Formato no soportado' });
 
-          files.push({
-            buffer: buf,
-            filename: String(p.filename ?? 'image'),
-            mime,
-          });
+          files.push({ buffer: buf, filename: String(p.filename ?? 'image'), mime });
         }
       }
     } else {
@@ -691,185 +684,169 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       return reply.code(400).send({ message: 'metadata.title requerido' });
     }
 
-    // Normaliza payloads (JSON) para SQL Server
-    const tagsJson = JSON.stringify(meta?.tags ?? meta?.tagIds ?? []);
-    const attrsJson = JSON.stringify(meta?.attributes ?? meta?.attrs ?? []);
+    // ✅ IMPORTANTÍSIMO: tu front manda tags + categories
+    const tagsJson = JSON.stringify(meta?.tags ?? []);
+    const attrsJson = JSON.stringify(meta?.categories ?? meta?.attributes ?? meta?.attrs ?? []);
 
-    // ========= INSERT item + TAGS + ATTRS (en el MISMO batch) =========
+    // ========== INSERT item + tags + attrs (SQL Server) ==========
     const [idRows]: any = await db.execute(
       `
       SET NOCOUNT ON;
+      BEGIN TRY
+        BEGIN TRAN;
 
-      DECLARE @ownerId BIGINT = ?;
-      DECLARE @title VARCHAR(200) = ?;
-      DECLARE @description NVARCHAR(MAX) = ?;
-      DECLARE @country VARCHAR(80) = ?;
-      DECLARE @issue_year SMALLINT = ?;
-      DECLARE @condition_code VARCHAR(30) = ?;
-      DECLARE @catalog_code VARCHAR(80) = ?;
-      DECLARE @face_value DECIMAL(10,2) = ?;
-      DECLARE @currency VARCHAR(10) = ?;
-      DECLARE @acquisition_date DATE = ?;
-      DECLARE @visibility VARCHAR(10) = ?;
+        DECLARE @ownerId BIGINT = ?;
+        DECLARE @title VARCHAR(200) = ?;
+        DECLARE @description NVARCHAR(MAX) = ?;
+        DECLARE @country VARCHAR(80) = ?;
+        DECLARE @issue_year SMALLINT = ?;
+        DECLARE @condition_code VARCHAR(30) = ?;
+        DECLARE @catalog_code VARCHAR(80) = ?;
+        DECLARE @face_value DECIMAL(10,2) = ?;
+        DECLARE @currency VARCHAR(10) = ?;
+        DECLARE @acquisition_date DATE = ?;
+        DECLARE @visibility VARCHAR(10) = ?;
 
-      DECLARE @tagsJson NVARCHAR(MAX) = ?;   -- JSON array
-      DECLARE @attrsJson NVARCHAR(MAX) = ?;  -- JSON array
+        DECLARE @tagsJson NVARCHAR(MAX) = ?;   -- JSON array
+        DECLARE @attrsJson NVARCHAR(MAX) = ?;  -- JSON array
 
-      DECLARE @t TABLE (id BIGINT);
+        DECLARE @t TABLE (id BIGINT);
 
-      INSERT INTO philatelic_items (
-        owner_user_id,
-        title,
-        description,
-        country,
-        issue_year,
-        condition_code,
-        catalog_code,
-        face_value,
-        currency,
-        acquisition_date,
-        visibility,
-        created_at,
-        updated_at
-      )
-      OUTPUT INSERTED.id INTO @t(id)
-      VALUES (
-        @ownerId, @title, @description, @country, @issue_year, @condition_code, @catalog_code,
-        @face_value, @currency, @acquisition_date, @visibility,
-        SYSUTCDATETIME(), SYSUTCDATETIME()
-      );
+        INSERT INTO philatelic_items (
+          owner_user_id, title, description, country, issue_year,
+          condition_code, catalog_code, face_value, currency,
+          acquisition_date, visibility, created_at, updated_at
+        )
+        OUTPUT INSERTED.id INTO @t(id)
+        VALUES (
+          @ownerId, @title, @description, @country, @issue_year,
+          @condition_code, @catalog_code, @face_value, @currency,
+          @acquisition_date, @visibility, SYSUTCDATETIME(), SYSUTCDATETIME()
+        );
 
-      DECLARE @itemId BIGINT = (SELECT TOP (1) id FROM @t);
+        DECLARE @itemId BIGINT = (SELECT TOP (1) id FROM @t);
 
-      ------------------------------------------------------------------
-      -- TAGS: acepta ids, objetos {id}, strings, objetos {name}
-      ------------------------------------------------------------------
-      IF (ISJSON(@tagsJson) = 1)
-      BEGIN
-        -- 1) recolecta nombres de tags (strings o {name})
-        DECLARE @tagNames TABLE (name VARCHAR(60) PRIMARY KEY);
+        ------------------------------------------------------------------
+        -- TAGS (robusto):
+        -- - soporta: ["a","b"], [1,2], [{"id":1}], [{"name":"a"}]
+        -- - NO usa JSON_VALUE sobre strings sueltas
+        ------------------------------------------------------------------
+        IF (ISJSON(@tagsJson) = 1)
+        BEGIN
+          DECLARE @tagIds TABLE (tag_id INT PRIMARY KEY);
+          DECLARE @tagNames TABLE (name VARCHAR(60) PRIMARY KEY);
 
-        INSERT INTO @tagNames(name)
-        SELECT DISTINCT LEFT(LTRIM(RTRIM(JSON_VALUE([value], '$.name'))), 60)
-        FROM OPENJSON(@tagsJson)
-        WHERE ISJSON([value]) = 1 AND NULLIF(LTRIM(RTRIM(JSON_VALUE([value], '$.name'))), '') IS NOT NULL;
-
-        INSERT INTO @tagNames(name)
-        SELECT DISTINCT LEFT(LTRIM(RTRIM([value])), 60)
-        FROM OPENJSON(@tagsJson)
-        WHERE ISJSON([value]) = 0
-          AND TRY_CAST([value] AS INT) IS NULL
-          AND NULLIF(LTRIM(RTRIM([value])), '') IS NOT NULL;
-
-        -- 2) crea tags que no existan (por owner)
-        MERGE tags AS T
-        USING (SELECT name FROM @tagNames) AS S
-          ON T.owner_user_id = @ownerId AND T.name = S.name
-        WHEN NOT MATCHED THEN
-          INSERT (owner_user_id, name) VALUES (@ownerId, S.name);
-
-        -- 3) inserta relación item_tags (dedup)
-        INSERT INTO item_tags (item_id, tag_id)
-        SELECT DISTINCT @itemId, X.tag_id
-        FROM (
-          -- ids directos: [1,2,3]
-          SELECT TRY_CAST([value] AS INT) AS tag_id
+          -- (A) ids escalares: [1,2,3]
+          INSERT INTO @tagIds(tag_id)
+          SELECT DISTINCT TRY_CAST([value] AS INT)
           FROM OPENJSON(@tagsJson)
-          WHERE TRY_CAST([value] AS INT) IS NOT NULL
+          WHERE TRY_CAST([value] AS INT) IS NOT NULL;
 
-          UNION
+          -- (B) objetos: [{"id":1,"name":"x"}] (WITH NO explota con escalares)
+          ;WITH O AS (
+            SELECT
+              id   = TRY_CAST(id AS INT),
+              name = NULLIF(LTRIM(RTRIM(name)), '')
+            FROM OPENJSON(@tagsJson)
+            WITH (
+              id   NVARCHAR(50) '$.id',
+              name NVARCHAR(60) '$.name'
+            )
+          )
+          INSERT INTO @tagIds(tag_id)
+          SELECT DISTINCT id FROM O WHERE id IS NOT NULL;
 
-          -- ids dentro de objetos: [{"id":1}]
-          SELECT TRY_CAST(JSON_VALUE([value], '$.id') AS INT) AS tag_id
+          INSERT INTO @tagNames(name)
+          SELECT DISTINCT LEFT(name, 60) FROM O WHERE name IS NOT NULL;
+
+          -- (C) strings escalares: ["alskdn","dasd"]  -> OPENJSON retorna value ya sin comillas
+          INSERT INTO @tagNames(name)
+          SELECT DISTINCT LEFT(LTRIM(RTRIM([value])), 60)
           FROM OPENJSON(@tagsJson)
-          WHERE ISJSON([value]) = 1 AND TRY_CAST(JSON_VALUE([value], '$.id') AS INT) IS NOT NULL
+          WHERE TRY_CAST([value] AS INT) IS NULL
+            AND NULLIF(LTRIM(RTRIM([value])), '') IS NOT NULL;
 
-          UNION
+          -- crea tags faltantes (por owner)
+          MERGE tags AS T
+          USING (SELECT name FROM @tagNames) AS S
+            ON T.owner_user_id = @ownerId AND T.name = S.name
+          WHEN NOT MATCHED THEN
+            INSERT (owner_user_id, name) VALUES (@ownerId, S.name);
 
-          -- nombres resueltos a id
-          SELECT TT.id AS tag_id
+          -- inserta relaciones por ids directos
+          INSERT INTO item_tags (item_id, tag_id)
+          SELECT @itemId, tag_id
+          FROM @tagIds;
+
+          -- inserta relaciones por nombres (resuelve a id)
+          INSERT INTO item_tags (item_id, tag_id)
+          SELECT DISTINCT @itemId, TT.id
           FROM tags TT
           JOIN @tagNames N ON N.name = TT.name
           WHERE TT.owner_user_id = @ownerId
-        ) X
-        WHERE X.tag_id IS NOT NULL;
-      END
+            AND NOT EXISTS (
+              SELECT 1 FROM item_tags IT WHERE IT.item_id = @itemId AND IT.tag_id = TT.id
+            );
+        END
 
-      ------------------------------------------------------------------
-      -- ATTRS: item_attributes + attribute_definitions (si viene por name)
-      -- Espera array de objetos: { attributeId?, name?, type?, value? }
-      ------------------------------------------------------------------
-      IF (ISJSON(@attrsJson) = 1)
-      BEGIN
-        ;WITH A AS (
+        ------------------------------------------------------------------
+        -- ATTRS (tu front manda "categories"):
+        -- [{name:"Aaa", attrType:"text", value:"AAA"}]
+        -- guarda en attribute_definitions + item_attributes
+        ------------------------------------------------------------------
+        IF (ISJSON(@attrsJson) = 1)
+        BEGIN
+          ;WITH A AS (
+            SELECT
+              attribute_id = TRY_CAST(attributeId AS INT),
+              name         = NULLIF(LTRIM(RTRIM(name)), ''),
+              attr_type    = LOWER(NULLIF(LTRIM(RTRIM(attrType)), '')),
+              value_raw    = NULLIF(value, '')
+            FROM OPENJSON(@attrsJson)
+            WITH (
+              attributeId NVARCHAR(50) '$.attributeId',
+              name        NVARCHAR(100) '$.name',
+              attrType    NVARCHAR(10)  '$.attrType',
+              value       NVARCHAR(MAX) '$.value'
+            )
+          ),
+          NAMES AS (
+            SELECT DISTINCT
+              name,
+              CASE WHEN attr_type IN ('text','number','date','list') THEN attr_type ELSE 'text' END AS attr_type
+            FROM A
+            WHERE name IS NOT NULL
+          )
+          -- crea definiciones faltantes
+          MERGE attribute_definitions AS D
+          USING NAMES AS S
+            ON D.owner_user_id = @ownerId AND D.name = S.name
+          WHEN NOT MATCHED THEN
+            INSERT (owner_user_id, name, attr_type, options_json, created_at)
+            VALUES (@ownerId, S.name, S.attr_type, NULL, SYSUTCDATETIME());
+
+          -- inserta valores (resolve attribute_id por id o por name)
+          INSERT INTO item_attributes (item_id, attribute_id, value_text, value_number, value_date)
           SELECT
-            TRY_CAST(JSON_VALUE([value], '$.attributeId') AS INT) AS attribute_id,
-            NULLIF(LTRIM(RTRIM(JSON_VALUE([value], '$.name'))), '') AS name,
-            LOWER(NULLIF(LTRIM(RTRIM(JSON_VALUE([value], '$.type'))), '')) AS attr_type,
-            JSON_VALUE([value], '$.valueText') AS value_text_raw,
-            JSON_VALUE([value], '$.valueNumber') AS value_number_raw,
-            JSON_VALUE([value], '$.valueDate') AS value_date_raw,
-            JSON_VALUE([value], '$.value') AS value_raw
-          FROM OPENJSON(@attrsJson)
-          WHERE ISJSON([value]) = 1
-        ),
-        NAMES AS (
-          SELECT DISTINCT
-            name,
-            CASE
-              WHEN attr_type IN ('text','number','date','list') THEN attr_type
-              ELSE 'text'
-            END AS attr_type
+            @itemId,
+            COALESCE(A.attribute_id, D.id) AS attribute_id,
+            CASE WHEN COALESCE(A.attr_type, D.attr_type) IN ('text','list') THEN A.value_raw ELSE NULL END,
+            CASE WHEN COALESCE(A.attr_type, D.attr_type) = 'number' THEN TRY_CONVERT(DECIMAL(18,6), A.value_raw) ELSE NULL END,
+            CASE WHEN COALESCE(A.attr_type, D.attr_type) = 'date'   THEN TRY_CONVERT(DATE, A.value_raw) ELSE NULL END
           FROM A
-          WHERE name IS NOT NULL
-        )
-        -- 1) crea definiciones si no existen (por owner + name)
-        MERGE attribute_definitions AS D
-        USING NAMES AS S
-          ON D.owner_user_id = @ownerId AND D.name = S.name
-        WHEN NOT MATCHED THEN
-          INSERT (owner_user_id, name, attr_type, options_json, created_at)
-          VALUES (@ownerId, S.name, S.attr_type, NULL, SYSUTCDATETIME());
+          LEFT JOIN attribute_definitions D
+            ON D.owner_user_id = @ownerId AND D.name = A.name
+          WHERE COALESCE(A.attribute_id, D.id) IS NOT NULL
+            AND A.value_raw IS NOT NULL;
+        END
 
-        -- 2) inserta item_attributes (resolviendo attribute_id por id o por name)
-        INSERT INTO item_attributes (item_id, attribute_id, value_text, value_number, value_date)
-        SELECT
-          @itemId AS item_id,
-          COALESCE(
-            A.attribute_id,
-            D.id
-          ) AS attribute_id,
-          CASE
-            WHEN COALESCE(A.attr_type, D.attr_type) IN ('text','list') THEN
-              COALESCE(NULLIF(A.value_text_raw,''), NULLIF(A.value_raw,''))
-            WHEN COALESCE(A.attr_type, D.attr_type) = 'date' THEN NULL
-            WHEN COALESCE(A.attr_type, D.attr_type) = 'number' THEN NULL
-            ELSE COALESCE(NULLIF(A.value_text_raw,''), NULLIF(A.value_raw,''))
-          END AS value_text,
-          CASE
-            WHEN COALESCE(A.attr_type, D.attr_type) = 'number' THEN
-              TRY_CONVERT(DECIMAL(18,6), COALESCE(NULLIF(A.value_number_raw,''), NULLIF(A.value_raw,'')))
-            ELSE NULL
-          END AS value_number,
-          CASE
-            WHEN COALESCE(A.attr_type, D.attr_type) = 'date' THEN
-              TRY_CONVERT(DATE, COALESCE(NULLIF(A.value_date_raw,''), NULLIF(A.value_raw,'')))
-            ELSE NULL
-          END AS value_date
-        FROM A
-        LEFT JOIN attribute_definitions D
-          ON D.owner_user_id = @ownerId
-         AND D.name = A.name
-        WHERE COALESCE(A.attribute_id, D.id) IS NOT NULL
-          AND (
-            NULLIF(A.value_text_raw,'') IS NOT NULL OR
-            NULLIF(A.value_number_raw,'') IS NOT NULL OR
-            NULLIF(A.value_date_raw,'') IS NOT NULL OR
-            NULLIF(A.value_raw,'') IS NOT NULL
-          );
-      END
-
-      SELECT @itemId AS id;
+        COMMIT;
+        SELECT @itemId AS id;
+      END TRY
+      BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK;
+        THROW;
+      END CATCH
       `,
       [
         ownerId,
@@ -892,7 +869,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     const itemId = Number(row0?.id);
     if (!Number.isFinite(itemId)) throw new Error('No se pudo obtener el id insertado');
 
-    // ================= IMÁGENES (igual que tú) =================
+    // ===== IMÁGENES (igual que tú) =====
     if (files.length) {
       const fs = require('fs');
       const path = require('path');
@@ -908,10 +885,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         fs.writeFileSync(filePath, f.buffer);
 
         await db.execute(
-          `
-          INSERT INTO item_images (item_id, file_path, is_primary)
-          VALUES (?, ?, ?);
-          `,
+          `INSERT INTO item_images (item_id, file_path, is_primary) VALUES (?, ?, ?);`,
           [itemId, filePath, i === 0 ? 1 : 0]
         );
       }
@@ -926,6 +900,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     });
   }
 });
+
 
 
 app.get('/me/items', { preHandler: authGuard }, async (req: any, reply: any) => {
