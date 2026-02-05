@@ -538,79 +538,61 @@ export class ItemDetailsComponent implements OnInit {
 
     const saveTags$ = this.tagsTouched ? this.renameTagsOnly(id) : of(null);
 
+    // forkJoin({ itemRes: saveItem$, tagsRes: saveTags$ }).subscribe({
+      
+    //   next: () => {
+    //     // 🔒 NO usamos itemRes ni tagsRes
+    //     // el PUT /items solo devuelve { ok: true }
+      
+    //     const finalItem: MyItem = {
+    //       ...it,
+    //       ...payload,            // ← solo lo que el usuario editó
+    //       tags: it.tags,         // se mantienen
+    //       attributes: it.attributes,
+    //       images: it.images,
+    //       cover: it.cover,
+    //     };
+      
+    //     this.item.set(finalItem);
+    //     this.draft.set(toDraft(finalItem));
+    //     this.isEditing.set(false);
+      
+    //     this.touched.clear();
+    //     this.tagsTouched = false;
+    //     this.newTagName = '';
+      
+    //     this.saving.set(false);
+    //   },
+      
+    //   error: (err) => {
+    //     this.error.set(errorMessage(err, 'No se pudo guardar los cambios.'));
+    //     this.saving.set(false);
+    //   },
+    // });
     forkJoin({ itemRes: saveItem$, tagsRes: saveTags$ }).subscribe({
-      // next: ({ itemRes, tagsRes }) => {
-      //   const baseUpdated = itemRes ? normalizeItem(itemRes) : it;
 
-      //   let finalTags: ItemTag[] | undefined = it.tags;
-
-      //   if (this.tagsTouched) {
-      //     if (!Array.isArray(tagsRes)) {
-      //       throw new Error('No se pudo guardar tags (respuesta inválida).');
-      //     }
-
-      //     const updatedById = new Map<number, ItemTag>();
-      //     for (const r of tagsRes as Array<ItemTag | null>) {
-      //       if (r && typeof r.id === 'number') updatedById.set(r.id, r);
-      //     }
-
-      //     finalTags = (Array.isArray(it.tags) ? it.tags : []).map((t) => updatedById.get(t.id) ?? t);
-      //   }
-
-      //   const finalItem: MyItem = {
-      //     ...it,
-      //     ...baseUpdated,
-      //     tags: finalTags,
-      //     attributes: it.attributes,
-      //     images: it.images,
-      //     cover: it.cover ?? baseUpdated.cover,
-      //   };
-
-      //   (Object.keys(payload) as (keyof ItemDraft)[]).forEach((k) => {
-      //     (finalItem as any)[k] = (payload as any)[k];
-      //   });
-
-      //   this.item.set(finalItem);
-      //   this.draft.set(toDraft(finalItem));
-      //   this.isEditing.set(false);
-
-      //   this.touched.clear();
-      //   this.tagsTouched = false;
-      //   this.newTagName = '';
-
-      //   this.draftTagNames = normalizeTagNames(Array.isArray(finalTags) ? finalTags.map((t) => t.name) : []);
-
-      //   this.saving.set(false);
-      // },
       next: () => {
-        // 🔒 NO usamos itemRes ni tagsRes
-        // el PUT /items solo devuelve { ok: true }
-      
-        const finalItem: MyItem = {
-          ...it,
-          ...payload,            // ← solo lo que el usuario editó
-          tags: it.tags,         // se mantienen
-          attributes: it.attributes,
-          images: it.images,
-          cover: it.cover,
-        };
-      
-        this.item.set(finalItem);
-        this.draft.set(toDraft(finalItem));
+        // 1️⃣ salir de modo edición
         this.isEditing.set(false);
-      
+    
+        // 2️⃣ limpiar estados locales
         this.touched.clear();
         this.tagsTouched = false;
         this.newTagName = '';
-      
+    
+        // 3️⃣ 🔁 RECARGAR DESDE BACKEND (CLAVE)
+        this.fetchItem(id);
+    
+        // 4️⃣ finalizar guardado
         this.saving.set(false);
       },
-      
+    
       error: (err) => {
         this.error.set(errorMessage(err, 'No se pudo guardar los cambios.'));
         this.saving.set(false);
       },
     });
+    
   }
 
   goEdit(id: number) {
