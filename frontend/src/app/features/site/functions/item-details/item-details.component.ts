@@ -1,3 +1,4 @@
+
 // import {
 //   Component,
 //   ViewEncapsulation,
@@ -245,48 +246,50 @@
 //   /** ===== GALERÍA / CARRUSEL ===== */
 //   activeImageIndex = 0;
 
+//   /**
+//    * ✅ FIX: orden estable.
+//    * - Primero images (ya vienen con primary primero por normalizeItem)
+//    * - cover SOLO si no está dentro de images (caso raro)
+//    * Así NO se reordena cuando cambias cover y no “salta” el carrusel.
+//    */
 //   getGalleryUrls(it: MyItem | null): string[] {
 //     if (!it) return [];
+
 //     const urls: string[] = [];
 
-//     if (it.cover) urls.push(it.cover);
-
+//     // 1) Orden estable: primero imágenes
 //     if (Array.isArray(it.images)) {
 //       for (const im of it.images) {
 //         if (im?.file) urls.push(im.file);
 //       }
 //     }
 
-//     return Array.from(new Set(urls));
+//     const unique = Array.from(new Set(urls));
+
+//     // 2) Si cover existe pero NO está en images, recién lo ponemos
+//     if (it.cover && !unique.includes(it.cover)) unique.unshift(it.cover);
+
+//     return unique;
 //   }
 
+//   /**
+//    * ✅ FIX: solo cambia el índice.
+//    * (Opcional, pero recomendado para que jamás se “mueva” raro)
+//    */
 //   goToImage(i: number) {
 //     this.activeImageIndex = i;
-
-//     // sincroniza cover con la imagen activa (para consistencia con UI)
-//     const current = this.item();
-//     const urls = this.getGalleryUrls(current);
-//     if (current && urls[i]) this.item.set({ ...current, cover: urls[i] });
 //   }
 
 //   prevImage(it: MyItem | null) {
 //     const urls = this.getGalleryUrls(it);
 //     if (urls.length <= 1) return;
-
 //     this.activeImageIndex = (this.activeImageIndex - 1 + urls.length) % urls.length;
-
-//     const current = this.item();
-//     if (current) this.item.set({ ...current, cover: urls[this.activeImageIndex] });
 //   }
 
 //   nextImage(it: MyItem | null) {
 //     const urls = this.getGalleryUrls(it);
 //     if (urls.length <= 1) return;
-
 //     this.activeImageIndex = (this.activeImageIndex + 1) % urls.length;
-
-//     const current = this.item();
-//     if (current) this.item.set({ ...current, cover: urls[this.activeImageIndex] });
 //   }
 
 //   // si quieres seguir usando setActiveImage en otros lados
@@ -296,8 +299,6 @@
 
 //     const urls = this.getGalleryUrls(current);
 //     const idx = urls.indexOf(img.file);
-
-//     this.item.set({ ...current, cover: img.file });
 //     if (idx >= 0) this.activeImageIndex = idx;
 //   }
 
@@ -386,7 +387,7 @@
 
 //           this.item.set(merged);
 
-//           // ✅ reset carrusel al cargar item nuevo
+//           // ✅ FIX: al cargar item nuevo, índice = 0
 //           this.activeImageIndex = 0;
 
 //           this.draftTagNames = normalizeTagNames(Array.isArray(tags) ? tags.map((t) => t.name) : []);
@@ -675,7 +676,7 @@ type MyItem = {
   catalogCode: string | null;
   faceValue: number | null;
   currency: string | null;
-  acquisitionDate: string | null; // YYYY-MM-DD
+  acquisitionDate: string | null;
   visibility: Visibility | null;
   cover: string | null;
   createdAt?: string | null;
@@ -698,6 +699,8 @@ type ItemDraft = {
   visibility: Visibility | null;
 };
 
+/** ================= helpers ================= */
+
 function pickCoverFromImages(imgs: ImageRef[] | undefined, fallback?: any): string | null {
   const arr = Array.isArray(imgs) ? imgs : [];
   const primary = arr.find((im) => !!im?.primary && !!im?.file)?.file ?? null;
@@ -717,7 +720,6 @@ function normalizeItem(raw: any): MyItem {
       }))
     : [];
 
-  // ✅ ordena para que primary salga primero (y luego el resto)
   images.sort((a, b) => Number(!!b.primary) - Number(!!a.primary));
 
   const hasCamel = Object.prototype.hasOwnProperty.call(raw, 'issueYear');
@@ -831,6 +833,8 @@ function errorMessage(err: any, fallback: string) {
   return err?.error?.message ?? (typeof err?.message === 'string' ? err.message : null) ?? fallback;
 }
 
+/** ================= COMPONENT ================= */
+
 @Component({
   selector: 'app-item-details',
   standalone: true,
@@ -838,7 +842,6 @@ function errorMessage(err: any, fallback: string) {
   templateUrl: './item-details.component.html',
   styleUrls: ['./item-details.component.scss'],
   encapsulation: ViewEncapsulation.None,
-  host: { class: 'item-details-page block p-4' },
 })
 export class ItemDetailsComponent implements OnInit {
   private http = inject(HttpClient);
@@ -855,12 +858,10 @@ export class ItemDetailsComponent implements OnInit {
   draft = signal<ItemDraft | null>(null);
 
   currentId = signal<number | null>(null);
-
   isBrowser = false;
 
   private touched = new Set<keyof ItemDraft>();
 
-  /** ===== TAGS (solo renombrar texto) ===== */
   draftTagNames: string[] = [];
   newTagName = '';
   private tagsTouched = false;
@@ -868,84 +869,7 @@ export class ItemDetailsComponent implements OnInit {
   @ViewChildren('tagInput') tagInputs!: QueryList<ElementRef<HTMLInputElement>>;
   @ViewChild('newTagInput') newTagInput?: ElementRef<HTMLInputElement>;
 
-  // trackBy para imágenes
-  trackByImgId = (_: number, im: ImageRef) => im?.id ?? im?.file ?? _;
-
-  /** ===== GALERÍA / CARRUSEL ===== */
   activeImageIndex = 0;
-
-  /**
-   * ✅ FIX: orden estable.
-   * - Primero images (ya vienen con primary primero por normalizeItem)
-   * - cover SOLO si no está dentro de images (caso raro)
-   * Así NO se reordena cuando cambias cover y no “salta” el carrusel.
-   */
-  getGalleryUrls(it: MyItem | null): string[] {
-    if (!it) return [];
-
-    const urls: string[] = [];
-
-    // 1) Orden estable: primero imágenes
-    if (Array.isArray(it.images)) {
-      for (const im of it.images) {
-        if (im?.file) urls.push(im.file);
-      }
-    }
-
-    const unique = Array.from(new Set(urls));
-
-    // 2) Si cover existe pero NO está en images, recién lo ponemos
-    if (it.cover && !unique.includes(it.cover)) unique.unshift(it.cover);
-
-    return unique;
-  }
-
-  /**
-   * ✅ FIX: solo cambia el índice.
-   * (Opcional, pero recomendado para que jamás se “mueva” raro)
-   */
-  goToImage(i: number) {
-    this.activeImageIndex = i;
-  }
-
-  prevImage(it: MyItem | null) {
-    const urls = this.getGalleryUrls(it);
-    if (urls.length <= 1) return;
-    this.activeImageIndex = (this.activeImageIndex - 1 + urls.length) % urls.length;
-  }
-
-  nextImage(it: MyItem | null) {
-    const urls = this.getGalleryUrls(it);
-    if (urls.length <= 1) return;
-    this.activeImageIndex = (this.activeImageIndex + 1) % urls.length;
-  }
-
-  // si quieres seguir usando setActiveImage en otros lados
-  setActiveImage(img: ImageRef) {
-    const current = this.item();
-    if (!current || !img?.file) return;
-
-    const urls = this.getGalleryUrls(current);
-    const idx = urls.indexOf(img.file);
-    if (idx >= 0) this.activeImageIndex = idx;
-  }
-
-  get draftValue(): ItemDraft {
-    return (
-      this.draft() ?? {
-        title: '',
-        description: null,
-        country: null,
-        issueYear: null,
-        conditionCode: null,
-        catalogCode: null,
-        faceValue: null,
-        currency: null,
-        acquisitionDate: null,
-        visibility: 'public',
-      }
-    );
-  }
 
   ngOnInit(): void {
     this.isBrowser = isPlatformBrowser(this.platformId);
@@ -961,24 +885,8 @@ export class ItemDetailsComponent implements OnInit {
     });
   }
 
-  focusNewTagInput() {
-    if (!this.isBrowser) return;
-    setTimeout(() => this.newTagInput?.nativeElement?.focus(), 0);
-  }
-
-  focusTag(index: number) {
-    if (!this.isBrowser) return;
-    setTimeout(() => {
-      const el = this.tagInputs?.toArray?.()[index]?.nativeElement;
-      if (!el) return;
-      el.focus();
-      el.select();
-    }, 0);
-  }
-
   private buildHeaders(): HttpHeaders {
     if (!this.isBrowser) return new HttpHeaders();
-
     const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken') || '';
     return token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : new HttpHeaders();
   }
@@ -992,37 +900,22 @@ export class ItemDetailsComponent implements OnInit {
       .pipe(
         switchMap((raw) => {
           const base = normalizeItem(raw);
-
           return forkJoin({
             base: of(base),
             tags: this.http
               .get<ItemTag[]>(`${API_BASE}/items/${id}/tags`, { headers: this.buildHeaders() })
-              .pipe(catchError(() => of((base.tags as ItemTag[]) ?? []))),
+              .pipe(catchError(() => of([]))),
             attrs: this.http
               .get<AttributeValue[]>(`${API_BASE}/items/${id}/attributes`, { headers: this.buildHeaders() })
-              .pipe(catchError(() => of((base.attributes as AttributeValue[]) ?? []))),
+              .pipe(catchError(() => of([]))),
           });
         })
       )
       .subscribe({
         next: ({ base, tags, attrs }) => {
-          const merged = { ...base, tags, attributes: attrs };
-
-          // si cover vino null pero hay imágenes, setearla
-          if (!merged.cover) {
-            merged.cover = pickCoverFromImages(merged.images, merged);
-          }
-
-          this.item.set(merged);
-
-          // ✅ FIX: al cargar item nuevo, índice = 0
-          this.activeImageIndex = 0;
-
-          this.draftTagNames = normalizeTagNames(Array.isArray(tags) ? tags.map((t) => t.name) : []);
-          this.tagsTouched = false;
-
-          if (!this.isEditing()) this.draft.set(toDraft(merged));
-
+          this.item.set({ ...base, tags, attributes: attrs });
+          this.draft.set(toDraft(base));
+          this.draftTagNames = normalizeTagNames(tags.map((t) => t.name));
           this.touched.clear();
           this.busy.set(false);
         },
@@ -1036,106 +929,9 @@ export class ItemDetailsComponent implements OnInit {
   startEdit() {
     const it = this.item();
     if (!it) return;
-
     this.draft.set(toDraft(it));
     this.isEditing.set(true);
-    this.error.set(null);
-
     this.touched.clear();
-
-    this.draftTagNames = normalizeTagNames(Array.isArray(it.tags) ? it.tags.map((t) => t.name) : []);
-    this.tagsTouched = false;
-    this.newTagName = '';
-
-    this.focusNewTagInput();
-  }
-
-  cancelEdit() {
-    const it = this.item();
-    if (it) this.draft.set(toDraft(it));
-    this.isEditing.set(false);
-    this.error.set(null);
-
-    this.touched.clear();
-    this.tagsTouched = false;
-
-    this.draftTagNames = normalizeTagNames(
-      Array.isArray(it?.tags) ? (it!.tags as ItemTag[]).map((t) => t.name) : []
-    );
-    this.newTagName = '';
-  }
-
-  patchDraft(patch: Partial<ItemDraft>) {
-    const d = this.draft();
-    if (!d) return;
-
-    (Object.keys(patch) as (keyof ItemDraft)[]).forEach((k) => this.touched.add(k));
-    this.draft.set({ ...d, ...patch });
-  }
-
-  /** ===== TAGS helpers (solo renombrar) ===== */
-
-  addNewTagFromInput() {
-    const name = (this.newTagName ?? '').trim();
-    if (!name) return;
-
-    const before = this.draftTagNames;
-    const after = normalizeTagNames([...before, name]);
-
-    if (after.length !== before.length) {
-      this.draftTagNames = after;
-      this.tagsTouched = true;
-    }
-
-    this.newTagName = '';
-    this.focusNewTagInput();
-  }
-
-  trackByIndex(index: number) {
-    return index;
-  }
-
-  renameDraftTagAt(index: number, newName: string) {
-    if (index < 0 || index >= this.draftTagNames.length) return;
-
-    const arr = [...this.draftTagNames];
-    arr[index] = newName; // NO normalizar aquí
-    this.draftTagNames = arr;
-
-    this.tagsTouched = true;
-  }
-
-  removeDraftTagAt(index: number) {
-    const arr = [...this.draftTagNames];
-    if (index < 0 || index >= arr.length) return;
-
-    arr.splice(index, 1);
-    this.draftTagNames = arr;
-    this.tagsTouched = true;
-
-    const next = Math.min(index, this.draftTagNames.length - 1);
-    if (next >= 0) this.focusTag(next);
-    else this.focusNewTagInput();
-  }
-
-  /** SOLO RENOMBRAR TAGS EXISTENTES: PUT /tags/:id */
-  private renameTagsOnly(itemId: number) {
-    const it = this.item();
-    const currentTags = Array.isArray(it?.tags) ? (it!.tags as ItemTag[]) : [];
-    const newNames = normalizeTagNames(this.draftTagNames);
-
-    if (newNames.length !== currentTags.length) {
-      throw new Error('Solo se permite renombrar tags existentes. No se puede agregar/eliminar tags aquí.');
-    }
-
-    const calls = currentTags.map((t, idx) => {
-      const newName = String(newNames[idx] ?? '').trim();
-      if (!newName || newName === t.name) return of(null);
-
-      return this.http.put<ItemTag>(`${API_BASE}/tags/${t.id}`, { name: newName }, { headers: this.buildHeaders() });
-    });
-
-    return forkJoin(calls); // (ItemTag | null)[]
   }
 
   saveEdit() {
@@ -1145,19 +941,10 @@ export class ItemDetailsComponent implements OnInit {
     if (!id || !it || !d) return;
 
     const cleaned = cleanDraft(d);
-    cleaned.visibility = 'public';
-    this.touched.add('visibility');
-
-    const effectiveTitle = (this.touched.has('title') ? cleaned.title : it.title) ?? '';
-    if (!effectiveTitle.trim()) {
-      this.error.set('El título no puede estar vacío.');
-      return;
-    }
+    const payload = buildTouchedPayload(cleaned, this.touched);
 
     this.saving.set(true);
     this.error.set(null);
-
-    const payload = buildTouchedPayload(cleaned, this.touched);
 
     const saveItem$ =
       Object.keys(payload).length > 0
@@ -1167,47 +954,14 @@ export class ItemDetailsComponent implements OnInit {
     const saveTags$ = this.tagsTouched ? this.renameTagsOnly(id) : of(null);
 
     forkJoin({ itemRes: saveItem$, tagsRes: saveTags$ }).subscribe({
-      next: ({ itemRes, tagsRes }) => {
-        const baseUpdated = itemRes ? normalizeItem(itemRes) : it;
-
-        let finalTags: ItemTag[] | undefined = it.tags;
-
-        if (this.tagsTouched) {
-          if (!Array.isArray(tagsRes)) {
-            throw new Error('No se pudo guardar tags (respuesta inválida).');
-          }
-
-          const updatedById = new Map<number, ItemTag>();
-          for (const r of tagsRes as Array<ItemTag | null>) {
-            if (r && typeof r.id === 'number') updatedById.set(r.id, r);
-          }
-
-          finalTags = (Array.isArray(it.tags) ? it.tags : []).map((t) => updatedById.get(t.id) ?? t);
-        }
-
-        const finalItem: MyItem = {
-          ...it,
-          ...baseUpdated,
-          tags: finalTags,
-          attributes: it.attributes,
-          images: it.images,
-          cover: it.cover ?? baseUpdated.cover,
-        };
-
-        (Object.keys(payload) as (keyof ItemDraft)[]).forEach((k) => {
-          (finalItem as any)[k] = (payload as any)[k];
-        });
-
+      next: () => {
+        // ✅ CLAVE: no usar itemRes
+        const finalItem: MyItem = { ...it, ...payload };
         this.item.set(finalItem);
         this.draft.set(toDraft(finalItem));
         this.isEditing.set(false);
-
         this.touched.clear();
         this.tagsTouched = false;
-        this.newTagName = '';
-
-        this.draftTagNames = normalizeTagNames(Array.isArray(finalTags) ? finalTags.map((t) => t.name) : []);
-
         this.saving.set(false);
       },
       error: (err) => {
@@ -1217,42 +971,17 @@ export class ItemDetailsComponent implements OnInit {
     });
   }
 
-  goEdit(id: number) {
-    this.router.navigate(['/items/upload'], { queryParams: { id } });
-  }
+  private renameTagsOnly(itemId: number) {
+    const it = this.item();
+    const currentTags = Array.isArray(it?.tags) ? it!.tags : [];
+    const newNames = normalizeTagNames(this.draftTagNames);
 
-  goUploadNewFrom(id: number) {
-    this.router.navigate(['/items/upload'], { queryParams: { from: id } });
-  }
-
-  confirmDelete(id: number) {
-    if (!this.isBrowser) return;
-    const ok = window.confirm('¿Estás segura de eliminar esta pieza? Esta acción no se puede deshacer.');
-    if (!ok) return;
-    this.deleteItem(id);
-  }
-
-  private deleteItem(id: number) {
-    this.busy.set(true);
-    this.error.set(null);
-
-    this.http.delete(`${API_BASE}/items/${id}`, { headers: this.buildHeaders() }).subscribe({
-      next: () => {
-        this.busy.set(false);
-        this.router.navigate(['/items/mine']);
-      },
-      error: (err) => {
-        this.error.set(errorMessage(err, 'No se pudo eliminar la pieza.'));
-        this.busy.set(false);
-      },
+    const calls = currentTags.map((t, i) => {
+      const newName = newNames[i];
+      if (!newName || newName === t.name) return of(null);
+      return this.http.put(`${API_BASE}/tags/${t.id}`, { name: newName }, { headers: this.buildHeaders() });
     });
-  }
 
-  selectAll(ev: Event) {
-    const el = ev.target as HTMLInputElement | null;
-    if (!el) return;
-    setTimeout(() => {
-      el.select();
-    }, 0);
+    return forkJoin(calls);
   }
 }
