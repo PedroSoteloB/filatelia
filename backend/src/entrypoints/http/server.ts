@@ -659,10 +659,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         }
 
         if (p?.type === 'file') {
-          if (files.length >= maxImages) {
-            await p.file?.resume?.();
-            continue;
-          }
+          if (files.length >= maxImages) { await p.file?.resume?.(); continue; }
           const buf = await p.toBuffer();
           if (!buf?.length) continue;
 
@@ -721,7 +718,9 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 
       DECLARE @itemId BIGINT = (SELECT TOP 1 id FROM @t);
 
+      ------------------------------------------------------------------
       -- TAGS (solo strings)
+      ------------------------------------------------------------------
       IF (ISJSON(@tagsJson) = 1 AND JSON_QUERY(@tagsJson) <> '[]')
       BEGIN
         DECLARE @tagNames TABLE (name VARCHAR(60) PRIMARY KEY);
@@ -744,23 +743,31 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         WHERE T.owner_user_id = @ownerId;
       END
 
-      -- ATTRIBUTES (categories del front)
+      ------------------------------------------------------------------
+      -- ATTRIBUTES (categories del front)  <<< FIX DEFINITIVO
+      ------------------------------------------------------------------
       IF (ISJSON(@attrsJson) = 1 AND JSON_QUERY(@attrsJson) <> '[]')
       BEGIN
-        ;WITH A AS (
-          SELECT
-            name     = NULLIF(LTRIM(RTRIM(name)), ''),
-            attrType = LOWER(NULLIF(LTRIM(RTRIM(attrType)), '')),
-            valueRaw = NULLIF(value, '')
-          FROM OPENJSON(@attrsJson)
-          WITH (
-            name     NVARCHAR(100) '$.name',
-            attrType NVARCHAR(10)  '$.attrType',
-            value    NVARCHAR(MAX) '$.value'
-          )
-        )
+        DECLARE @A TABLE (
+          name NVARCHAR(100),
+          attrType NVARCHAR(10),
+          valueRaw NVARCHAR(MAX)
+        );
+
+        INSERT INTO @A (name, attrType, valueRaw)
+        SELECT
+          NULLIF(LTRIM(RTRIM(name)), ''),
+          COALESCE(LOWER(NULLIF(LTRIM(RTRIM(attrType)), '')), 'text'),
+          NULLIF(value, '')
+        FROM OPENJSON(@attrsJson)
+        WITH (
+          name     NVARCHAR(100) '$.name',
+          attrType NVARCHAR(10)  '$.attrType',
+          value    NVARCHAR(MAX) '$.value'
+        );
+
         MERGE attribute_definitions D
-        USING (SELECT DISTINCT name, attrType FROM A WHERE name IS NOT NULL) S
+        USING (SELECT DISTINCT name, attrType FROM @A WHERE name IS NOT NULL) S
           ON D.owner_user_id = @ownerId AND D.name = S.name
         WHEN NOT MATCHED THEN
           INSERT (owner_user_id, name, attr_type, created_at)
@@ -771,7 +778,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           @itemId,
           D.id,
           A.valueRaw
-        FROM A
+        FROM @A A
         JOIN attribute_definitions D
           ON D.owner_user_id = @ownerId AND D.name = A.name
         WHERE A.valueRaw IS NOT NULL;
