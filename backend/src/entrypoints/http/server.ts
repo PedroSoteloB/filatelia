@@ -489,6 +489,152 @@ function authGuard(req: FastifyRequest, reply: FastifyReply, done: HookHandlerDo
 
 
 
+// app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+
+//     const ct = String((req.headers['content-type'] || '')).toLowerCase();
+//     const isMultipart = ct.startsWith('multipart/form-data');
+
+//     let meta: any = null;
+//     const files: { buffer: Buffer; filename: string; mime: string }[] = [];
+
+//     if (isMultipart) {
+//       const parts = await (req.parts?.() as AsyncIterable<any>);
+//       if (!parts) return reply.code(400).send({ message: 'multipart requerido' });
+
+//       const allowed = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+//       const maxImages = 12;
+
+//       for await (const p of parts) {
+//         if (p?.type === 'field' && p.fieldname === 'metadata') {
+//           try {
+//             meta = JSON.parse(String(p.value ?? '{}'));
+//           } catch {
+//             return reply.code(400).send({ message: 'metadata inválido (JSON)' });
+//           }
+//           continue;
+//         }
+
+//         if (p?.type === 'file') {
+//           if (files.length >= maxImages) {
+//             await p.file?.resume?.();
+//             continue;
+//           }
+
+//           const buf = await p.toBuffer();
+//           if (!buf?.length) continue;
+
+//           const mime = String(p.mimetype ?? '');
+//           if (!allowed.has(mime)) {
+//             return reply.code(400).send({ message: 'Formato no soportado' });
+//           }
+
+//           files.push({
+//             buffer: buf,
+//             filename: String(p.filename ?? 'image'),
+//             mime,
+//           });
+//         }
+//       }
+//     } else {
+//       meta = req.body;
+//     }
+
+//     if (!meta?.title?.trim()) {
+//       return reply.code(400).send({ message: 'metadata.title requerido' });
+//     }
+
+//     // ========= INSERT + ID (robusto para cualquier driver) =========
+//     const [idRows]: any = await db.execute(
+//       `
+//       SET NOCOUNT ON;
+
+//       DECLARE @t TABLE (id BIGINT);
+
+//       INSERT INTO philatelic_items (
+//         owner_user_id,
+//         title,
+//         description,
+//         country,
+//         issue_year,
+//         condition_code,
+//         catalog_code,
+//         face_value,
+//         currency,
+//         acquisition_date,
+//         visibility,
+//         created_at,
+//         updated_at
+//       )
+//       OUTPUT INSERTED.id INTO @t(id)
+//       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME());
+
+//       SELECT TOP (1) id FROM @t;
+//       `,
+//       [
+//         ownerId,
+//         meta.title.trim(),
+//         meta.description || null,
+//         meta.country || null,
+//         meta.issueYear ?? meta.issue_year ?? meta.year ?? null,
+//         meta.condition ?? meta.condition_code ?? null,
+//         meta.catalogCode ?? meta.catalog_code ?? null,
+//         meta.faceValue ?? meta.face_value ?? null,
+//         meta.currency ?? null,
+//         meta.acquisitionDate ?? meta.acquisition_date ?? null,
+//         meta.visibility || 'public',
+//       ]
+//     );
+
+//     // depende del wrapper: a veces viene como [ [ {id: ...} ] , ...]
+//     const row0 = Array.isArray(idRows) ? idRows[0] : null;
+//     const itemId = Number(row0?.id);
+
+//     if (!Number.isFinite(itemId)) {
+//       throw new Error('No se pudo obtener el id insertado');
+//     }
+//     // ===============================================================
+
+//     // ================= IMÁGENES =================
+//     if (files.length) {
+//       const fs = require('fs');
+//       const path = require('path');
+
+//       const base = process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
+//       if (!fs.existsSync(base)) fs.mkdirSync(base, { recursive: true });
+
+//       for (const [i, f] of files.entries()) {
+//         const filePath = path.join(
+//           base,
+//           `${itemId}-${Date.now()}-${i}-${f.filename}`.replace(/[^\w.\-]+/g, '_')
+//         );
+//         fs.writeFileSync(filePath, f.buffer);
+//         await db.execute(
+//           `
+//           INSERT INTO item_images (item_id, file_path, is_primary)
+//           VALUES (?, ?, ?);
+//           `,
+//           [itemId, filePath, i === 0 ? 1 : 0]
+//         );
+//       }
+//     }
+
+//     return reply.code(201).send({ id: itemId, message: 'item_creado' });
+//   } catch (e: any) {
+//     console.error('[POST /items] ERROR:', e);
+//     return reply.code(500).send({
+//       message: 'Ha ocurrido un error, por favor contactar con soporte',
+//       detail: String(e?.message || ''),
+//     });
+//   }
+// });
+
+
+
+
+// GET /me/items
+
 app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -545,10 +691,29 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       return reply.code(400).send({ message: 'metadata.title requerido' });
     }
 
-    // ========= INSERT + ID (robusto para cualquier driver) =========
+    // Normaliza payloads (JSON) para SQL Server
+    const tagsJson = JSON.stringify(meta?.tags ?? meta?.tagIds ?? []);
+    const attrsJson = JSON.stringify(meta?.attributes ?? meta?.attrs ?? []);
+
+    // ========= INSERT item + TAGS + ATTRS (en el MISMO batch) =========
     const [idRows]: any = await db.execute(
       `
       SET NOCOUNT ON;
+
+      DECLARE @ownerId BIGINT = ?;
+      DECLARE @title VARCHAR(200) = ?;
+      DECLARE @description NVARCHAR(MAX) = ?;
+      DECLARE @country VARCHAR(80) = ?;
+      DECLARE @issue_year SMALLINT = ?;
+      DECLARE @condition_code VARCHAR(30) = ?;
+      DECLARE @catalog_code VARCHAR(80) = ?;
+      DECLARE @face_value DECIMAL(10,2) = ?;
+      DECLARE @currency VARCHAR(10) = ?;
+      DECLARE @acquisition_date DATE = ?;
+      DECLARE @visibility VARCHAR(10) = ?;
+
+      DECLARE @tagsJson NVARCHAR(MAX) = ?;   -- JSON array
+      DECLARE @attrsJson NVARCHAR(MAX) = ?;  -- JSON array
 
       DECLARE @t TABLE (id BIGINT);
 
@@ -568,9 +733,143 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         updated_at
       )
       OUTPUT INSERTED.id INTO @t(id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME());
+      VALUES (
+        @ownerId, @title, @description, @country, @issue_year, @condition_code, @catalog_code,
+        @face_value, @currency, @acquisition_date, @visibility,
+        SYSUTCDATETIME(), SYSUTCDATETIME()
+      );
 
-      SELECT TOP (1) id FROM @t;
+      DECLARE @itemId BIGINT = (SELECT TOP (1) id FROM @t);
+
+      ------------------------------------------------------------------
+      -- TAGS: acepta ids, objetos {id}, strings, objetos {name}
+      ------------------------------------------------------------------
+      IF (ISJSON(@tagsJson) = 1)
+      BEGIN
+        -- 1) recolecta nombres de tags (strings o {name})
+        DECLARE @tagNames TABLE (name VARCHAR(60) PRIMARY KEY);
+
+        INSERT INTO @tagNames(name)
+        SELECT DISTINCT LEFT(LTRIM(RTRIM(JSON_VALUE([value], '$.name'))), 60)
+        FROM OPENJSON(@tagsJson)
+        WHERE ISJSON([value]) = 1 AND NULLIF(LTRIM(RTRIM(JSON_VALUE([value], '$.name'))), '') IS NOT NULL;
+
+        INSERT INTO @tagNames(name)
+        SELECT DISTINCT LEFT(LTRIM(RTRIM([value])), 60)
+        FROM OPENJSON(@tagsJson)
+        WHERE ISJSON([value]) = 0
+          AND TRY_CAST([value] AS INT) IS NULL
+          AND NULLIF(LTRIM(RTRIM([value])), '') IS NOT NULL;
+
+        -- 2) crea tags que no existan (por owner)
+        MERGE tags AS T
+        USING (SELECT name FROM @tagNames) AS S
+          ON T.owner_user_id = @ownerId AND T.name = S.name
+        WHEN NOT MATCHED THEN
+          INSERT (owner_user_id, name) VALUES (@ownerId, S.name);
+
+        -- 3) inserta relación item_tags (dedup)
+        INSERT INTO item_tags (item_id, tag_id)
+        SELECT DISTINCT @itemId, X.tag_id
+        FROM (
+          -- ids directos: [1,2,3]
+          SELECT TRY_CAST([value] AS INT) AS tag_id
+          FROM OPENJSON(@tagsJson)
+          WHERE TRY_CAST([value] AS INT) IS NOT NULL
+
+          UNION
+
+          -- ids dentro de objetos: [{"id":1}]
+          SELECT TRY_CAST(JSON_VALUE([value], '$.id') AS INT) AS tag_id
+          FROM OPENJSON(@tagsJson)
+          WHERE ISJSON([value]) = 1 AND TRY_CAST(JSON_VALUE([value], '$.id') AS INT) IS NOT NULL
+
+          UNION
+
+          -- nombres resueltos a id
+          SELECT TT.id AS tag_id
+          FROM tags TT
+          JOIN @tagNames N ON N.name = TT.name
+          WHERE TT.owner_user_id = @ownerId
+        ) X
+        WHERE X.tag_id IS NOT NULL;
+      END
+
+      ------------------------------------------------------------------
+      -- ATTRS: item_attributes + attribute_definitions (si viene por name)
+      -- Espera array de objetos: { attributeId?, name?, type?, value? }
+      ------------------------------------------------------------------
+      IF (ISJSON(@attrsJson) = 1)
+      BEGIN
+        ;WITH A AS (
+          SELECT
+            TRY_CAST(JSON_VALUE([value], '$.attributeId') AS INT) AS attribute_id,
+            NULLIF(LTRIM(RTRIM(JSON_VALUE([value], '$.name'))), '') AS name,
+            LOWER(NULLIF(LTRIM(RTRIM(JSON_VALUE([value], '$.type'))), '')) AS attr_type,
+            JSON_VALUE([value], '$.valueText') AS value_text_raw,
+            JSON_VALUE([value], '$.valueNumber') AS value_number_raw,
+            JSON_VALUE([value], '$.valueDate') AS value_date_raw,
+            JSON_VALUE([value], '$.value') AS value_raw
+          FROM OPENJSON(@attrsJson)
+          WHERE ISJSON([value]) = 1
+        ),
+        NAMES AS (
+          SELECT DISTINCT
+            name,
+            CASE
+              WHEN attr_type IN ('text','number','date','list') THEN attr_type
+              ELSE 'text'
+            END AS attr_type
+          FROM A
+          WHERE name IS NOT NULL
+        )
+        -- 1) crea definiciones si no existen (por owner + name)
+        MERGE attribute_definitions AS D
+        USING NAMES AS S
+          ON D.owner_user_id = @ownerId AND D.name = S.name
+        WHEN NOT MATCHED THEN
+          INSERT (owner_user_id, name, attr_type, options_json, created_at)
+          VALUES (@ownerId, S.name, S.attr_type, NULL, SYSUTCDATETIME());
+
+        -- 2) inserta item_attributes (resolviendo attribute_id por id o por name)
+        INSERT INTO item_attributes (item_id, attribute_id, value_text, value_number, value_date)
+        SELECT
+          @itemId AS item_id,
+          COALESCE(
+            A.attribute_id,
+            D.id
+          ) AS attribute_id,
+          CASE
+            WHEN COALESCE(A.attr_type, D.attr_type) IN ('text','list') THEN
+              COALESCE(NULLIF(A.value_text_raw,''), NULLIF(A.value_raw,''))
+            WHEN COALESCE(A.attr_type, D.attr_type) = 'date' THEN NULL
+            WHEN COALESCE(A.attr_type, D.attr_type) = 'number' THEN NULL
+            ELSE COALESCE(NULLIF(A.value_text_raw,''), NULLIF(A.value_raw,''))
+          END AS value_text,
+          CASE
+            WHEN COALESCE(A.attr_type, D.attr_type) = 'number' THEN
+              TRY_CONVERT(DECIMAL(18,6), COALESCE(NULLIF(A.value_number_raw,''), NULLIF(A.value_raw,'')))
+            ELSE NULL
+          END AS value_number,
+          CASE
+            WHEN COALESCE(A.attr_type, D.attr_type) = 'date' THEN
+              TRY_CONVERT(DATE, COALESCE(NULLIF(A.value_date_raw,''), NULLIF(A.value_raw,'')))
+            ELSE NULL
+          END AS value_date
+        FROM A
+        LEFT JOIN attribute_definitions D
+          ON D.owner_user_id = @ownerId
+         AND D.name = A.name
+        WHERE COALESCE(A.attribute_id, D.id) IS NOT NULL
+          AND (
+            NULLIF(A.value_text_raw,'') IS NOT NULL OR
+            NULLIF(A.value_number_raw,'') IS NOT NULL OR
+            NULLIF(A.value_date_raw,'') IS NOT NULL OR
+            NULLIF(A.value_raw,'') IS NOT NULL
+          );
+      END
+
+      SELECT @itemId AS id;
       `,
       [
         ownerId,
@@ -584,19 +883,16 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         meta.currency ?? null,
         meta.acquisitionDate ?? meta.acquisition_date ?? null,
         meta.visibility || 'public',
+        tagsJson,
+        attrsJson,
       ]
     );
 
-    // depende del wrapper: a veces viene como [ [ {id: ...} ] , ...]
     const row0 = Array.isArray(idRows) ? idRows[0] : null;
     const itemId = Number(row0?.id);
+    if (!Number.isFinite(itemId)) throw new Error('No se pudo obtener el id insertado');
 
-    if (!Number.isFinite(itemId)) {
-      throw new Error('No se pudo obtener el id insertado');
-    }
-    // ===============================================================
-
-    // ================= IMÁGENES =================
+    // ================= IMÁGENES (igual que tú) =================
     if (files.length) {
       const fs = require('fs');
       const path = require('path');
@@ -610,6 +906,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           `${itemId}-${Date.now()}-${i}-${f.filename}`.replace(/[^\w.\-]+/g, '_')
         );
         fs.writeFileSync(filePath, f.buffer);
+
         await db.execute(
           `
           INSERT INTO item_images (item_id, file_path, is_primary)
@@ -631,7 +928,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
 });
 
 
-// GET /me/items
 app.get('/me/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const q: any = req.query || {};
@@ -971,12 +1267,61 @@ app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any)
 });
 
 
+// app.get('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+//     const itemId = Number(req.params.id);
+//     if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'id inválido' });
+
+//     const [rows]: any = await db.execute(
+//       `SELECT *
+//          FROM philatelic_items
+//         WHERE id = ? AND owner_user_id = ?`,
+//       [itemId, ownerId]
+//     );
+//     const item = rows?.[0];
+//     if (!item) return reply.code(404).send({ message: 'not_found' });
+
+//     const [imgRows]: any = await db.execute(
+//       `SELECT id,
+//              file_path AS [file], 
+//              is_primary AS [primary]
+//          FROM item_images
+//         WHERE item_id = ?
+//         ORDER BY is_primary DESC, id ASC`,
+//       [itemId]
+//     );
+
+//     // 🔹 aquí el cambio
+//     item.images = (imgRows || []).map((im: any) => {
+//       const rel = toPublicUrl(im.file);   // "/uploads/..."
+//       const abs = toAbsoluteUrl(rel);     // "https://filatelia-api.../uploads/..."
+//       return {
+//         ...im,
+//         file: abs || rel,
+//       };
+//     });
+
+//     // opcional: normalizar cover si existe
+//     if (item.cover) {
+//       const relCover = toPublicUrl(item.cover);
+//       const absCover = toAbsoluteUrl(relCover);
+//       item.cover = absCover || relCover;
+//     }
+
+//     reply.send(item);
+//   } catch (e: any) {
+//     reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
+//   }
+// });
+
 app.get('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
     const itemId = Number(req.params.id);
     if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'id inválido' });
 
+    // 1) ITEM
     const [rows]: any = await db.execute(
       `SELECT *
          FROM philatelic_items
@@ -986,9 +1331,10 @@ app.get('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) =>
     const item = rows?.[0];
     if (!item) return reply.code(404).send({ message: 'not_found' });
 
+    // 2) IMÁGENES
     const [imgRows]: any = await db.execute(
       `SELECT id,
-             file_path AS [file], 
+             file_path AS [file],
              is_primary AS [primary]
          FROM item_images
         WHERE item_id = ?
@@ -996,28 +1342,67 @@ app.get('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) =>
       [itemId]
     );
 
-    // 🔹 aquí el cambio
     item.images = (imgRows || []).map((im: any) => {
-      const rel = toPublicUrl(im.file);   // "/uploads/..."
-      const abs = toAbsoluteUrl(rel);     // "https://filatelia-api.../uploads/..."
-      return {
-        ...im,
-        file: abs || rel,
-      };
+      const rel = toPublicUrl(im.file);
+      const abs = toAbsoluteUrl(rel);
+      return { ...im, file: abs || rel };
     });
 
-    // opcional: normalizar cover si existe
     if (item.cover) {
       const relCover = toPublicUrl(item.cover);
       const absCover = toAbsoluteUrl(relCover);
       item.cover = absCover || relCover;
     }
 
-    reply.send(item);
+    // 3) TAGS (item_tags -> tags)
+    const [tagRows]: any = await db.execute(
+      `
+      SELECT t.id, t.name
+      FROM item_tags it
+      JOIN tags t ON t.id = it.tag_id
+      WHERE it.item_id = ? AND t.owner_user_id = ?
+      ORDER BY t.name ASC;
+      `,
+      [itemId, ownerId]
+    );
+    item.tags = (tagRows || []).map((t: any) => ({ id: t.id, name: t.name }));
+
+    // 4) ATTRIBUTES (item_attributes -> attribute_definitions)
+    const [attrRows]: any = await db.execute(
+      `
+      SELECT
+        ia.attribute_id        AS attributeId,
+        ad.name                AS name,
+        ad.attr_type           AS type,
+        ia.value_text          AS valueText,
+        ia.value_number        AS valueNumber,
+        ia.value_date          AS valueDate
+      FROM item_attributes ia
+      JOIN attribute_definitions ad ON ad.id = ia.attribute_id
+      WHERE ia.item_id = ? AND ad.owner_user_id = ?
+      ORDER BY ad.name ASC;
+      `,
+      [itemId, ownerId]
+    );
+
+    item.attributes = (attrRows || []).map((a: any) => ({
+      attributeId: a.attributeId,
+      name: a.name,
+      type: a.type,
+      valueText: a.valueText ?? null,
+      valueNumber: a.valueNumber ?? null,
+      valueDate: a.valueDate ?? null,
+    }));
+
+    return reply.send(item);
   } catch (e: any) {
-    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
+    console.error('[GET /items/:id] ERROR:', e);
+    return reply
+      .code(500)
+      .send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
+
 
 
 app.put('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
