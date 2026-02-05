@@ -684,11 +684,9 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
       return reply.code(400).send({ message: 'metadata.title requerido' });
     }
 
-    // ✅ IMPORTANTÍSIMO: tu front manda tags + categories
-    const tagsJson = JSON.stringify(meta?.tags ?? []);
+    const tagsJson  = JSON.stringify(meta?.tags ?? []);
     const attrsJson = JSON.stringify(meta?.categories ?? meta?.attributes ?? meta?.attrs ?? []);
 
-    // ========== INSERT item + tags + attrs (SQL Server) ==========
     const [idRows]: any = await db.execute(
       `
       SET NOCOUNT ON;
@@ -707,8 +705,8 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         DECLARE @acquisition_date DATE = ?;
         DECLARE @visibility VARCHAR(10) = ?;
 
-        DECLARE @tagsJson NVARCHAR(MAX) = ?;   -- JSON array
-        DECLARE @attrsJson NVARCHAR(MAX) = ?;  -- JSON array
+        DECLARE @tagsJson  NVARCHAR(MAX) = ?;
+        DECLARE @attrsJson NVARCHAR(MAX) = ?;
 
         DECLARE @t TABLE (id BIGINT);
 
@@ -727,22 +725,18 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         DECLARE @itemId BIGINT = (SELECT TOP (1) id FROM @t);
 
         ------------------------------------------------------------------
-        -- TAGS (robusto):
-        -- - soporta: ["a","b"], [1,2], [{"id":1}], [{"name":"a"}]
-        -- - NO usa JSON_VALUE sobre strings sueltas
+        -- TAGS
         ------------------------------------------------------------------
-        IF (ISJSON(@tagsJson) = 1)
+        IF (ISJSON(@tagsJson) = 1 AND JSON_QUERY(@tagsJson) <> '[]')
         BEGIN
           DECLARE @tagIds TABLE (tag_id INT PRIMARY KEY);
           DECLARE @tagNames TABLE (name VARCHAR(60) PRIMARY KEY);
 
-          -- (A) ids escalares: [1,2,3]
           INSERT INTO @tagIds(tag_id)
           SELECT DISTINCT TRY_CAST([value] AS INT)
           FROM OPENJSON(@tagsJson)
           WHERE TRY_CAST([value] AS INT) IS NOT NULL;
 
-          -- (B) objetos: [{"id":1,"name":"x"}] (WITH NO explota con escalares)
           ;WITH O AS (
             SELECT
               id   = TRY_CAST(id AS INT),
@@ -759,26 +753,21 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
           INSERT INTO @tagNames(name)
           SELECT DISTINCT LEFT(name, 60) FROM O WHERE name IS NOT NULL;
 
-          -- (C) strings escalares: ["alskdn","dasd"]  -> OPENJSON retorna value ya sin comillas
           INSERT INTO @tagNames(name)
           SELECT DISTINCT LEFT(LTRIM(RTRIM([value])), 60)
           FROM OPENJSON(@tagsJson)
           WHERE TRY_CAST([value] AS INT) IS NULL
             AND NULLIF(LTRIM(RTRIM([value])), '') IS NOT NULL;
 
-          -- crea tags faltantes (por owner)
           MERGE tags AS T
           USING (SELECT name FROM @tagNames) AS S
             ON T.owner_user_id = @ownerId AND T.name = S.name
           WHEN NOT MATCHED THEN
             INSERT (owner_user_id, name) VALUES (@ownerId, S.name);
 
-          -- inserta relaciones por ids directos
           INSERT INTO item_tags (item_id, tag_id)
-          SELECT @itemId, tag_id
-          FROM @tagIds;
+          SELECT @itemId, tag_id FROM @tagIds;
 
-          -- inserta relaciones por nombres (resuelve a id)
           INSERT INTO item_tags (item_id, tag_id)
           SELECT DISTINCT @itemId, TT.id
           FROM tags TT
@@ -790,11 +779,9 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
         END
 
         ------------------------------------------------------------------
-        -- ATTRS (tu front manda "categories"):
-        -- [{name:"Aaa", attrType:"text", value:"AAA"}]
-        -- guarda en attribute_definitions + item_attributes
+        -- ATTRIBUTES
         ------------------------------------------------------------------
-        IF (ISJSON(@attrsJson) = 1)
+        IF (ISJSON(@attrsJson) = 1 AND JSON_QUERY(@attrsJson) <> '[]')
         BEGIN
           ;WITH A AS (
             SELECT
@@ -817,7 +804,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
             FROM A
             WHERE name IS NOT NULL
           )
-          -- crea definiciones faltantes
           MERGE attribute_definitions AS D
           USING NAMES AS S
             ON D.owner_user_id = @ownerId AND D.name = S.name
@@ -825,11 +811,10 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
             INSERT (owner_user_id, name, attr_type, options_json, created_at)
             VALUES (@ownerId, S.name, S.attr_type, NULL, SYSUTCDATETIME());
 
-          -- inserta valores (resolve attribute_id por id o por name)
           INSERT INTO item_attributes (item_id, attribute_id, value_text, value_number, value_date)
           SELECT
             @itemId,
-            COALESCE(A.attribute_id, D.id) AS attribute_id,
+            COALESCE(A.attribute_id, D.id),
             CASE WHEN COALESCE(A.attr_type, D.attr_type) IN ('text','list') THEN A.value_raw ELSE NULL END,
             CASE WHEN COALESCE(A.attr_type, D.attr_type) = 'number' THEN TRY_CONVERT(DECIMAL(18,6), A.value_raw) ELSE NULL END,
             CASE WHEN COALESCE(A.attr_type, D.attr_type) = 'date'   THEN TRY_CONVERT(DATE, A.value_raw) ELSE NULL END
@@ -840,7 +825,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
             AND A.value_raw IS NOT NULL;
         END
 
-        COMMIT;
+        IF @@TRANCOUNT > 0 COMMIT;
         SELECT @itemId AS id;
       END TRY
       BEGIN CATCH
@@ -869,7 +854,6 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     const itemId = Number(row0?.id);
     if (!Number.isFinite(itemId)) throw new Error('No se pudo obtener el id insertado');
 
-    // ===== IMÁGENES (igual que tú) =====
     if (files.length) {
       const fs = require('fs');
       const path = require('path');
@@ -900,6 +884,7 @@ app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
     });
   }
 });
+
 
 
 
