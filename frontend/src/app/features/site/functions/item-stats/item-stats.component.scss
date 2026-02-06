@@ -1,4 +1,10 @@
-:host {
+/* ============================================================
+   Item Stats Dashboard (NO encapsulation)
+   IMPORTANT: usamos .search-page porque encapsulation: None
+   y el host del componente ya trae class="search-page"
+   ============================================================ */
+
+   .search-page {
     --ink: #2b2623;
     --muted: #7a5c4d;
     --accent: #85586f;
@@ -12,11 +18,10 @@
   
     color: var(--ink);
     display: block;
-  }
   
-  /* Fondo general */
-  .search-page {
     min-height: 100vh;
+  
+    /* Fondo general */
     background:
       radial-gradient(900px 500px at 0% 0%, rgba(133, 88, 111, 0.06), transparent 60%),
       radial-gradient(900px 500px at 100% 100%, rgba(176, 137, 104, 0.08), transparent 60%),
@@ -29,17 +34,17 @@
       );
   }
   
-  .wrap {
+  .search-page .wrap {
     width: min(1120px, 94vw);
     margin: 0 auto;
     padding: 1.1rem 0 2.5rem;
   }
   
-  .muted { color: var(--muted); opacity: 0.9; }
-  .small { font-size: 0.92rem; }
+  .search-page .muted { color: var(--muted); opacity: 0.9; }
+  .search-page .small { font-size: 0.92rem; }
   
   /* Topbar */
-  .topbar {
+  .search-page .topbar {
     position: sticky;
     top: 0;
     z-index: 40;
@@ -52,7 +57,7 @@
     backdrop-filter: blur(10px);
   }
   
-  .brand {
+  .search-page .brand {
     display: flex;
     align-items: center;
     gap: 0.75rem;
@@ -60,28 +65,28 @@
     text-decoration: none;
   }
   
-  .stamp { width: 56px; height: 56px; }
+  .search-page .stamp { width: 56px; height: 56px; }
   
-  .title h1 {
+  .search-page .title h1 {
     margin: 0;
     font-weight: 800;
     font-size: 1.15rem;
   }
   
-  .title p {
+  .search-page .title p {
     margin: 0.15rem 0 0;
     color: var(--muted);
     font-size: 0.9rem;
   }
   
-  .actions {
+  .search-page .actions {
     display: flex;
     gap: 0.6rem;
     align-items: center;
   }
   
   /* Botones */
-  .btn {
+  .search-page .btn {
     border: 1px solid rgba(0, 0, 0, 0.1);
     background: #fff;
     padding: 0.5rem 0.9rem;
@@ -92,18 +97,18 @@
     transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
   }
   
-  .btn:hover:not(:disabled) {
+  .search-page .btn:hover:not(:disabled) {
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
     transform: translateY(-1px);
   }
   
-  .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+  .search-page .btn:disabled { opacity: 0.55; cursor: not-allowed; }
   
-  .btn.light { background: #f3f2f0; border-color: #dfd7cf; }
-  .btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
+  .search-page .btn.light { background: #f3f2f0; border-color: #dfd7cf; }
+  .search-page .btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
   
   /* Panel */
-  .panel {
+  .search-page .panel {
     background: var(--paper);
     border: 1px solid rgba(0, 0, 0, 0.06);
     border-radius: 18px;
@@ -112,13 +117,13 @@
     margin-bottom: 0.9rem;
   }
   
-  .panel-title {
+  .search-page .panel-title {
     margin: 0.15rem 0 0.9rem;
     font-size: 1.1rem;
     font-weight: 800;
   }
   
-  .panel-title-row {
+  .search-page .panel-title-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -126,7 +131,7 @@
   }
   
   /* Estado error */
-  .status.error {
+  .search-page .status.error {
     color: #7a1212;
     background: #ffecec;
     border: 1px solid #ffd6d6;
@@ -136,7 +141,7 @@
   }
   
   /* Empty */
-  .empty {
+  .search-page .empty {
     border: 1px dashed #e0d6cd;
     border-radius: 16px;
     padding: 1rem;
@@ -146,17 +151,17 @@
     justify-content: space-between;
     gap: 1rem;
   }
-  .empty .title { font-weight: 700; margin-bottom: 0.15rem; }
+  .search-page .empty .title { font-weight: 700; margin-bottom: 0.15rem; }
   
   /* ===== KPI ===== */
-  .kpi-grid {
+  .search-page .kpi-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0.9rem;
     margin-bottom: 0.9rem;
   }
   
-  .kpi-card {
+  .search-page .kpi-card {
     background: var(--paper);
     border: 1px solid rgba(0, 0, 0, 0.06);
     border-radius: 18px;
@@ -164,67 +169,67 @@
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.06);
   }
   
-  .kpi-label {
+  .search-page .kpi-label {
     font-size: 0.9rem;
     color: var(--muted);
     margin-bottom: 0.25rem;
     font-weight: 700;
   }
   
-  .kpi-value {
+  .search-page .kpi-value {
     font-size: 2rem;
     font-weight: 900;
     line-height: 1.05;
   }
   
-  .kpi-hint {
+  .search-page .kpi-hint {
     margin-top: 0.35rem;
     font-size: 0.88rem;
   }
   
   @media (max-width: 980px) {
-    .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .search-page .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 560px) {
-    .kpi-grid { grid-template-columns: 1fr; }
+    .search-page .kpi-grid { grid-template-columns: 1fr; }
   }
   
   /* ===== Dashboard grid ===== */
-  .dash-grid {
+  .search-page .dash-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
     align-items: start;
   }
   
-  .panel-wide { grid-column: 1 / -1; }
+  .search-page .panel-wide { grid-column: 1 / -1; }
   
   @media (max-width: 980px) {
-    .dash-grid { grid-template-columns: 1fr; }
+    .search-page .dash-grid { grid-template-columns: 1fr; }
   }
   
   /* ===== Bars (Horizontales) ===== */
-  .bars {
+  .search-page .bars {
     display: flex;
     flex-direction: column;
     gap: 0.65rem;
   }
   
-  .bar-row {
+  .search-page .bar-row {
     display: grid;
     grid-template-columns: 180px 1fr;
     gap: 0.75rem;
     align-items: center;
   }
   
-  .bar-left {
+  .search-page .bar-left {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 0.5rem;
   }
   
-  .bar-key {
+  .search-page .bar-key {
     font-weight: 800;
     font-size: 0.95rem;
     overflow: hidden;
@@ -232,14 +237,14 @@
     white-space: nowrap;
   }
   
-  .bar-count {
+  .search-page .bar-count {
     font-weight: 800;
     color: var(--muted);
     font-size: 0.92rem;
     flex: 0 0 auto;
   }
   
-  .bar-track {
+  .search-page .bar-track {
     height: 12px;
     background: #fff;
     border: 1px solid #e6e0da;
@@ -247,7 +252,7 @@
     overflow: hidden;
   }
   
-  .bar-fill {
+  .search-page .bar-fill {
     height: 100%;
     background: var(--accent);
     border-radius: 999px;
@@ -256,14 +261,14 @@
   }
   
   @media (max-width: 560px) {
-    .bar-row { grid-template-columns: 1fr; }
-    .bar-left { justify-content: space-between; }
+    .search-page .bar-row { grid-template-columns: 1fr; }
+    .search-page .bar-left { justify-content: space-between; }
   }
   
   /* ============================================================
      (2) DONUT (Condición)
      ============================================================ */
-  .donut-row {
+  .search-page .donut-row {
     display: grid;
     grid-template-columns: 160px 1fr;
     gap: 1rem;
@@ -271,24 +276,23 @@
   }
   
   @media (max-width: 560px) {
-    .donut-row { grid-template-columns: 1fr; }
+    .search-page .donut-row { grid-template-columns: 1fr; }
   }
   
-  .donut {
+  .search-page .donut {
     /* --p viene del HTML (0..100) */
     --p: 0;
     width: 150px;
     height: 150px;
     border-radius: 999px;
-    background:
-      conic-gradient(var(--accent) calc(var(--p) * 1%), var(--ring) 0);
+    background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--ring) 0);
     display: grid;
     place-items: center;
     border: 1px solid var(--line);
     box-shadow: inset 0 0 0 10px rgba(255, 255, 255, 0.55);
   }
   
-  .donut-center {
+  .search-page .donut-center {
     width: 102px;
     height: 102px;
     background: #fff;
@@ -300,26 +304,26 @@
     padding: 0.6rem;
   }
   
-  .donut-big {
+  .search-page .donut-big {
     font-size: 1.4rem;
     font-weight: 1000;
     line-height: 1;
   }
-  .donut-small {
+  .search-page .donut-small {
     font-size: 0.85rem;
     margin-top: 0.25rem;
   }
   
-  .donut-legend {
+  .search-page .donut-legend {
     min-width: 0;
   }
   
-  .legend-list {
+  .search-page .legend-list {
     display: grid;
     gap: 0.5rem;
   }
   
-  .legend-item {
+  .search-page .legend-item {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -330,14 +334,14 @@
     border: 1px solid rgba(0, 0, 0, 0.05);
   }
   
-  .legend-key {
+  .search-page .legend-key {
     font-weight: 800;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   
-  .legend-val {
+  .search-page .legend-val {
     font-variant-numeric: tabular-nums;
     color: var(--muted);
     font-weight: 800;
@@ -347,7 +351,7 @@
   /* ============================================================
      (3) BARRAS VERTICALES MINI (Países)
      ============================================================ */
-  .vbars {
+  .search-page .vbars {
     height: 170px;
     display: grid;
     grid-template-columns: repeat(10, minmax(0, 1fr));
@@ -357,13 +361,13 @@
   }
   
   @media (max-width: 980px) {
-    .vbars { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+    .search-page .vbars { grid-template-columns: repeat(8, minmax(0, 1fr)); }
   }
   @media (max-width: 560px) {
-    .vbars { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .search-page .vbars { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   }
   
-  .vbar {
+  .search-page .vbar {
     display: grid;
     grid-template-rows: 1fr auto auto;
     gap: 0.25rem;
@@ -371,17 +375,21 @@
     min-width: 0;
   }
   
-  .vfill {
+  .search-page .vfill {
     width: 100%;
     height: 0%;
     border-radius: 12px 12px 10px 10px;
-    background: linear-gradient(180deg, color-mix(in oklab, var(--accent) 92%, #ffffff), var(--accent));
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--accent) 92%, #ffffff),
+      var(--accent)
+    );
     border: 1px solid rgba(0, 0, 0, 0.06);
     box-shadow: 0 10px 22px rgba(0, 0, 0, 0.08);
     transition: height 0.25s ease;
   }
   
-  .vkey {
+  .search-page .vkey {
     font-size: 0.82rem;
     font-weight: 900;
     text-align: center;
@@ -390,7 +398,7 @@
     white-space: nowrap;
   }
   
-  .vval {
+  .search-page .vval {
     font-size: 0.8rem;
     text-align: center;
     font-variant-numeric: tabular-nums;
@@ -399,23 +407,23 @@
   /* ============================================================
      (4) GAUGE / PROGRESO (Concentración de valor)
      ============================================================ */
-  .gauge-wrap {
+  .search-page .gauge-wrap {
     display: grid;
     gap: 0.9rem;
   }
   
-  .gauge-meta {
+  .search-page .gauge-meta {
     display: grid;
     gap: 0.2rem;
   }
   
-  .gauge-title {
+  .search-page .gauge-title {
     font-size: 1.1rem;
     font-weight: 1000;
     line-height: 1.1;
   }
   
-  .gauge {
+  .search-page .gauge {
     position: relative;
     height: 16px;
     border-radius: 999px;
@@ -424,17 +432,13 @@
     background: #fff;
   }
   
-  .gauge-track {
+  .search-page .gauge-track {
     position: absolute;
     inset: 0;
-    background: linear-gradient(
-      90deg,
-      rgba(133, 88, 111, 0.10),
-      rgba(133, 88, 111, 0.04)
-    );
+    background: linear-gradient(90deg, rgba(133, 88, 111, 0.10), rgba(133, 88, 111, 0.04));
   }
   
-  .gauge-fill {
+  .search-page .gauge-fill {
     position: absolute;
     inset: 0 auto 0 0;
     width: 0%;
@@ -443,7 +447,7 @@
     transition: width 0.25s ease;
   }
   
-  .gauge-pct {
+  .search-page .gauge-pct {
     position: absolute;
     right: 10px;
     top: 50%;
@@ -456,26 +460,27 @@
   }
   
   /* ===== Table ===== */
-  .table-wrap {
+  .search-page .table-wrap {
     overflow: auto;
     border-radius: 14px;
     border: 1px solid rgba(0, 0, 0, 0.06);
     background: #fff;
   }
   
-  .tbl {
+  .search-page .tbl {
     width: 100%;
     border-collapse: collapse;
     min-width: 720px;
   }
   
-  .tbl th, .tbl td {
+  .search-page .tbl th,
+  .search-page .tbl td {
     padding: 0.65rem 0.75rem;
     border-bottom: 1px solid #eee6df;
     font-size: 0.92rem;
   }
   
-  .tbl thead th {
+  .search-page .tbl thead th {
     position: sticky;
     top: 0;
     background: #fff;
@@ -484,7 +489,8 @@
     font-weight: 900;
   }
   
-  .tbl td.num, .tbl th.num {
+  .search-page .tbl td.num,
+  .search-page .tbl th.num {
     text-align: right;
     font-variant-numeric: tabular-nums;
   }
