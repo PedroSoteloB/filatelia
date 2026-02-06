@@ -1,6 +1,6 @@
 import { Component, ViewEncapsulation, Inject, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http';
 import { PLATFORM_ID } from '@angular/core';
 
@@ -17,6 +17,8 @@ type CountryPriceRow = {
   avgValue: number | null;
   minValue: number | null;
   maxValue: number | null;
+  // si tu backend manda currency, no rompe aunque no lo tipemos
+  // currency?: string | null;
 };
 
 type ItemStatsResponse = {
@@ -33,7 +35,7 @@ function errorMessage(err: any, fallback: string) {
 @Component({
   selector: 'app-item-stats',
   standalone: true,
-  imports: [CommonModule, RouterModule, HttpClientModule],
+  imports: [CommonModule, RouterLink, HttpClientModule],
   templateUrl: './item-stats.component.html',
   styleUrl: './item-stats.component.scss',
   encapsulation: ViewEncapsulation.None,
@@ -68,11 +70,20 @@ export class ItemStatsComponent implements OnInit {
     this.error.set(null);
 
     this.http.get<ItemStatsResponse>(`${API_BASE}/me/items/stats`, { headers: this.buildHeaders() }).subscribe({
-      next: (res) => {
+      next: (res: any) => {
+        // Normaliza StatPair aunque el backend mande { key } o { type } o { condition }
+        const normalizePairs = (list: any): StatPair[] => {
+          const arr = Array.isArray(list) ? list : [];
+          return arr.map((x: any) => ({
+            key: String(x?.key ?? x?.type ?? x?.condition ?? '').trim(),
+            count: Number(x?.count ?? 0),
+          }));
+        };
+
         const safe: ItemStatsResponse = {
           total: Number(res?.total ?? 0),
-          byType: Array.isArray(res?.byType) ? res.byType : [],
-          byCondition: Array.isArray(res?.byCondition) ? res.byCondition : [],
+          byType: normalizePairs(res?.byType),
+          byCondition: normalizePairs(res?.byCondition),
           byCountryPrice: Array.isArray(res?.byCountryPrice) ? res.byCountryPrice : [],
         };
 
@@ -136,7 +147,7 @@ export class ItemStatsComponent implements OnInit {
     const arr = Array.isArray(list) ? list : [];
     let s = 0;
     for (const r of arr) {
-      const v = Number(r?.totalValue ?? 0);
+      const v = Number((r as any)?.totalValue ?? 0);
       if (Number.isFinite(v)) s += v;
     }
     return s;
@@ -150,7 +161,7 @@ export class ItemStatsComponent implements OnInit {
     let bestV = -Infinity;
 
     for (const r of arr) {
-      const v = Number(r?.totalValue ?? 0);
+      const v = Number((r as any)?.totalValue ?? 0);
       const vv = Number.isFinite(v) ? v : 0;
       if (best === null || vv > bestV) {
         best = r;

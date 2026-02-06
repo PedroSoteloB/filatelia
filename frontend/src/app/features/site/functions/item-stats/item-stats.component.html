@@ -36,19 +36,19 @@
   
           <div class="kpi-card">
             <div class="kpi-label">Tipos distintos</div>
-            <div class="kpi-value">{{ (s.byType.length || 0) }}</div>
+            <div class="kpi-value">{{ s.byType.length }}</div>
             <div class="kpi-hint muted">Cantidad de categorías/tipos</div>
           </div>
   
           <div class="kpi-card">
             <div class="kpi-label">Condiciones distintas</div>
-            <div class="kpi-value">{{ (s.byCondition.length || 0) }}</div>
+            <div class="kpi-value">{{ s.byCondition.length }}</div>
             <div class="kpi-hint muted">Estados/condiciones encontradas</div>
           </div>
   
           <div class="kpi-card">
             <div class="kpi-label">Países distintos</div>
-            <div class="kpi-value">{{ (s.byCountryPrice.length || 0) }}</div>
+            <div class="kpi-value">{{ s.byCountryPrice.length }}</div>
             <div class="kpi-hint muted">Agrupado por país</div>
           </div>
         </section>
@@ -102,33 +102,35 @@
             </div>
   
             <ng-container *ngIf="s.byCondition.length; else noCondTpl">
-              <div class="donut-row">
-                <!-- Donut: visualiza el % de la condición top respecto al total -->
-                <div
-                  class="donut"
-                  [style.--p]="pct(maxCount(s.byCondition), sumCount(s.byCondition))"
-                  aria-label="donut-cond"
-                >
-                  <div class="donut-center">
-                    <div class="donut-big">
-                      {{ pct(maxCount(s.byCondition), sumCount(s.byCondition)) }}%
+              <ng-container *ngIf="sumCount(s.byCondition) as totalCond">
+                <div class="donut-row">
+                  <!-- Donut: visualiza el % de la condición top respecto al total -->
+                  <div
+                    class="donut"
+                    [style.--p]="pct(maxCount(s.byCondition), totalCond)"
+                    aria-label="donut-cond"
+                  >
+                    <div class="donut-center">
+                      <div class="donut-big">
+                        {{ pct(maxCount(s.byCondition), totalCond) }}%
+                      </div>
+                      <div class="donut-small muted">condición top</div>
                     </div>
-                    <div class="donut-small muted">condición top</div>
                   </div>
-                </div>
   
-                <div class="donut-legend">
-                  <div class="muted small" style="margin-bottom: 6px;">Top condiciones</div>
-                  <div class="legend-list">
-                    <div class="legend-item" *ngFor="let r of takeTop(s.byCondition)">
-                      <div class="legend-key">{{ fmtText(r.key) }}</div>
-                      <div class="legend-val">
-                        {{ r.count }} ({{ pct(r.count, sumCount(s.byCondition)) }}%)
+                  <div class="donut-legend">
+                    <div class="muted small" style="margin-bottom: 6px;">Top condiciones</div>
+                    <div class="legend-list">
+                      <div class="legend-item" *ngFor="let r of takeTop(s.byCondition)">
+                        <div class="legend-key">{{ fmtText(r.key) }}</div>
+                        <div class="legend-val">
+                          {{ r.count }} ({{ pct(r.count, totalCond) }}%)
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              </ng-container>
             </ng-container>
   
             <ng-template #noCondTpl>
@@ -185,8 +187,7 @@
             </div>
   
             <ng-container *ngIf="s.byCountryPrice.length; else noGaugeTpl">
-  
-              <!-- FIX: guardamos el top en variable (evita null + no repetimos la función) -->
+              <!-- guardamos el top en variable (evita null + no repetimos la función) -->
               <ng-container *ngIf="topCountryByTotal(s.byCountryPrice) as top; else noGaugeTpl">
                 <div class="gauge-wrap">
                   <div class="gauge-meta">
@@ -211,7 +212,6 @@
                   </div>
                 </div>
               </ng-container>
-  
             </ng-container>
   
             <ng-template #noGaugeTpl>
