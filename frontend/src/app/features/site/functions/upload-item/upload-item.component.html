@@ -19,7 +19,8 @@
   
         <!-- ✅ NUEVO: saludo si está logueado; si no, tagline normal -->
         <p *ngIf="isAuth; else tagline">
-          Hola, {{ displayName || 'Usuario' }}
+          Hola, {{ displayName() || 'Usuario' }}
+
         </p>
         <ng-template #tagline>
           <p>Catálogo personal de sellos</p>

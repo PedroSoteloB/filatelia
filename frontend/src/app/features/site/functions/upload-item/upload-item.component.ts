@@ -28,7 +28,7 @@ interface DynAttr {
 // Payload que espera el backend en meta.categories
 type CategoryPayload =
   | { name: string; attrType: 'number'; value: number }
-  | { name: string; attrType: 'date'; value: string }   // YYYY-MM-DD
+  | { name: string; attrType: 'date'; value: string } // YYYY-MM-DD
   | { name: string; attrType: 'text' | 'list'; value: string };
 
 // ==== Helpers JWT (roles y expiración) ====
@@ -55,6 +55,16 @@ function isExpired(token: string): boolean {
   }
 }
 
+// ✅ NUEVO: decode del payload para sacar name/email
+function decodeTokenPayload(token: string): any {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(base64));
+  } catch {
+    return {};
+  }
+}
+
 @Component({
   selector: 'app-upload-item',
   standalone: true,
@@ -67,6 +77,9 @@ function isExpired(token: string): boolean {
 export class UploadItemComponent implements OnInit {
   private fb = inject(FormBuilder);
   private router = inject(Router);
+
+  // ✅ NUEVO: para el "Hola, Nombre"
+  displayName = signal('Usuario');
 
   constructor(
     @Inject(PLATFORM_ID) private platformId: Object,
@@ -107,7 +120,7 @@ export class UploadItemComponent implements OnInit {
     currency: [''],
     acquisitionDate: [''],
     visibility: ['public', Validators.required], // el backend igual lo fija a 'public'
-    tagsCsv: ['']
+    tagsCsv: [''],
   });
 
   ngOnInit(): void {
@@ -115,48 +128,75 @@ export class UploadItemComponent implements OnInit {
 
     // === detectar navegador y evaluar auth/roles ===
     this.isBrowser = isPlatformBrowser(this.platformId);
-    if (this.isBrowser) {
-      const token =
-        localStorage.getItem('accessToken') ??
-        sessionStorage.getItem('accessToken') ??
-        '';
+    if (!this.isBrowser) return;
 
-      if (!token || isExpired(token)) {
-        localStorage.clear();
-        sessionStorage.clear();
-        this.isAuth = false;
-        this.isAdmin = false;
-        this.goLogin(this.router.url);
-        return;
-      }
+    const token =
+      localStorage.getItem('accessToken') ??
+      sessionStorage.getItem('accessToken') ??
+      '';
 
-      this.isAuth = true;
-      const role = getRoleFromToken(token);
-      this.isAdmin = Array.isArray(role)
-        ? role.includes('admin')
-        : role === 'admin';
+    if (!token || isExpired(token)) {
+      localStorage.clear();
+      sessionStorage.clear();
+      this.isAuth = false;
+      this.isAdmin = false;
+      this.goLogin(this.router.url);
+      return;
+    }
+
+    this.isAuth = true;
+    const role = getRoleFromToken(token);
+    this.isAdmin = Array.isArray(role) ? role.includes('admin') : role === 'admin';
+
+    // ✅ NUEVO: displayName (local/session -> fallback token)
+    const name =
+      localStorage.getItem('displayName') ??
+      sessionStorage.getItem('displayName');
+
+    if (name) {
+      this.displayName.set(name);
+    } else {
+      const p = decodeTokenPayload(token);
+      this.displayName.set(p?.name ?? p?.email ?? 'Usuario');
     }
   }
 
-  goInicio() { this.router.navigateByUrl('/'); }
+  goInicio() {
+    this.router.navigateByUrl('/');
+  }
 
   goLogin(returnUrl: string = this.router.url) {
     this.router.navigate(['/login'], { queryParams: { returnUrl } });
   }
 
   private navigateOrLogin(targetUrl: string) {
-    if (!this.isAuth) { this.goLogin(targetUrl); return; }
+    if (!this.isAuth) {
+      this.goLogin(targetUrl);
+      return;
+    }
     this.router.navigateByUrl(targetUrl);
   }
 
-  goUpload() { this.navigateOrLogin('/items/upload'); }
-  goMyItems() { this.navigateOrLogin('/items/mine'); }
-  goSearch() { this.router.navigateByUrl('/items/search'); }
-  goCollections() { this.navigateOrLogin('/collections'); }
-  goPresentation() { this.navigateOrLogin('/presentations'); }
-  goMyCatalog() { this.goMyItems(); }
+  goUpload() {
+    this.navigateOrLogin('/items/upload');
+  }
+  goMyItems() {
+    this.navigateOrLogin('/items/mine');
+  }
+  goSearch() {
+    this.router.navigateByUrl('/items/search');
+  }
+  goCollections() {
+    this.navigateOrLogin('/collections');
+  }
+  goPresentation() {
+    this.navigateOrLogin('/presentations');
+  }
+  goMyCatalog() {
+    this.goMyItems();
+  }
 
-  // 🔁 LOGOUT usando ApiService (no más fetch al frontend)
+  // 🔁 LOGOUT usando ApiService
   async logout() {
     if (!this.isBrowser) return;
 
@@ -165,25 +205,21 @@ export class UploadItemComponent implements OnInit {
       sessionStorage.getItem('refreshToken');
 
     try {
-      await firstValueFrom(
-        this.api.post('/auth/logout', { refreshToken: refresh })
-      );
-    } catch {
-      // si falla igual limpiamos sesión
-    }
+      await firstValueFrom(this.api.post('/auth/logout', { refreshToken: refresh }));
+    } catch {}
 
     localStorage.clear();
     sessionStorage.clear();
     this.isAuth = false;
     this.isAdmin = false;
+    this.displayName.set('Usuario');
     this.router.navigate(['/']);
   }
 
   // ===== Helpers =====
   private normalizeTag(s: string) {
-    return s.trim().replace(/\s+/g, ' ').toLowerCase(); // ✅ case-insensitive
+    return s.trim().replace(/\s+/g, ' ').toLowerCase();
   }
-  
 
   private pushTags(raws: string[]) {
     const base = new Set(this.tags());
@@ -194,43 +230,39 @@ export class UploadItemComponent implements OnInit {
     this.tags.set([...base].slice(0, 50));
   }
 
- 
   private buildCategories(): CategoryPayload[] {
     const seen = new Set<string>();
-  
     const out: CategoryPayload[] = [];
-  
+
     for (const a of this.attrs()) {
       const prettyName = this.toTitleCase(a.name);
       const key = this.normalizeKey(prettyName);
       if (!key) continue;
-  
-      // ✅ dedupe final antes de enviar
+
       if (seen.has(key)) continue;
       seen.add(key);
-  
+
       if (a.type === 'number') {
         const n = Number(String(a.value).replace(',', '.').trim());
         if (!Number.isFinite(n)) continue;
         out.push({ name: prettyName, attrType: 'number', value: n });
         continue;
       }
-  
+
       if (a.type === 'date') {
         const v = String(a.value || '').trim();
         if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) continue;
         out.push({ name: prettyName, attrType: 'date', value: v });
         continue;
       }
-  
+
       const v = String(a.value || '').trim();
       if (!v) continue;
       out.push({ name: prettyName, attrType: a.type, value: v });
     }
-  
+
     return out;
   }
-  
 
   remaining = computed(() => this.maxImages - this.files().length);
 
@@ -244,10 +276,12 @@ export class UploadItemComponent implements OnInit {
 
     for (const f of picked) {
       if (!this.allowedTypes.has(f.type)) {
-        errors.push(`Formato no soportado: ${f.name}`); continue;
+        errors.push(`Formato no soportado: ${f.name}`);
+        continue;
       }
       if (f.size > this.maxFileMB * 1024 * 1024) {
-        errors.push(`Archivo > ${this.maxFileMB}MB: ${f.name}`); continue;
+        errors.push(`Archivo > ${this.maxFileMB}MB: ${f.name}`);
+        continue;
       }
       if (current.length + next.length >= this.maxImages) break;
       next.push(f);
@@ -308,50 +342,43 @@ export class UploadItemComponent implements OnInit {
 
   addAttr() {
     this.error.set(null);
-  
+
     const raw = this.attrNameDraft();
     const prettyName = this.toTitleCase(raw);
     const key = this.normalizeKey(prettyName);
-  
+
     if (!key) return;
-  
-    // 🚫 bloquea duplicados WAS/was/WaS (case-insensitive + espacios)
-    const exists = this.attrs().some(a => this.normalizeKey(a.name) === key);
+
+    const exists = this.attrs().some((a) => this.normalizeKey(a.name) === key);
     if (exists) {
       this.error.set(`Ya existe un atributo con el nombre "${prettyName}".`);
       return;
     }
-  
+
     const entry: DynAttr = {
-      name: prettyName,                 // guardas estandarizado
+      name: prettyName,
       type: this.attrTypeDraft(),
       value: this.attrValueDraft().trim(),
     };
-  
+
     this.attrs.set([...this.attrs(), entry]);
-  
-    // reset drafts
+
     this.attrNameDraft.set('');
     this.attrValueDraft.set('');
     this.attrTypeDraft.set('text');
-  
-    console.log('[UPLOAD] addAttr() attrs =', this.attrs());
   }
-  
 
   removeAttr(index: number) {
     const arr = [...this.attrs()];
     arr.splice(index, 1);
     this.attrs.set(arr);
-    console.log('[UPLOAD] removeAttr() attrs =', this.attrs());
   }
 
   // ======= Submit =======
-  
   async submit() {
     this.error.set(null);
     this.successId.set(null);
-  
+
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       this.error.set('Completa los campos obligatorios.');
@@ -361,19 +388,14 @@ export class UploadItemComponent implements OnInit {
       this.error.set('Sube al menos una imagen.');
       return;
     }
-  
+
     const csv = (this.form.get('tagsCsv')?.value || '') as string;
     if (csv.trim()) this.pushTags(csv.split(','));
-  
+
     const v = this.form.getRawValue();
     const tags = this.tags();
     const categories = this.buildCategories();
-  
-    // 🔍 LOGS CLAVE ANTES DE ENVIAR
-    console.log('[UPLOAD] attrs UI (antes de enviar) =', this.attrs());
-    console.log('[UPLOAD] categories payload =', categories);
-    console.log('[UPLOAD] tags =', tags);
-  
+
     const metadata: any = {
       title: v.title?.trim(),
       description: v.description || null,
@@ -386,46 +408,31 @@ export class UploadItemComponent implements OnInit {
       acquisitionDate: v.acquisitionDate || null,
       visibility: 'public',
       tags,
-      categories
+      categories,
     };
-  
-    console.log('[UPLOAD] metadata enviado =', metadata);
-  
+
     const fd = new FormData();
     fd.append('metadata', JSON.stringify(metadata));
-    this.files().forEach((file, idx) =>
-      fd.append(`image${idx + 1}`, file, file.name)
-    );
-  
-    console.log('[UPLOAD] FormData metadata =', fd.get('metadata'));
-  
+    this.files().forEach((file, idx) => fd.append(`image${idx + 1}`, file, file.name));
+
     const token =
       (this.isBrowser &&
         (localStorage.getItem('accessToken') ||
           sessionStorage.getItem('accessToken'))) ||
       '';
-  
-    const headers = new HttpHeaders(
-      token ? { Authorization: `Bearer ${token}` } : {}
-    );
-  
-    // 🔄 activa loading (spinner en el botón)
+
+    const headers = new HttpHeaders(token ? { Authorization: `Bearer ${token}` } : {});
+
     this.busy.set(true);
-  
+
     try {
-      console.log('[UPLOAD] Enviando POST', ENDPOINT_ITEMS);
-  
       const res = await firstValueFrom(
         this.api.post<{ id: number }>(ENDPOINT_ITEMS, fd, headers)
       );
-  
-      console.log('[UPLOAD] Respuesta /items =', res);
-  
-      // ✅ marca éxito (esto activa el mensaje en el HTML)
+
       const id = res?.id ?? null;
       this.successId.set(id);
-  
-      // (opcional) resetea formulario/listas para que quede limpio
+
       this.files.set([]);
       this.tags.set([]);
       this.tagDraft.set('');
@@ -433,82 +440,66 @@ export class UploadItemComponent implements OnInit {
       this.attrNameDraft.set('');
       this.attrValueDraft.set('');
       this.attrTypeDraft.set('text');
-  
+
       this.form.reset({ visibility: 'public', tagsCsv: '' });
       this.form.get('visibility')?.disable({ emitEvent: false, onlySelf: true });
-  
-      // ➡️ redirige a "Mis ítems" luego de mostrar el OK un ratito
+
       setTimeout(() => {
         this.router.navigate(['/items/mine']);
       }, 1200);
-  
     } catch (e: any) {
-      console.error('[UPLOAD] ERROR /items =', e);
-      this.error.set(
-        e?.error?.message || e?.message || 'Error subiendo la pieza'
-      );
+      this.error.set(e?.error?.message || e?.message || 'Error subiendo la pieza');
     } finally {
-      // 🔚 apaga loading (si ya redirigió, igual no molesta)
       this.busy.set(false);
     }
   }
-  
 
   // ======= Normalización y validación (Attrs) =======
+  private normalizeKey(s: string): string {
+    return (s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  }
 
-// Para comparar: trim + colapsa espacios + lower
-private normalizeKey(s: string): string {
-  return (s || '').trim().replace(/\s+/g, ' ').toLowerCase();
-}
+  private toTitleCase(s: string): string {
+    return (s || '')
+      .trim()
+      .replace(/\s+/g, ' ')
+      .toLowerCase()
+      .split(' ')
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  }
 
-// Para mostrar: Title Case (bonito)
-private toTitleCase(s: string): string {
-  return (s || '')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toLowerCase()
-    .split(' ')
-    .filter(Boolean)
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-}
+  attrNameError(): string {
+    const raw = this.attrNameDraft();
+    const prettyName = this.toTitleCase(raw);
+    const key = this.normalizeKey(prettyName);
 
-attrNameError(): string {
-  const raw = this.attrNameDraft();
-  const prettyName = this.toTitleCase(raw);
-  const key = this.normalizeKey(prettyName);
+    if (!raw || !raw.trim()) return 'Ingresa un nombre de atributo.';
 
-  if (!raw || !raw.trim()) return 'Ingresa un nombre de atributo.';
+    const exists = this.attrs().some((a) => this.normalizeKey(a.name) === key);
+    if (exists) return `Ya existe un atributo con el nombre "${prettyName}".`;
 
-  const exists = this.attrs().some(a => this.normalizeKey(a.name) === key);
-  if (exists) return `Ya existe un atributo con el nombre "${prettyName}".`;
+    return '';
+  }
 
-  return '';
-}
+  normalizeAttrNameDraft(): void {
+    const raw = this.attrNameDraft();
+    const prettyName = this.toTitleCase(raw);
+    if (prettyName !== raw) this.attrNameDraft.set(prettyName);
+  }
 
-normalizeAttrNameDraft(): void {
-  const raw = this.attrNameDraft();
-  const prettyName = this.toTitleCase(raw);
+  isAttrNameDuplicate(): boolean {
+    const raw = this.attrNameDraft();
+    const prettyName = this.toTitleCase(raw);
+    const key = this.normalizeKey(prettyName);
+    if (!key) return false;
+    return this.attrs().some((a) => this.normalizeKey(a.name) === key);
+  }
 
-  // Si quieres que al salir del input se “auto-formatee”
-  if (prettyName !== raw) {
-    this.attrNameDraft.set(prettyName);
+  goDashboard() {
+    this.router.navigate(['/items/stats']);
   }
 }
 
-isAttrNameDuplicate(): boolean {
-  const raw = this.attrNameDraft();
-  const prettyName = this.toTitleCase(raw);
-  const key = this.normalizeKey(prettyName);
 
-  if (!key) return false;
-
-  return this.attrs().some(a => this.normalizeKey(a.name) === key);
-}
-
-goDashboard() {
-  this.router.navigate(['/items/stats']);
-}
-
-
-}
