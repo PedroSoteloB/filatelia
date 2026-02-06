@@ -2981,61 +2981,7 @@ app.post('/presentations', { preHandler: authGuard }, async (req: any, reply: an
   }
 });
 
-// app.get('/presentations', { preHandler: authGuard }, async (req: any, reply: any) => {
-//   try {
-//     const ownerId = ensureAuth(req);
-//     const q = req.query || {};
-//     const offset = Number.isFinite(Number(q.offset)) && Number(q.offset) >= 0 ? Number(q.offset) : 0;
-//     const limit  = Number.isFinite(Number(q.limit))  && Number(q.limit)  >  0 ? Math.min(Number(q.limit), 100) : 20;
 
-//     const [rows]: any = await db.execute(
-//       `SELECT p.id,
-//               p.title,
-//               p.description,
-//               p.cover_image_path AS cover,
-//               p.collection_id,
-//               p.created_at,
-//               p.updated_at
-//          FROM presentations p
-//         WHERE p.owner_user_id = ?
-//         ORDER BY p.updated_at DESC
-//         OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`,
-//       [ownerId]
-//     );
-//     reply.send(rows);
-//   } catch (e:any) {
-//     reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
-//   }
-// });
-
-// app.get('/presentations/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
-//   try {
-//     const ownerId = ensureAuth(req);
-//     const id = Number(req.params.id);
-//     if (!Number.isFinite(id)) return reply.code(400).send({ message: 'id inválido' });
-
-//     const [rows]: any = await db.execute(
-//       `SELECT TOP 1
-//               p.id,
-//               p.title,
-//               p.description,
-//               p.cover_image_path AS cover,
-//               p.collection_id,
-//               p.created_at,
-//               p.updated_at,
-//               (SELECT COUNT(*)
-//                  FROM presentation_assets a
-//                 WHERE a.presentation_id = p.id) AS assetsCount
-//          FROM presentations p
-//         WHERE p.id = ? AND p.owner_user_id = ?`,
-//       [id, ownerId]
-//     );
-//     if (!rows.length) return reply.code(404).send({ message: 'not_found' });
-//     reply.send(rows[0]);
-//   } catch (e:any) {
-//     reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
-//   }
-// });
 app.get('/presentations', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -3568,6 +3514,427 @@ app.post('/auth/register', async (req: any, reply: any) => {
 
 
 // =================== PRESENTATIONS: generate-ppt (SQL adaptado) ===================
+
+function toPresentonImageUrl(p?: string | null): string | null {
+  if (!p) return null;
+  const s = String(p).trim();
+  if (/^https?:\/\//i.test(s)) return s;          // si ya es URL, no tocar
+  const rel = toPublicUrl(s);                    // debe devolver "/uploads/xxx"
+  return rel ? toAbsoluteUrl(rel) : null;         // devuelve "https://TU_API/uploads/xxx"
+}
+
+
+// app.post(
+//   "/presentations/:id/generate-ppt",
+//   { preHandler: authGuard },
+//   async (req: any, reply: any) => {
+//     try {
+//       const ownerId = ensureAuth(req);
+//       const presId = Number(req.params.id);
+//       if (!Number.isFinite(presId)) {
+//         return reply.code(400).send({ message: "id inválido" });
+//       }
+
+//       const [presRows]: any = await db.execute(
+//         `SELECT TOP 1 p.id,
+//                         p.title,
+//                         p.description,
+//                         p.collection_id AS collectionId
+//            FROM presentations p
+//           WHERE p.id = ? AND p.owner_user_id = ?`,
+//         [presId, ownerId]
+//       );
+//       const pres = presRows?.[0];
+//       if (!pres) return reply.code(404).send({ message: "presentation_not_found" });
+
+//       const [colRows]: any = await db.execute(
+//         `SELECT TOP 1 c.id,
+//                         c.type,
+//                         c.filter_json,
+//                         c.sort_key,
+//                         c.sort_dir,
+//                         c.history_text
+//            FROM collections c
+//           WHERE c.id = ? AND c.owner_user_id = ?`,
+//         [pres.collectionId, ownerId]
+//       );
+//       const col = colRows?.[0];
+//       if (!col) return reply.code(404).send({ message: "collection_not_found" });
+
+//       const historyText: string = (col.history_text == null ? "" : String(col.history_text)).trim();
+
+//       const qLimit = Number(req.query?.maxSlides ?? req.body?.maxSlides);
+//       const maxSlides =
+//         Number.isFinite(qLimit) && qLimit > 0 ? Math.min(qLimit, 60) : 30;
+
+//       let items: any[] = [];
+//       if (col.type === "static") {
+//         const [rows]: any = await db.execute(
+//           `SELECT TOP ${maxSlides}
+//                   i.id,
+//                   i.title,
+//                   i.country,
+//                   i.issue_year AS issueYear,
+//                   i.description,
+//                   i.catalog_code AS catalogCode,
+//                   i.face_value AS faceValue,
+//                   i.currency,
+//                   (
+//                     SELECT TOP 1 file_path
+//                     FROM item_images
+//                     WHERE item_id = i.id
+//                     ORDER BY is_primary DESC, id ASC
+//                   ) AS cover
+//              FROM collection_items ci
+//              JOIN philatelic_items i
+//                ON i.id = ci.item_id
+//               AND i.owner_user_id = ?
+//             WHERE ci.collection_id = ?
+//             ORDER BY i.${col.sort_key || "issue_year"} ${String(
+//             col.sort_dir || "asc"
+//           ).toUpperCase()}`,
+//           [ownerId, col.id]
+//         );
+//         items = rows;
+//       } else {
+//         let f: any = {};
+//         try {
+//           const raw = col.filter_json;
+//           f = raw == null
+//             ? {}
+//             : (typeof raw === "string"
+//                 ? JSON.parse(raw)
+//                 : (Buffer.isBuffer(raw)
+//                     ? JSON.parse(raw.toString("utf8"))
+//                     : raw));
+//         } catch {
+//           f = {};
+//         }
+
+//         const built: any = buildWhereFromFilter(ownerId, f);
+//         const { where, params, tagIds, tagNames, tagMode, attrFilters } = built;
+//         let join = "";
+
+//         if (tagIds.length + tagNames.length > 0) {
+//           let all = [...tagIds];
+//           if (tagNames.length) {
+//             const placeholders = tagNames.map(() => "?").join(",");
+//             const ownerFilter = await tagsOwnerWhere(ownerId);
+//             const [trs]: any = await db.execute(
+//               `SELECT id FROM tags WHERE ${ownerFilter.where} AND name IN (${placeholders})`,
+//               [...ownerFilter.params, ...tagNames]
+//             );
+//             const idsByName = trs.map((r: any) => r.id);
+//             all = all.concat(idsByName);
+//           }
+//           const unique = Array.from(
+//             new Set(all.map(Number).filter(Number.isFinite))
+//           );
+//           if (unique.length) {
+//             if (String(tagMode || "OR").toUpperCase() === "AND") {
+//               join += `
+//                 JOIN (
+//                   SELECT it.item_id
+//                     FROM item_tags it
+//                    WHERE it.tag_id IN (${unique
+//                      .map(() => "?")
+//                      .join(",")})
+//                    GROUP BY it.item_id
+//                   HAVING COUNT(DISTINCT it.tag_id) = ${unique.length}
+//                 ) tfilter ON tfilter.item_id = i.id`;
+//               params.push(...unique);
+//             } else {
+//               join += `
+//                 JOIN item_tags itf
+//                   ON itf.item_id = i.id
+//                  AND itf.tag_id IN (${unique.map(() => "?").join(",")})`;
+//               params.push(...unique);
+//             }
+//           }
+//         }
+
+//         const { join: aj, params: ap } = await buildAttrJoins(
+//           ownerId,
+//           attrFilters
+//         );
+//         join += aj;
+//         built.params.push(...ap);
+
+//         const [rows]: any = await db.execute(
+//           `SELECT DISTINCT TOP ${maxSlides}
+//                   i.id,
+//                   i.title,
+//                   i.country,
+//                   i.issue_year AS issueYear,
+//                   i.description,
+//                   i.catalog_code AS catalogCode,
+//                   i.face_value AS faceValue,
+//                   i.currency,
+//                   (
+//                     SELECT TOP 1 file_path
+//                     FROM item_images
+//                     WHERE item_id = i.id
+//                     ORDER BY is_primary DESC, id ASC
+//                   ) AS cover
+//              FROM philatelic_items i
+//              ${join}
+//             WHERE ${built.where.join(" AND ")}
+//             ORDER BY i.${col.sort_key || "issue_year"} ${String(
+//             col.sort_dir || "asc"
+//           ).toUpperCase()}`,
+//           built.params
+//         );
+//         items = rows;
+//       }
+
+//       const normalizeText = (base: string, fallback: string): string => {
+//         let txt = (base || "").toString().trim();
+//         if (!txt) txt = fallback;
+//         if (txt.length < 25) {
+//           txt +=
+//             " Esta sección se incluye como parte de la interpretación de la colección.";
+//         }
+//         if (txt.length > 300) {
+//           txt = txt.slice(0, 296) + "...";
+//         }
+//         return txt;
+//       };
+
+//       const splitHistoryByParagraphs = (text: string): string[] => {
+//         const raw = (text || "").replace(/\r\n/g, "\n").trim();
+//         if (!raw) return [];
+//         let parts = raw
+//           .split(/\n{2,}/)
+//           .map((p) => p.trim())
+//           .filter(Boolean);
+//         if (!parts.length) parts = [raw];
+//         return parts;
+//       };
+
+//       const layoutId = "modern:image-and-description";
+//       const slides: any[] = [];
+
+//       const fallbackPortadaText =
+//         "Presentación generada a partir de una colección filatélica seleccionada en la app Filatelia.";
+
+//       let portadaContentText = normalizeText(
+//         pres.description || "",
+//         fallbackPortadaText
+//       );
+
+//       const portadaRawImg = (pres as any).cover_image_path || items[0]?.cover || null;
+//       const portadaAbsImg =
+//         toAbsoluteUrl(portadaRawImg) || portadaRawImg || null;
+//       const fallbackImgUrl =
+//         "https://via.placeholder.com/1200x800.png?text=Filatelia";
+//       const portadaImageUrl = portadaAbsImg || fallbackImgUrl;
+
+//       slides.push({
+//         layout: layoutId,
+//         content: {
+//           title: pres.title || "Presentación filatélica",
+//           content: portadaContentText,
+//           image: {
+//             __image_url__: portadaImageUrl,
+//             __image_prompt__:
+//               "Portada de colección filatélica para presentación académica",
+//           },
+//         },
+//       });
+
+//       const historyBlocks = splitHistoryByParagraphs(historyText);
+
+//       if (historyBlocks.length > 0) {
+//         const merged = historyBlocks.join("\n\n");
+//         const blocks =
+//           merged.length <= 400 ? [merged] : historyBlocks;
+
+//         const covers: string[] = (items || [])
+//           .map((it: any) => toAbsoluteUrl(it.cover) || it.cover)
+//           .filter((u: any): u is string => !!u);
+
+//         const historyFallback =
+//           "Esta colección se organiza en torno a un conjunto de piezas que reflejan procesos políticos y simbólicos en distintos contextos nacionales.";
+
+//         blocks.forEach((block, idx) => {
+//           const title =
+//             blocks.length === 1
+//               ? "Historia de la colección"
+//               : `Historia de la colección (${idx + 1})`;
+
+//           const contentText = normalizeText(block, historyFallback);
+
+//           const imgIndex =
+//             covers.length === 0
+//               ? -1
+//               : idx < covers.length
+//               ? idx
+//               : covers.length - 1;
+
+//           const imgUrl =
+//             imgIndex >= 0 ? covers[imgIndex] : portadaImageUrl;
+
+//           let imgPrompt =
+//             "Sello histórico para slide de contexto filatélico";
+//           if (items[idx]) {
+//             const it = items[idx];
+//             imgPrompt = `Sello ${it.country ?? ""} ${
+//               it.issueYear ?? ""
+//             } para historia de la colección`.trim();
+//           }
+
+//           slides.push({
+//             layout: layoutId,
+//             content: {
+//               title,
+//               content: contentText,
+//               image: {
+//                 __image_url__: imgUrl || portadaImageUrl,
+//                 __image_prompt__:
+//                   imgPrompt.slice(0, 50) ||
+//                   "Sello clásico para contexto filatélico",
+//               },
+//             },
+//           });
+//         });
+//       }
+
+//       for (const it of items) {
+//         const metaLine = `País ${it.country ?? ""} • Año ${
+//           it.issueYear ?? ""
+//         } • Catálogo ${it.catalogCode ?? ""} • Valor ${
+//           it.faceValue ?? it.face_value ?? ""
+//         } ${it.currency ?? ""}`.replace(/\s+/g, " ").trim();
+
+//         let itemText =
+//           it.description && it.description.trim().length > 0
+//             ? it.description.trim()
+//             : metaLine || "Pieza de la colección.";
+
+//         itemText = normalizeText(
+//           itemText,
+//           "Esta pieza se incluye como ejemplo representativo de la colección y resume rasgos iconográficos y políticos propios del periodo estudiado."
+//         );
+
+//         const absImg = toAbsoluteUrl(it.cover);
+//         const fallbackImgUrlItem =
+//           "https://via.placeholder.com/1200x800.png?text=Sello";
+//         const imgUrl = absImg || fallbackImgUrlItem;
+
+//         let imgPromptBase = `Sello ${it.country ?? ""} ${
+//           it.issueYear ?? ""
+//         } para análisis filatélico`.trim();
+//         if (imgPromptBase.length > 50) {
+//           imgPromptBase = imgPromptBase.slice(0, 50);
+//         }
+//         if (imgPromptBase.length < 10) {
+//           imgPromptBase += " sello clásico";
+//         }
+
+//         slides.push({
+//           layout: layoutId,
+//           content: {
+//             title: it.title || `Pieza #${it.id}`,
+//             content: itemText,
+//             image: {
+//               __image_url__: imgUrl,
+//               __image_prompt__: imgPromptBase,
+//             },
+//           },
+//         });
+//       }
+
+//       if (items.length >= 2) {
+//         const a = items[0];
+//         const b = items[1];
+
+//         const aCountry = a.country ?? "un país";
+//         const bCountry = b.country ?? "otro país";
+//         const aYear = a.issueYear ?? "año desconocido";
+//         const bYear = b.issueYear ?? "año desconocido";
+
+//         let compText = `
+// Se presenta una comparación entre "${a.title || "la primera pieza"}" (${aCountry}, ${aYear})
+// y "${b.title || "la segunda pieza"}" (${bCountry}, ${bYear}).
+
+// Ambas emisiones comparten la función de difundir una imagen oficial del Estado, pero
+// difieren en el tratamiento visual (composición, color y jerarquía de símbolos) y en el
+// momento político al que responden. Estas diferencias permiten contrastar cómo cada
+// administración construye su relato sobre nación, ciudadanía e integración regional.
+// `.trim();
+
+//         compText = normalizeText(
+//           compText,
+//           "Las primeras dos piezas permiten observar continuidades y cambios en la manera en que el Estado representa su proyecto político hacia dentro y hacia fuera del país."
+//         );
+
+//         const compImgRaw = toAbsoluteUrl(a.cover) || a.cover || portadaImageUrl;
+//         const compImg = compImgRaw || portadaImageUrl;
+
+//         slides.push({
+//           layout: layoutId,
+//           content: {
+//             title: "Comparación de piezas seleccionadas",
+//             content: compText,
+//             image: {
+//               __image_url__: compImg,
+//               __image_prompt__:
+//                 "Sello postal destacado para slide de comparación analítica en contexto filatélico",
+//             },
+//           },
+//         });
+//       }
+
+//       const body = {
+//         language: "Spanish",
+//         title: pres.title || "Presentación filatélica",
+//         template: "modern",
+//         theme: "edge-yellow",
+//         export_as: "pptx",
+//         slides,
+//       };
+
+//       const presentonRes = await createPresentationFromJson(body);
+
+//       const [ins]: any = await db.execute(
+//         `INSERT INTO presentation_assets (presentation_id, kind, file_path, url, meta_json)
+//          VALUES (?,?,?,?,?)`,
+//         [
+//           presId,
+//           "ppt",
+//           null,
+//           presentonRes.path,
+//           JSON.stringify({
+//             provider: "presenton",
+//             presentation_id: presentonRes.presentation_id,
+//             edit_path: presentonRes.edit_path,
+//             credits_consumed: presentonRes.credits_consumed,
+//           }),
+//         ]
+//       );
+
+//       return reply.send({
+//         ok: true,
+//         assetId: ins.insertId,
+//         download: `/presentations/${presId}/ppt`,
+//       });
+//     } catch (e: any) {
+//       if ((e as any).response) {
+//         console.error("❌ Presenton /create/from-json error");
+//         console.error("Status:", (e as any).response.status);
+//         console.error("Data:", (e as any).response.data);
+//       }
+//       req.log?.error(e, "generate-ppt (presenton) failed");
+//       return reply.code(500).send({
+//         message: "Ha ocurrido un error, por favor contactar con soporte",
+//         detail: e?.message ?? "unknown_error",
+//       });
+//     }
+//   }
+// );
+
+// Devuelve URLs del PPT más reciente
+
 app.post(
   "/presentations/:id/generate-ppt",
   { preHandler: authGuard },
@@ -3577,6 +3944,20 @@ app.post(
       const presId = Number(req.params.id);
       if (!Number.isFinite(presId)) {
         return reply.code(400).send({ message: "id inválido" });
+      }
+
+      // ✅ NUEVO: normalizador para Presenton (acepta URL externa y convierte paths locales a URL pública)
+      function toPresentonImageUrl(p?: string | null): string | null {
+        if (!p) return null;
+        const s = String(p).trim();
+        if (!s) return null;
+
+        // si ya es URL http(s), se deja tal cual
+        if (/^https?:\/\//i.test(s)) return s;
+
+        // convierte file_path (absoluto o relativo) => "/uploads/xxx" => "https://API/uploads/xxx"
+        const rel = toPublicUrl(s); // debe devolver "/uploads/xxx.ext" o null
+        return rel ? toAbsoluteUrl(rel) : null;
       }
 
       const [presRows]: any = await db.execute(
@@ -3766,12 +4147,16 @@ app.post(
         fallbackPortadaText
       );
 
-      const portadaRawImg = (pres as any).cover_image_path || items[0]?.cover || null;
-      const portadaAbsImg =
-        toAbsoluteUrl(portadaRawImg) || portadaRawImg || null;
       const fallbackImgUrl =
         "https://via.placeholder.com/1200x800.png?text=Filatelia";
-      const portadaImageUrl = portadaAbsImg || fallbackImgUrl;
+
+      // ✅ CAMBIO: NO usar toAbsoluteUrl directo con paths locales.
+      //    Usar el normalizador que deja URL externas y convierte uploads locales a URL pública.
+      const portadaRawImg =
+        (pres as any).cover_image_path || items[0]?.cover || null;
+
+      const portadaImageUrl =
+        toPresentonImageUrl(portadaRawImg) || fallbackImgUrl;
 
       slides.push({
         layout: layoutId,
@@ -3793,8 +4178,9 @@ app.post(
         const blocks =
           merged.length <= 400 ? [merged] : historyBlocks;
 
+        // ✅ CAMBIO: normaliza covers para Presenton
         const covers: string[] = (items || [])
-          .map((it: any) => toAbsoluteUrl(it.cover) || it.cover)
+          .map((it: any) => toPresentonImageUrl(it.cover))
           .filter((u: any): u is string => !!u);
 
         const historyFallback =
@@ -3860,10 +4246,12 @@ app.post(
           "Esta pieza se incluye como ejemplo representativo de la colección y resume rasgos iconográficos y políticos propios del periodo estudiado."
         );
 
-        const absImg = toAbsoluteUrl(it.cover);
         const fallbackImgUrlItem =
           "https://via.placeholder.com/1200x800.png?text=Sello";
-        const imgUrl = absImg || fallbackImgUrlItem;
+
+        // ✅ CAMBIO: normaliza cover para Presenton
+        const imgUrl =
+          toPresentonImageUrl(it.cover) || fallbackImgUrlItem;
 
         let imgPromptBase = `Sello ${it.country ?? ""} ${
           it.issueYear ?? ""
@@ -3912,8 +4300,9 @@ administración construye su relato sobre nación, ciudadanía e integración re
           "Las primeras dos piezas permiten observar continuidades y cambios en la manera en que el Estado representa su proyecto político hacia dentro y hacia fuera del país."
         );
 
-        const compImgRaw = toAbsoluteUrl(a.cover) || a.cover || portadaImageUrl;
-        const compImg = compImgRaw || portadaImageUrl;
+        // ✅ CAMBIO: normaliza cover para Presenton
+        const compImg =
+          toPresentonImageUrl(a.cover) || portadaImageUrl;
 
         slides.push({
           layout: layoutId,
@@ -3970,14 +4359,14 @@ administración construye su relato sobre nación, ciudadanía e integración re
       }
       req.log?.error(e, "generate-ppt (presenton) failed");
       return reply.code(500).send({
-        message: "ppt_generation_failed",
+        message: "Ha ocurrido un error, por favor contactar con soporte",
         detail: e?.message ?? "unknown_error",
       });
     }
   }
 );
 
-// Devuelve URLs del PPT más reciente
+
 app.get('/presentations/:id/ppt', { preHandler: authGuard }, async (req:any, reply:any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -4494,220 +4883,6 @@ app.get('/collections/:id/countries', { preHandler: authGuard }, async (req: any
   }
 });
 
-
-// app.get('/me/items/stats', { preHandler: authGuard }, async (req: any, reply: any) => {
-//   try {
-//     const ownerId = ensureAuth(req);
-
-//     // 1) TOTAL
-//     const [rTotal]: any = await db.execute(
-//       `
-//       SELECT COUNT(1) AS total
-//       FROM philatelic_items
-//       WHERE owner_user_id = ?;
-//       `,
-//       [ownerId]
-//     );
-//     const total = Number(rTotal?.[0]?.total ?? 0);
-
-//     // 2) TIPO DE ESTAMPILLA POR CANTIDAD (usa TAGS como "tipo")
-//     const [rTypes]: any = await db.execute(
-//       `
-//       SELECT
-//         t.name AS type,
-//         COUNT(1) AS count
-//       FROM item_tags it
-//       INNER JOIN tags t
-//         ON t.id = it.tag_id
-//       INNER JOIN philatelic_items p
-//         ON p.id = it.item_id
-//       WHERE p.owner_user_id = ?
-//         AND t.owner_user_id = ?
-//       GROUP BY t.name
-//       ORDER BY COUNT(1) DESC, t.name ASC;
-//       `,
-//       [ownerId, ownerId]
-//     );
-
-//     const byType = (rTypes || []).map((x: any) => ({
-//       type: String(x.type ?? ''),
-//       count: Number(x.count ?? 0),
-//     }));
-
-//     // 3) CONDICIÓN POR CANTIDAD
-//     const [rCond]: any = await db.execute(
-//       `
-//       SELECT
-//         ISNULL(NULLIF(LTRIM(RTRIM(condition_code)), ''), '(vacío)') AS condition,
-//         COUNT(1) AS count
-//       FROM philatelic_items
-//       WHERE owner_user_id = ?
-//       GROUP BY ISNULL(NULLIF(LTRIM(RTRIM(condition_code)), ''), '(vacío)')
-//       ORDER BY COUNT(1) DESC;
-//       `,
-//       [ownerId]
-//     );
-
-//     const byCondition = (rCond || []).map((x: any) => ({
-//       condition: String(x.condition ?? '(vacío)'),
-//       count: Number(x.count ?? 0),
-//     }));
-
-//     // 4) POR PAÍS Y PRECIO (face_value) + moneda
-//     // Nota: si face_value es NULL lo tratamos como 0 para sum/min/max
-//     const [rCountry]: any = await db.execute(
-//       `
-//       SELECT
-//         ISNULL(NULLIF(LTRIM(RTRIM(country)), ''), '(vacío)') AS country,
-//         ISNULL(NULLIF(LTRIM(RTRIM(currency)), ''), '') AS currency,
-//         COUNT(1) AS count,
-//         SUM(COALESCE(face_value, 0)) AS totalValue,
-//         AVG(CAST(COALESCE(face_value, 0) AS float)) AS avgValue,
-//         MIN(COALESCE(face_value, 0)) AS minValue,
-//         MAX(COALESCE(face_value, 0)) AS maxValue
-//       FROM philatelic_items
-//       WHERE owner_user_id = ?
-//       GROUP BY
-//         ISNULL(NULLIF(LTRIM(RTRIM(country)), ''), '(vacío)'),
-//         ISNULL(NULLIF(LTRIM(RTRIM(currency)), ''), '')
-//       ORDER BY COUNT(1) DESC, country ASC;
-//       `,
-//       [ownerId]
-//     );
-
-//     const byCountryPrice = (rCountry || []).map((x: any) => ({
-//       country: String(x.country ?? '(vacío)'),
-//       currency: String(x.currency ?? ''),
-//       count: Number(x.count ?? 0),
-//       totalValue: Number(x.totalValue ?? 0),
-//       avgValue: Number(x.avgValue ?? 0),
-//       minValue: Number(x.minValue ?? 0),
-//       maxValue: Number(x.maxValue ?? 0),
-//     }));
-
-//     return reply.send({
-//       total,
-//       byType,
-//       byCondition,
-//       byCountryPrice,
-//     });
-//   } catch (e: any) {
-//     console.error('[GET /me/items/stats] ERROR:', e);
-//     return reply.code(500).send({
-//       message: 'Ha ocurrido un error, por favor contactar con soporte',
-//       detail: String(e?.message || ''),
-//     });
-//   }
-// });
-
-
-// app.get('/me/items/stats', { preHandler: authGuard }, async (req: any, reply: any) => {
-//   try {
-//     const ownerId = ensureAuth(req);
-
-//     // 1) TOTAL
-//     const [rTotal]: any = await db.execute(
-//       `
-//       SELECT COUNT(1) AS total
-//       FROM philatelic_items
-//       WHERE owner_user_id = ?;
-//       `,
-//       [ownerId]
-//     );
-//     const total = Number(rTotal?.[0]?.total ?? 0);
-
-//     // 2) "TIPO" POR CANTIDAD (usa TAGS ligados al item)
-
-//     const [rTypes]: any = await db.execute(
-//       `
-//       SELECT
-//         ISNULL(NULLIF(LTRIM(RTRIM(t.name)), ''), '(vacío)') AS [key],
-//         COUNT(1) AS count
-//       FROM item_tags it
-//       INNER JOIN tags t
-//         ON t.id = it.tag_id
-//       INNER JOIN philatelic_items p
-//         ON p.id = it.item_id
-//       WHERE p.owner_user_id = ?
-//       GROUP BY ISNULL(NULLIF(LTRIM(RTRIM(t.name)), ''), '(vacío)')
-//       ORDER BY COUNT(1) DESC, [key] ASC;
-//       `,
-//       [ownerId]
-//     );
-
-//     const byType = (rTypes || []).map((x: any) => ({
-//       key: String(x.key ?? '(vacío)'),
-//       count: Number(x.count ?? 0),
-//     }));
-
-//     // 3) CONDICIÓN POR CANTIDAD
-//     // IMPORTANTES CAMBIOS:
-//     // - devolvemos shape { key, count } (frontend espera key)
-//     const [rCond]: any = await db.execute(
-//       `
-//       SELECT
-//         ISNULL(NULLIF(LTRIM(RTRIM(condition_code)), ''), '(vacío)') AS [key],
-//         COUNT(1) AS count
-//       FROM philatelic_items
-//       WHERE owner_user_id = ?
-//       GROUP BY ISNULL(NULLIF(LTRIM(RTRIM(condition_code)), ''), '(vacío)')
-//       ORDER BY COUNT(1) DESC, [key] ASC;
-//       `,
-//       [ownerId]
-//     );
-
-//     const byCondition = (rCond || []).map((x: any) => ({
-//       key: String(x.key ?? '(vacío)'),
-//       count: Number(x.count ?? 0),
-//     }));
-
-//     // 4) POR PAÍS Y PRECIO (face_value) + moneda
-//     // Nota: si face_value es NULL lo tratamos como 0 para sum/min/max
-//     const [rCountry]: any = await db.execute(
-//       `
-//       SELECT
-//         ISNULL(NULLIF(LTRIM(RTRIM(country)), ''), '(vacío)') AS country,
-//         ISNULL(NULLIF(LTRIM(RTRIM(currency)), ''), '') AS currency,
-//         COUNT(1) AS count,
-//         SUM(COALESCE(face_value, 0)) AS totalValue,
-//         AVG(CAST(COALESCE(face_value, 0) AS float)) AS avgValue,
-//         MIN(COALESCE(face_value, 0)) AS minValue,
-//         MAX(COALESCE(face_value, 0)) AS maxValue
-//       FROM philatelic_items
-//       WHERE owner_user_id = ?
-//       GROUP BY
-//         ISNULL(NULLIF(LTRIM(RTRIM(country)), ''), '(vacío)'),
-//         ISNULL(NULLIF(LTRIM(RTRIM(currency)), ''), '')
-//       ORDER BY COUNT(1) DESC, country ASC;
-//       `,
-//       [ownerId]
-//     );
-
-//     // (frontend actualmente ignora currency, pero no hace daño dejarla)
-//     const byCountryPrice = (rCountry || []).map((x: any) => ({
-//       country: String(x.country ?? '(vacío)'),
-//       currency: String(x.currency ?? ''),
-//       count: Number(x.count ?? 0),
-//       totalValue: Number(x.totalValue ?? 0),
-//       avgValue: Number(x.avgValue ?? 0),
-//       minValue: Number(x.minValue ?? 0),
-//       maxValue: Number(x.maxValue ?? 0),
-//     }));
-
-//     return reply.send({
-//       total,
-//       byType,        // [{ key, count }]
-//       byCondition,   // [{ key, count }]
-//       byCountryPrice,
-//     });
-//   } catch (e: any) {
-//     console.error('[GET /me/items/stats] ERROR:', e);
-//     return reply.code(500).send({
-//       message: 'Ha ocurrido un error, por favor contactar con soporte',
-//       detail: String(e?.message || ''),
-//     });
-//   }
-// });
 app.get('/me/items/stats', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -4824,7 +4999,6 @@ app.get('/me/items/stats', { preHandler: authGuard }, async (req: any, reply: an
     });
   }
 });
-
 
 //en azure
 const PORT = Number(process.env.PORT || 3000);
