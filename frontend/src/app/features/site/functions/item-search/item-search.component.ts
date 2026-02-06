@@ -1,4 +1,3 @@
-
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { HttpClient, HttpParams, HttpHeaders } from '@angular/common/http';
@@ -78,6 +77,16 @@ function isExpired(token: string): boolean {
   }
 }
 
+// ✅ NUEVO: decode payload para name/email
+function decodeTokenPayload(token: string): any {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(base64));
+  } catch {
+    return {};
+  }
+}
+
 @Component({
   selector: 'app-item-search',
   standalone: true,
@@ -99,6 +108,9 @@ export class ItemSearchComponent implements OnInit {
   isAuth = false;
   isAdmin = false;
   isBrowser = false;
+
+  // ✅ NUEVO: displayName para el header
+  displayName = signal('Usuario');
 
   // ---- estado UI/negocio
   busy = signal(false);
@@ -213,6 +225,18 @@ export class ItemSearchComponent implements OnInit {
         this.isAuth = true;
         const role = getRoleFromToken(token);
         this.isAdmin = Array.isArray(role) ? role.includes('admin') : role === 'admin';
+
+        // ✅ NUEVO: resolver nombre (storage -> token)
+        const name =
+          localStorage.getItem('displayName') ??
+          sessionStorage.getItem('displayName');
+
+        if (name) {
+          this.displayName.set(name);
+        } else {
+          const p = decodeTokenPayload(token);
+          this.displayName.set(p?.name ?? p?.email ?? 'Usuario');
+        }
       } else {
         if (token) {
           localStorage.clear();
@@ -220,6 +244,7 @@ export class ItemSearchComponent implements OnInit {
         }
         this.isAuth = false;
         this.isAdmin = false;
+        this.displayName.set('Usuario'); // ✅
       }
     }
 
@@ -252,21 +277,11 @@ export class ItemSearchComponent implements OnInit {
     this.router.navigateByUrl(targetUrl);
   }
 
-  goUpload() {
-    this.navigateOrLogin('/items/upload');
-  }
-  goMyItems() {
-    this.navigateOrLogin('/items/mine');
-  }
-  goSearch() {
-    this.router.navigateByUrl('/items/search');
-  }
-  goCollections() {
-    this.navigateOrLogin('/collections');
-  }
-  goPresentation() {
-    this.navigateOrLogin('/presentations');
-  }
+  goUpload() { this.navigateOrLogin('/items/upload'); }
+  goMyItems() { this.navigateOrLogin('/items/mine'); }
+  goSearch() { this.router.navigateByUrl('/items/search'); }
+  goCollections() { this.navigateOrLogin('/collections'); }
+  goPresentation() { this.navigateOrLogin('/presentations'); }
 
   // 🔁 LOGOUT usando ApiService
   async logout() {
@@ -285,6 +300,7 @@ export class ItemSearchComponent implements OnInit {
     sessionStorage.clear();
     this.isAuth = false;
     this.isAdmin = false;
+    this.displayName.set('Usuario'); // ✅
     this.router.navigate(['/']);
   }
 
@@ -689,13 +705,8 @@ export class ItemSearchComponent implements OnInit {
       this.busy.set(true);
       this.error.set(null);
 
-      console.group('[snapshot] createStaticSnapshot');
-      console.log('[snapshot] name:', nm, 'howMany:', howMany);
-
       // ✅ Asegurar que results refleje el filtro actual
-      console.log('[snapshot] running search() to sync results with current filters...');
       await this.search();
-      console.log('[snapshot] search done. results length:', this.results().length);
 
       const filter = this.currentFilterJson();
       const filterJson = JSON.stringify(filter);
@@ -729,7 +740,6 @@ export class ItemSearchComponent implements OnInit {
         );
       }
 
-      console.groupEnd();
       this.router.navigateByUrl('/collections');
     } catch (e: any) {
       console.error('[snapshot] ERROR:', e);
@@ -782,5 +792,9 @@ export class ItemSearchComponent implements OnInit {
     } catch (e: any) {
       console.warn('No se pudieron cargar condiciones', e);
     }
+  }
+
+  goDashboard() {
+    this.router.navigate(['/items/stats']);
   }
 }
