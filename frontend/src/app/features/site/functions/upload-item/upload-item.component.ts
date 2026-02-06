@@ -506,6 +506,9 @@ isAttrNameDuplicate(): boolean {
   return this.attrs().some(a => this.normalizeKey(a.name) === key);
 }
 
+goDashboard() {
+  this.router.navigate(['/items/stats']);
+}
 
 
 }

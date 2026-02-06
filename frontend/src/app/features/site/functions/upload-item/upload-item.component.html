@@ -13,31 +13,42 @@
         <circle cx="60" cy="52" r="24" fill="#85586F"></circle>
         <path d="M30 82h60" stroke="#85586F" stroke-width="6" stroke-linecap="round" />
       </svg>
+  
       <div class="title">
         <h1>Filatelia</h1>
-        <p>Catálogo personal de sellos</p>
+  
+        <!-- ✅ NUEVO: saludo si está logueado; si no, tagline normal -->
+        <p *ngIf="isAuth; else tagline">
+          Hola, {{ displayName || 'Usuario' }}
+        </p>
+        <ng-template #tagline>
+          <p>Catálogo personal de sellos</p>
+        </ng-template>
       </div>
     </div>
-
+  
     <nav class="actions">
       <a class="link" (click)="goInicio()">Inicio</a>
-
-      <!-- Versión autenticada -->
       <ng-container *ngIf="isAuth; else anon">
-        <button class="btn" (click)="goUpload()">Nueva pieza</button>
-        <button class="btn" (click)="goMyItems()">Mis items</button>
-        <button class="btn" (click)="goSearch()">Búsqueda</button>
-        <button class="btn" (click)="goCollections()">Mis colecciones</button>
-        <button class="btn" (click)="goPresentation()">Mis Presentaciones</button>
-        <button class="btn light" (click)="logout()">Cerrar sesión</button>
+        <button class="btn nav" (click)="goUpload()">Nueva pieza</button>
+        <button class="btn nav" (click)="goMyItems()">Mis ítems</button>
+        <button class="btn nav" (click)="goSearch()">Búsqueda</button>
+        <button class="btn nav" (click)="goCollections()">Colecciones</button>
+        <button class="btn nav" (click)="goPresentation()">Presentaciones</button>
+
+        <!-- NUEVO -->
+        <button class="btn nav" (click)="goDashboard()">Dashboard</button>
+
+        <button class="btn nav light" (click)="logout()">Cerrar sesión</button>
       </ng-container>
 
       <!-- Versión anónima -->
       <ng-template #anon>
-        <a class="link" (click)="goLogin()">Iniciar sesión</a>
+        <button class="btn nav primary" (click)="goLogin()">Iniciar sesión</button>
       </ng-template>
     </nav>
   </header>
+  
 
   <div class="upload-wrap">
     <h1 class="page-title">Cargar material filatélico</h1>
@@ -269,13 +280,6 @@
             </label>
           </div>
 
-          <!-- <label class="field">
-            <span class="label">Visibilidad</span>
-         
-            <select formControlName="visibility" aria-label="Visibilidad" [disabled]="true">
-              <option value="public">Público</option>
-            </select>
-          </label> -->
         </section>
 
         <!-- BLOQUE 3: Etiquetas -->
