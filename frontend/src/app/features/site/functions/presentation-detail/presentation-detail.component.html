@@ -144,11 +144,13 @@
   <section class="assets-grid" *ngIf="assets().length; else emptyAssets">
     <article class="asset card" *ngFor="let a of assets()">
       <div class="thumb" [class.placeholder]="!isMedia(a)">
-        <img *ngIf="a.kind === 'image' && a.filePath" [src]="a.filePath" alt="Imagen" />
-        <video *ngIf="a.kind === 'video' && a.filePath" [src]="a.filePath" controls></video>
+        <!-- ✅ media usa downloadUrl para asegurar dominio del API -->
+        <img *ngIf="a.kind === 'image' && downloadUrl(a) as imgUrl" [src]="imgUrl" alt="Imagen" />
+        <video *ngIf="a.kind === 'video' && downloadUrl(a) as vidUrl" [src]="vidUrl" controls></video>
 
         <div class="ext" *ngIf="a.kind === 'ppt'">PPT</div>
 
+        <!-- ✅ links normales -->
         <a
           class="link"
           *ngIf="a.kind === 'link' && a.url"
@@ -175,26 +177,17 @@
             Eliminar
           </button>
         </div>
-<!-- 
-        <div class="row small" *ngIf="a.filePath">
-          Archivo local:
-          <code>{{ a.filePath }}</code>
-        </div> -->
 
+        <!-- ✅ SOLO DESCARGA (sin mostrar rutas internas ni "URL técnica") -->
         <div class="row small" *ngIf="downloadUrl(a) as dUrl">
           Descargar:
-          <a [href]="dUrl" target="_blank" rel="noopener">Descargar archivo</a>
-        </div>
-        
-
-        <div class="row small" *ngIf="a.url">
-          URL técnica:
-          <a [href]="a.url" target="_blank" rel="noopener">{{ a.url }}</a>
+          <a [href]="dUrl" target="_blank" rel="noopener" download>
+            Descargar archivo
+          </a>
         </div>
 
-        <div
-          class="row small"
-          *ngIf="a.kind === 'ppt' && a.metaJson?.edit_path as editUrl">
+        <!-- ✅ Presenton (si viene) -->
+        <div class="row small" *ngIf="a.kind === 'ppt' && a.metaJson?.edit_path as editUrl">
           Abrir / descargar en Presenton:
           <a [href]="editUrl" target="_blank" rel="noopener">
             Abrir en Presenton

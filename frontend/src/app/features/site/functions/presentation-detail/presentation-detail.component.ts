@@ -31,13 +31,16 @@ import {
 import { PLATFORM_ID } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
-// 👇 IMPORTA environment
+// 👇 environment
 import { environment } from '../../../../core/environments/environment.prod';
-// 👇 ApiService para POST
+// 👇 ApiService
 import { ApiService } from '../../../../core/services/api.service';
 
 const API_BASE = environment.apiBaseUrl;
 
+/* =======================
+   TIPOS
+======================= */
 type Pres = {
   id: number;
   title: string;
@@ -49,7 +52,6 @@ type Pres = {
   assetsCount?: number;
 };
 
-// 👇 metaJson tipado
 type AssetMeta = {
   caption?: string;
   edit_path?: string;
@@ -59,8 +61,8 @@ type AssetMeta = {
 type Asset = {
   id: number;
   kind: 'video' | 'ppt' | 'image' | 'text' | 'link';
-  filePath?: string | null;
-  url?: string | null;
+  filePath?: string | null; // /uploads/...
+  url?: string | null;      // /uploads/... o https://...
   metaJson?: AssetMeta;
   createdAt: string;
 };
@@ -79,6 +81,7 @@ type Asset = {
   styleUrls: ['./presentation-detail.component.scss']
 })
 export class PresentationDetailComponent implements OnInit {
+
   private fb = inject(FormBuilder);
   private route = inject(ActivatedRoute);
   private http = inject(HttpClient);
@@ -86,7 +89,6 @@ export class PresentationDetailComponent implements OnInit {
   private apiService = inject(ApiService);
 
   constructor(@Inject(PLATFORM_ID) private platformId: Object) {
-    // Sincroniza el form cuando cambia `pres`
     effect(() => {
       const p = this.pres();
       if (p) {
@@ -98,6 +100,9 @@ export class PresentationDetailComponent implements OnInit {
     });
   }
 
+  /* =======================
+     STATE
+  ======================= */
   isBrowser = false;
 
   id = signal<number | null>(null);
@@ -119,6 +124,9 @@ export class PresentationDetailComponent implements OnInit {
   newText = signal<string>('');
   newFile: File | null = null;
 
+  /* =======================
+     INIT
+  ======================= */
   ngOnInit(): void {
     this.isBrowser = isPlatformBrowser(this.platformId);
 
@@ -133,7 +141,9 @@ export class PresentationDetailComponent implements OnInit {
     });
   }
 
-  /** Headers con Authorization (si hay token) */
+  /* =======================
+     AUTH HEADERS
+  ======================= */
   private authHeaders(): HttpHeaders {
     if (!this.isBrowser) return new HttpHeaders();
     const token =
@@ -145,19 +155,22 @@ export class PresentationDetailComponent implements OnInit {
       : new HttpHeaders();
   }
 
+  /* =======================
+     LOAD
+  ======================= */
   async loadAll() {
     try {
       this.loading.set(true);
       this.error.set(null);
       const pid = this.id()!;
-      // GET presentación
+
       const pres = await firstValueFrom(
         this.http.get<Pres>(`${API_BASE}/presentations/${pid}`, {
           headers: this.authHeaders()
         })
       );
       this.pres.set(pres);
-      // GET assets
+
       const assets = await firstValueFrom(
         this.http.get<Asset[]>(`${API_BASE}/presentations/${pid}/assets`, {
           headers: this.authHeaders()
@@ -171,75 +184,60 @@ export class PresentationDetailComponent implements OnInit {
     }
   }
 
+  /* =======================
+     DESCARGA – FIX CLAVE
+  ======================= */
+
+  /** ORIGIN real del API (sin /api) */
+  private apiOrigin(): string {
+    try {
+      return new URL(API_BASE).origin;
+    } catch {
+      return API_BASE.replace(/\/+$/, '');
+    }
+  }
+
+  /** Convierte /uploads/... en URL ABSOLUTO del API */
+  private toPublicUrl(p?: string | null): string | null {
+    if (!p) return null;
+
+    if (/^https?:\/\//i.test(p)) return p;
+
+    const idx = p.lastIndexOf('/uploads/');
+    if (idx >= 0) p = p.slice(idx);
+
+    if (p.startsWith('/uploads/')) {
+      return `${this.apiOrigin()}${p}`;
+    }
+
+    return null;
+  }
+
+  /** URL FINAL para descargar */
+  downloadUrl(a: Asset): string | null {
+    return this.toPublicUrl(a.url) || this.toPublicUrl(a.filePath) || null;
+  }
+
+  /* =======================
+     CRUD
+  ======================= */
   async saveMeta() {
     if (this.editForm.invalid || !this.pres()) return;
     try {
       this.saving.set(true);
       const pid = this.pres()!.id;
-      const body = {
-        title: this.editForm.value.title?.trim(),
-        description: (this.editForm.value.description ?? '').trim()
-      };
 
       await firstValueFrom(
         this.http.put(
           `${API_BASE}/presentations/${pid}`,
-          body,
+          {
+            title: this.editForm.value.title?.trim(),
+            description: (this.editForm.value.description ?? '').trim()
+          },
           { headers: this.authHeaders() }
         )
       );
 
-      await this.reloadPresOnly();
-    } catch (e: any) {
-      this.handleError(e);
-    } finally {
-      this.saving.set(false);
-    }
-  }
-
-  async onCoverChange(evt: Event) {
-    const inp = evt.target as HTMLInputElement;
-    const file = inp.files?.[0];
-    if (!file || !this.pres()) return;
-    try {
-      this.saving.set(true);
-      const pid = this.pres()!.id;
-      const fd = new FormData();
-      fd.append(
-        'metadata',
-        new Blob([JSON.stringify({})], { type: 'application/json' })
-      );
-      fd.append('cover', file, file.name);
-
-      await firstValueFrom(
-        this.http.put(
-          `${API_BASE}/presentations/${pid}`,
-          fd,
-          { headers: this.authHeaders() } // NO seteamos Content-Type, deja que el browser lo ponga
-        )
-      );
-
-      await this.reloadPresOnly();
-    } catch (e: any) {
-      this.handleError(e);
-    } finally {
-      (evt.target as HTMLInputElement).value = '';
-      this.saving.set(false);
-    }
-  }
-
-  async clearCover() {
-    if (!this.pres()) return;
-    try {
-      this.saving.set(true);
-      const pid = this.pres()!.id;
-      await firstValueFrom(
-        this.http.put(
-          `${API_BASE}/presentations/${pid}`,
-          { clearCover: true },
-          { headers: this.authHeaders() }
-        )
-      );
       await this.reloadPresOnly();
     } catch (e: any) {
       this.handleError(e);
@@ -266,26 +264,25 @@ export class PresentationDetailComponent implements OnInit {
   async addAsset() {
     const pres = this.pres();
     if (!pres) return;
-    const kind = this.newKind();
+
     try {
       this.saving.set(true);
+      const kind = this.newKind();
 
       if (kind === 'text') {
-        const meta: AssetMeta = { caption: (this.newText() || '').trim() };
         await firstValueFrom(
           this.apiService.post(
             `/presentations/${pres.id}/assets`,
-            { kind, meta_json: meta },
+            { kind, meta_json: { caption: this.newText().trim() } },
             this.authHeaders()
           )
         );
       } else if (kind === 'link') {
-        const url = (this.newUrl() || '').trim();
-        if (!url) throw new Error('URL requerida');
+        if (!this.newUrl()) throw new Error('URL requerida');
         await firstValueFrom(
           this.apiService.post(
             `/presentations/${pres.id}/assets`,
-            { kind, url },
+            { kind, url: this.newUrl().trim() },
             this.authHeaders()
           )
         );
@@ -306,8 +303,6 @@ export class PresentationDetailComponent implements OnInit {
       this.newUrl.set('');
       this.newText.set('');
       this.newFile = null;
-      const f = document.getElementById('asset-file') as HTMLInputElement | null;
-      if (f) f.value = '';
 
       const assets = await firstValueFrom(
         this.http.get<Asset[]>(`${API_BASE}/presentations/${pres.id}/assets`, {
@@ -324,8 +319,8 @@ export class PresentationDetailComponent implements OnInit {
 
   async deleteAsset(a: Asset) {
     const pres = this.pres();
-    if (!pres) return;
-    if (!confirm('¿Eliminar este recurso?')) return;
+    if (!pres || !confirm('¿Eliminar este recurso?')) return;
+
     try {
       this.saving.set(true);
       await firstValueFrom(
@@ -334,7 +329,7 @@ export class PresentationDetailComponent implements OnInit {
           { headers: this.authHeaders() }
         )
       );
-      this.assets.set(this.assets().filter((x) => x.id !== a.id));
+      this.assets.set(this.assets().filter(x => x.id !== a.id));
     } catch (e: any) {
       this.handleError(e);
     } finally {
@@ -342,56 +337,20 @@ export class PresentationDetailComponent implements OnInit {
     }
   }
 
-  fmtDate(d?: string) {
-    return d ? new Date(d) : null;
-  }
-
+  /* =======================
+     UI HELPERS
+  ======================= */
   kindIcon(a: Asset) {
-    switch (a.kind) {
-      case 'image':
-        return '🖼️';
-      case 'video':
-        return '🎬';
-      case 'ppt':
-        return '📑';
-      case 'link':
-        return '🔗';
-      case 'text':
-        return '📝';
-      default:
-        return '📄';
-    }
+    return a.kind === 'image' ? '🖼️'
+      : a.kind === 'video' ? '🎬'
+      : a.kind === 'ppt'   ? '📑'
+      : a.kind === 'link'  ? '🔗'
+      : '📝';
   }
 
   isMedia(a: Asset) {
     return a.kind === 'image' || a.kind === 'video';
   }
-
-    /** Convierte /uploads/... a URL absoluto usando API_BASE */
-    private toPublicUrl(p?: string | null): string | null {
-      if (!p) return null;
-  
-      // ya es URL absoluto
-      if (/^https?:\/\//i.test(p)) return p;
-  
-      // si por algún motivo viene ruta interna, recorta desde /uploads/
-      const idx = p.lastIndexOf('/uploads/');
-      if (idx >= 0) p = p.slice(idx);
-  
-      // si es /uploads/..., lo vuelvo absoluto
-      if (p.startsWith('/uploads/')) {
-        return `${API_BASE}${p}`;
-      }
-  
-      return null;
-    }
-  
-    /** Link que debe usarse para DESCARGAR el archivo (ppt/image/video) */
-    downloadUrl(a: Asset): string | null {
-      // prioridad: url si existe; sino filePath
-      return this.toPublicUrl(a.url) || this.toPublicUrl(a.filePath) || null;
-    }
-  
 
   back() {
     this.router.navigate(['/presentations']);
