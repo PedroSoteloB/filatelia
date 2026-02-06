@@ -246,6 +246,59 @@ export class PresentationDetailComponent implements OnInit {
     }
   }
 
+  async onCoverChange(evt: Event) {
+    const inp = evt.target as HTMLInputElement;
+    const file = inp.files?.[0];
+    if (!file || !this.pres()) return;
+
+    try {
+      this.saving.set(true);
+      const pid = this.pres()!.id;
+
+      const fd = new FormData();
+      fd.append('metadata', new Blob([JSON.stringify({})], { type: 'application/json' }));
+      fd.append('cover', file, file.name);
+
+      await firstValueFrom(
+        this.http.put(
+          `${API_BASE}/presentations/${pid}`,
+          fd,
+          { headers: this.authHeaders() } // NO seteamos Content-Type
+        )
+      );
+
+      await this.reloadPresOnly();
+    } catch (e: any) {
+      this.handleError(e);
+    } finally {
+      (evt.target as HTMLInputElement).value = '';
+      this.saving.set(false);
+    }
+  }
+
+  async clearCover() {
+    if (!this.pres()) return;
+
+    try {
+      this.saving.set(true);
+      const pid = this.pres()!.id;
+
+      await firstValueFrom(
+        this.http.put(
+          `${API_BASE}/presentations/${pid}`,
+          { clearCover: true },
+          { headers: this.authHeaders() }
+        )
+      );
+
+      await this.reloadPresOnly();
+    } catch (e: any) {
+      this.handleError(e);
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
   private async reloadPresOnly() {
     const pid = this.pres()!.id;
     const updated = await firstValueFrom(
