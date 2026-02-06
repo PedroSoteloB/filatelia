@@ -1,6 +1,6 @@
 <div class="topbar">
     <a class="brand" routerLink="/items/mine">
-      <img class="stamp" src="assets/stamp.svg" alt="Filatelia" />
+      <!-- <img class="stamp" src="assets/stamp.svg" alt="Filatelia" /> -->
       <div class="title">
         <h1>Dashboard</h1>
         <p>Resumen de tu colección (cantidad, tipos, condición, país y precio).</p>
@@ -59,7 +59,7 @@
           <!-- (1) GRÁFICO 1: BARRAS HORIZONTALES (Tipos) -->
           <div class="panel">
             <div class="panel-title-row">
-              <h2 class="panel-title">Tipo de estampillas (Top {{ topN }})</h2>
+              <h2 class="panel-title">Tags de las estampillas (Top {{ topN }})</h2>
               <span class="muted small">barras horizontales</span>
             </div>
   
@@ -156,7 +156,8 @@
                   <div class="vbar">
                     <div
                       class="vfill"
-                      [style.height]="barWidth(r.count, maxCountryCount(s.byCountryPrice))"
+                      [style.height]="barHeightPx(r.count, maxCountryCount(takeTopCountry(s.byCountryPrice)))"
+
                       [attr.aria-label]="'country-vbar-' + i"
                     ></div>
   

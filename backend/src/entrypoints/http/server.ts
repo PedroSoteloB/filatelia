@@ -4601,6 +4601,113 @@ app.get('/collections/:id/countries', { preHandler: authGuard }, async (req: any
 // });
 
 
+// app.get('/me/items/stats', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+
+//     // 1) TOTAL
+//     const [rTotal]: any = await db.execute(
+//       `
+//       SELECT COUNT(1) AS total
+//       FROM philatelic_items
+//       WHERE owner_user_id = ?;
+//       `,
+//       [ownerId]
+//     );
+//     const total = Number(rTotal?.[0]?.total ?? 0);
+
+//     // 2) "TIPO" POR CANTIDAD (usa TAGS ligados al item)
+
+//     const [rTypes]: any = await db.execute(
+//       `
+//       SELECT
+//         ISNULL(NULLIF(LTRIM(RTRIM(t.name)), ''), '(vacío)') AS [key],
+//         COUNT(1) AS count
+//       FROM item_tags it
+//       INNER JOIN tags t
+//         ON t.id = it.tag_id
+//       INNER JOIN philatelic_items p
+//         ON p.id = it.item_id
+//       WHERE p.owner_user_id = ?
+//       GROUP BY ISNULL(NULLIF(LTRIM(RTRIM(t.name)), ''), '(vacío)')
+//       ORDER BY COUNT(1) DESC, [key] ASC;
+//       `,
+//       [ownerId]
+//     );
+
+//     const byType = (rTypes || []).map((x: any) => ({
+//       key: String(x.key ?? '(vacío)'),
+//       count: Number(x.count ?? 0),
+//     }));
+
+//     // 3) CONDICIÓN POR CANTIDAD
+//     // IMPORTANTES CAMBIOS:
+//     // - devolvemos shape { key, count } (frontend espera key)
+//     const [rCond]: any = await db.execute(
+//       `
+//       SELECT
+//         ISNULL(NULLIF(LTRIM(RTRIM(condition_code)), ''), '(vacío)') AS [key],
+//         COUNT(1) AS count
+//       FROM philatelic_items
+//       WHERE owner_user_id = ?
+//       GROUP BY ISNULL(NULLIF(LTRIM(RTRIM(condition_code)), ''), '(vacío)')
+//       ORDER BY COUNT(1) DESC, [key] ASC;
+//       `,
+//       [ownerId]
+//     );
+
+//     const byCondition = (rCond || []).map((x: any) => ({
+//       key: String(x.key ?? '(vacío)'),
+//       count: Number(x.count ?? 0),
+//     }));
+
+//     // 4) POR PAÍS Y PRECIO (face_value) + moneda
+//     // Nota: si face_value es NULL lo tratamos como 0 para sum/min/max
+//     const [rCountry]: any = await db.execute(
+//       `
+//       SELECT
+//         ISNULL(NULLIF(LTRIM(RTRIM(country)), ''), '(vacío)') AS country,
+//         ISNULL(NULLIF(LTRIM(RTRIM(currency)), ''), '') AS currency,
+//         COUNT(1) AS count,
+//         SUM(COALESCE(face_value, 0)) AS totalValue,
+//         AVG(CAST(COALESCE(face_value, 0) AS float)) AS avgValue,
+//         MIN(COALESCE(face_value, 0)) AS minValue,
+//         MAX(COALESCE(face_value, 0)) AS maxValue
+//       FROM philatelic_items
+//       WHERE owner_user_id = ?
+//       GROUP BY
+//         ISNULL(NULLIF(LTRIM(RTRIM(country)), ''), '(vacío)'),
+//         ISNULL(NULLIF(LTRIM(RTRIM(currency)), ''), '')
+//       ORDER BY COUNT(1) DESC, country ASC;
+//       `,
+//       [ownerId]
+//     );
+
+//     // (frontend actualmente ignora currency, pero no hace daño dejarla)
+//     const byCountryPrice = (rCountry || []).map((x: any) => ({
+//       country: String(x.country ?? '(vacío)'),
+//       currency: String(x.currency ?? ''),
+//       count: Number(x.count ?? 0),
+//       totalValue: Number(x.totalValue ?? 0),
+//       avgValue: Number(x.avgValue ?? 0),
+//       minValue: Number(x.minValue ?? 0),
+//       maxValue: Number(x.maxValue ?? 0),
+//     }));
+
+//     return reply.send({
+//       total,
+//       byType,        // [{ key, count }]
+//       byCondition,   // [{ key, count }]
+//       byCountryPrice,
+//     });
+//   } catch (e: any) {
+//     console.error('[GET /me/items/stats] ERROR:', e);
+//     return reply.code(500).send({
+//       message: 'Ha ocurrido un error, por favor contactar con soporte',
+//       detail: String(e?.message || ''),
+//     });
+//   }
+// });
 app.get('/me/items/stats', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -4617,10 +4724,6 @@ app.get('/me/items/stats', { preHandler: authGuard }, async (req: any, reply: an
     const total = Number(rTotal?.[0]?.total ?? 0);
 
     // 2) "TIPO" POR CANTIDAD (usa TAGS ligados al item)
-    // IMPORTANTES CAMBIOS:
-    // - devolvemos shape { key, count } (frontend espera key)
-    // - removemos el filtro t.owner_user_id = ? (puede venir NULL o no coincidir)
-    // - normalizamos vacío a '(vacío)'
     const [rTypes]: any = await db.execute(
       `
       SELECT
@@ -4644,8 +4747,6 @@ app.get('/me/items/stats', { preHandler: authGuard }, async (req: any, reply: an
     }));
 
     // 3) CONDICIÓN POR CANTIDAD
-    // IMPORTANTES CAMBIOS:
-    // - devolvemos shape { key, count } (frontend espera key)
     const [rCond]: any = await db.execute(
       `
       SELECT
@@ -4665,28 +4766,40 @@ app.get('/me/items/stats', { preHandler: authGuard }, async (req: any, reply: an
     }));
 
     // 4) POR PAÍS Y PRECIO (face_value) + moneda
-    // Nota: si face_value es NULL lo tratamos como 0 para sum/min/max
+    // FIX: normalizamos country para agrupar ignorando tildes y mayúsculas
     const [rCountry]: any = await db.execute(
       `
+      WITH base AS (
+        SELECT
+          country_raw  = ISNULL(NULLIF(LTRIM(RTRIM(country)), ''), '(vacío)'),
+          currency_raw = ISNULL(NULLIF(LTRIM(RTRIM(currency)), ''), ''),
+          face_value_n = COALESCE(face_value, 0)
+        FROM philatelic_items
+        WHERE owner_user_id = ?
+      ),
+      norm AS (
+        SELECT
+          country_norm   = UPPER(country_raw) COLLATE Latin1_General_100_CI_AI,
+          country_display= country_raw,
+          currency_raw,
+          face_value_n
+        FROM base
+      )
       SELECT
-        ISNULL(NULLIF(LTRIM(RTRIM(country)), ''), '(vacío)') AS country,
-        ISNULL(NULLIF(LTRIM(RTRIM(currency)), ''), '') AS currency,
+        MIN(country_display) AS country,
+        currency_raw AS currency,
         COUNT(1) AS count,
-        SUM(COALESCE(face_value, 0)) AS totalValue,
-        AVG(CAST(COALESCE(face_value, 0) AS float)) AS avgValue,
-        MIN(COALESCE(face_value, 0)) AS minValue,
-        MAX(COALESCE(face_value, 0)) AS maxValue
-      FROM philatelic_items
-      WHERE owner_user_id = ?
-      GROUP BY
-        ISNULL(NULLIF(LTRIM(RTRIM(country)), ''), '(vacío)'),
-        ISNULL(NULLIF(LTRIM(RTRIM(currency)), ''), '')
+        SUM(face_value_n) AS totalValue,
+        AVG(CAST(face_value_n AS float)) AS avgValue,
+        MIN(face_value_n) AS minValue,
+        MAX(face_value_n) AS maxValue
+      FROM norm
+      GROUP BY country_norm, currency_raw
       ORDER BY COUNT(1) DESC, country ASC;
       `,
       [ownerId]
     );
 
-    // (frontend actualmente ignora currency, pero no hace daño dejarla)
     const byCountryPrice = (rCountry || []).map((x: any) => ({
       country: String(x.country ?? '(vacío)'),
       currency: String(x.currency ?? ''),
@@ -4711,6 +4824,7 @@ app.get('/me/items/stats', { preHandler: authGuard }, async (req: any, reply: an
     });
   }
 });
+
 
 //en azure
 const PORT = Number(process.env.PORT || 3000);
