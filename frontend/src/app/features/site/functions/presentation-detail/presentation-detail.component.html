@@ -175,11 +175,17 @@
             Eliminar
           </button>
         </div>
-
+<!-- 
         <div class="row small" *ngIf="a.filePath">
           Archivo local:
           <code>{{ a.filePath }}</code>
+        </div> -->
+
+        <div class="row small" *ngIf="downloadUrl(a) as dUrl">
+          Descargar:
+          <a [href]="dUrl" target="_blank" rel="noopener">Descargar archivo</a>
         </div>
+        
 
         <div class="row small" *ngIf="a.url">
           URL técnica:

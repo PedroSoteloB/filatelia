@@ -3213,80 +3213,192 @@ app.get(
   }
 );
 
-app.post('/presentations/:id/assets', { preHandler: authGuard }, async (req:any, reply:any) => {
-  try {
-    const ownerId = ensureAuth(req);
-    const presId = Number(req.params.id);
-    if (!Number.isFinite(presId)) return reply.code(400).send({ message: 'id inválido' });
+// app.post('/presentations/:id/assets', { preHandler: authGuard }, async (req:any, reply:any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+//     const presId = Number(req.params.id);
+//     if (!Number.isFinite(presId)) return reply.code(400).send({ message: 'id inválido' });
 
-    const [ex]: any = await db.execute(
-      'SELECT TOP 1 id FROM presentations WHERE id = ? AND owner_user_id = ?',
-      [presId, ownerId]
-    );
-    if (!ex.length) return reply.code(404).send({ message: 'presentation_not_found' });
+//     const [ex]: any = await db.execute(
+//       'SELECT TOP 1 id FROM presentations WHERE id = ? AND owner_user_id = ?',
+//       [presId, ownerId]
+//     );
+//     if (!ex.length) return reply.code(404).send({ message: 'presentation_not_found' });
 
-    const ct = String((req.headers['content-type'] || '')).toLowerCase();
-    const isMultipart = ct.startsWith('multipart/form-data');
+//     const ct = String((req.headers['content-type'] || '')).toLowerCase();
+//     const isMultipart = ct.startsWith('multipart/form-data');
 
-    let kind: string | null = null;
-    let url: string | null = null;
-    let metaJson: any = null;
-    let filePath: string | null = null;
+//     let kind: string | null = null;
+//     let url: string | null = null;
+//     let metaJson: any = null;
+//     let filePath: string | null = null;
 
-    if (isMultipart) {
-      const parts = await (req.parts?.() as AsyncIterable<any>);
-      if (!parts) return reply.code(400).send({ message: 'multipart requerido' });
+//     if (isMultipart) {
+//       const parts = await (req.parts?.() as AsyncIterable<any>);
+//       if (!parts) return reply.code(400).send({ message: 'multipart requerido' });
 
-      for await (const p of parts) {
-        if (p?.type === 'field') {
-          if (p.fieldname === 'kind') kind = String(p.value ?? '').toLowerCase();
-          else if (p.fieldname === 'url') url = String(p.value ?? '').trim() || null;
-          else if (p.fieldname === 'meta_json') {
-            try { metaJson = JSON.parse(String(p.value ?? '{}')); } catch {}
-          }
-          continue;
-        }
+//       for await (const p of parts) {
+//         if (p?.type === 'field') {
+//           if (p.fieldname === 'kind') kind = String(p.value ?? '').toLowerCase();
+//           else if (p.fieldname === 'url') url = String(p.value ?? '').trim() || null;
+//           else if (p.fieldname === 'meta_json') {
+//             try { metaJson = JSON.parse(String(p.value ?? '{}')); } catch {}
+//           }
+//           continue;
+//         }
 
-        if (p?.type === 'file' && p.fieldname === 'file') {
-          const buf = await p.toBuffer();
-          if (buf?.length) {
-            const fs = require('fs');
-            const path = require('path');
-            const base = process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
-            if (!fs.existsSync(base)) fs.mkdirSync(base, { recursive: true });
-            const safe = `pres-${presId}-${Date.now()}-${(p.filename||'asset').replace(/[^\w.\-]+/g,'_')}`;
-            const full = path.join(base, safe);
-            fs.writeFileSync(full, buf);
-            filePath = full;
-            url = `/uploads/${safe}`;
-          }
-          continue;
-        }
+//         if (p?.type === 'file' && p.fieldname === 'file') {
+//           const buf = await p.toBuffer();
+//           if (buf?.length) {
+//             const fs = require('fs');
+//             const path = require('path');
+//             const base = process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
+//             if (!fs.existsSync(base)) fs.mkdirSync(base, { recursive: true });
+//             const safe = `pres-${presId}-${Date.now()}-${(p.filename||'asset').replace(/[^\w.\-]+/g,'_')}`;
+//             const full = path.join(base, safe);
+//             fs.writeFileSync(full, buf);
+//             filePath = full;
+//             url = `/uploads/${safe}`;
+//           }
+//           continue;
+//         }
+//       }
+//     } else {
+//       const body = req.body || {};
+//       kind = body?.kind ? String(body.kind).toLowerCase() : null;
+//       url  = body?.url ? String(body.url).trim() : null;
+//       metaJson = body?.meta_json ?? body?.metaJson ?? null;
+//     }
+
+//     if (!kind || !['video','ppt','image','text','link'].includes(kind)) {
+//       return reply.code(400).send({ message: 'kind inválido' });
+//     }
+//     if (!filePath && !url && kind !== 'text') {
+//       return reply.code(400).send({ message: 'se requiere file o url (excepto kind=text)' });
+//     }
+
+//     const [r]: any = await db.execute(
+//       `INSERT INTO presentation_assets (presentation_id, kind, file_path, url, meta_json)
+//        VALUES (?,?,?,?,?)`,
+//       [presId, kind, filePath, url, metaJson ? JSON.stringify(metaJson) : null]
+//     );
+//     reply.send({ id: r.insertId });
+//   } catch (e:any) {
+//     reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
+//   }
+// });
+
+app.post(
+  '/presentations/:id/assets',
+  { preHandler: authGuard },
+  async (req: any, reply: any) => {
+    try {
+      const ownerId = ensureAuth(req);
+      const presId = Number(req.params.id);
+      if (!Number.isFinite(presId)) {
+        return reply.code(400).send({ message: 'id inválido' });
       }
-    } else {
-      const body = req.body || {};
-      kind = body?.kind ? String(body.kind).toLowerCase() : null;
-      url  = body?.url ? String(body.url).trim() : null;
-      metaJson = body?.meta_json ?? body?.metaJson ?? null;
-    }
 
-    if (!kind || !['video','ppt','image','text','link'].includes(kind)) {
-      return reply.code(400).send({ message: 'kind inválido' });
-    }
-    if (!filePath && !url && kind !== 'text') {
-      return reply.code(400).send({ message: 'se requiere file o url (excepto kind=text)' });
-    }
+      const [ex]: any = await db.execute(
+        'SELECT TOP 1 id FROM presentations WHERE id = ? AND owner_user_id = ?',
+        [presId, ownerId]
+      );
+      if (!ex.length) {
+        return reply.code(404).send({ message: 'presentation_not_found' });
+      }
 
-    const [r]: any = await db.execute(
-      `INSERT INTO presentation_assets (presentation_id, kind, file_path, url, meta_json)
-       VALUES (?,?,?,?,?)`,
-      [presId, kind, filePath, url, metaJson ? JSON.stringify(metaJson) : null]
-    );
-    reply.send({ id: r.insertId });
-  } catch (e:any) {
-    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
+      const ct = String(req.headers['content-type'] || '').toLowerCase();
+      const isMultipart = ct.startsWith('multipart/form-data');
+
+      let kind: string | null = null;
+      let url: string | null = null;
+      let metaJson: any = null;
+      let filePath: string | null = null; // ✅ aquí guardaremos SOLO "/uploads/..."
+
+      if (isMultipart) {
+        const parts = await (req.parts?.() as AsyncIterable<any>);
+        if (!parts) return reply.code(400).send({ message: 'multipart requerido' });
+
+        for await (const p of parts) {
+          if (p?.type === 'field') {
+            if (p.fieldname === 'kind') kind = String(p.value ?? '').toLowerCase();
+            else if (p.fieldname === 'url') url = String(p.value ?? '').trim() || null;
+            else if (p.fieldname === 'meta_json') {
+              try {
+                metaJson = JSON.parse(String(p.value ?? '{}'));
+              } catch {}
+            }
+            continue;
+          }
+
+          if (p?.type === 'file' && p.fieldname === 'file') {
+            const buf = await p.toBuffer();
+            if (buf?.length) {
+              const fs = require('fs');
+              const path = require('path');
+
+              const base =
+                process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
+              if (!fs.existsSync(base)) fs.mkdirSync(base, { recursive: true });
+
+              const safe = `pres-${presId}-${Date.now()}-${(p.filename || 'asset')
+                .replace(/[^\w.\-]+/g, '_')}`;
+
+              // ✅ 1) Escribe en disco con ruta absoluta
+              const full = path.join(base, safe);
+              fs.writeFileSync(full, buf);
+
+              // ✅ 2) PERO en BD guarda SOLO ruta pública (relativa)
+              filePath = `/uploads/${safe}`;
+
+              // ✅ si quieres mantener url también como ruta pública
+              url = `/uploads/${safe}`;
+            }
+            continue;
+          }
+        }
+      } else {
+        const body = req.body || {};
+        kind = body?.kind ? String(body.kind).toLowerCase() : null;
+        url = body?.url ? String(body.url).trim() : null;
+        metaJson = body?.meta_json ?? body?.metaJson ?? null;
+      }
+
+      if (!kind || !['video', 'ppt', 'image', 'text', 'link'].includes(kind)) {
+        return reply.code(400).send({ message: 'kind inválido' });
+      }
+
+      // ✅ Para archivos (image/video/ppt) obligamos filePath (que será "/uploads/...")
+      if ((kind === 'image' || kind === 'video' || kind === 'ppt') && !filePath) {
+        return reply.code(400).send({ message: 'se requiere archivo (multipart file)' });
+      }
+
+      // ✅ Para link: se requiere url
+      if (kind === 'link' && !url) {
+        return reply.code(400).send({ message: 'se requiere url para kind=link' });
+      }
+
+      // ✅ Para text: no requiere file ni url
+      if (kind === 'text') {
+        filePath = null;
+        url = null;
+      }
+
+      const [r]: any = await db.execute(
+        `INSERT INTO presentation_assets (presentation_id, kind, file_path, url, meta_json)
+         VALUES (?,?,?,?,?)`,
+        [presId, kind, filePath, url, metaJson ? JSON.stringify(metaJson) : null]
+      );
+
+      return reply.send({ id: r.insertId });
+    } catch (e: any) {
+      return reply
+        .code(500)
+        .send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
+    }
   }
-});
+);
+
 
 app.delete('/presentations/:id/assets/:assetId', { preHandler: authGuard }, async (req:any, reply:any) => {
   try {
