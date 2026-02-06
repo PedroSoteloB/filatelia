@@ -9,7 +9,7 @@ import { buildSlidesHTML } from './middlewares/core/openaiHtmlSlides';
 
 const Fastify = require('fastify');
 
-// ⚠️ AJUSTA ESTA RUTA A TU NUEVO POOL DE SQL SERVER
+
 const { db } = require('../../infrastructure/db/sql/pool');
 
 const bcrypt = require('bcrypt');
@@ -488,153 +488,6 @@ function authGuard(req: FastifyRequest, reply: FastifyReply, done: HookHandlerDo
 }
 
 
-
-// app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
-//   try {
-//     const ownerId = ensureAuth(req);
-
-//     const ct = String((req.headers['content-type'] || '')).toLowerCase();
-//     const isMultipart = ct.startsWith('multipart/form-data');
-
-//     let meta: any = null;
-//     const files: { buffer: Buffer; filename: string; mime: string }[] = [];
-
-//     if (isMultipart) {
-//       const parts = await (req.parts?.() as AsyncIterable<any>);
-//       if (!parts) return reply.code(400).send({ message: 'multipart requerido' });
-
-//       const allowed = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-//       const maxImages = 12;
-
-//       for await (const p of parts) {
-//         if (p?.type === 'field' && p.fieldname === 'metadata') {
-//           try {
-//             meta = JSON.parse(String(p.value ?? '{}'));
-//           } catch {
-//             return reply.code(400).send({ message: 'metadata inválido (JSON)' });
-//           }
-//           continue;
-//         }
-
-//         if (p?.type === 'file') {
-//           if (files.length >= maxImages) {
-//             await p.file?.resume?.();
-//             continue;
-//           }
-
-//           const buf = await p.toBuffer();
-//           if (!buf?.length) continue;
-
-//           const mime = String(p.mimetype ?? '');
-//           if (!allowed.has(mime)) {
-//             return reply.code(400).send({ message: 'Formato no soportado' });
-//           }
-
-//           files.push({
-//             buffer: buf,
-//             filename: String(p.filename ?? 'image'),
-//             mime,
-//           });
-//         }
-//       }
-//     } else {
-//       meta = req.body;
-//     }
-
-//     if (!meta?.title?.trim()) {
-//       return reply.code(400).send({ message: 'metadata.title requerido' });
-//     }
-
-//     // ========= INSERT + ID (robusto para cualquier driver) =========
-//     const [idRows]: any = await db.execute(
-//       `
-//       SET NOCOUNT ON;
-
-//       DECLARE @t TABLE (id BIGINT);
-
-//       INSERT INTO philatelic_items (
-//         owner_user_id,
-//         title,
-//         description,
-//         country,
-//         issue_year,
-//         condition_code,
-//         catalog_code,
-//         face_value,
-//         currency,
-//         acquisition_date,
-//         visibility,
-//         created_at,
-//         updated_at
-//       )
-//       OUTPUT INSERTED.id INTO @t(id)
-//       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME());
-
-//       SELECT TOP (1) id FROM @t;
-//       `,
-//       [
-//         ownerId,
-//         meta.title.trim(),
-//         meta.description || null,
-//         meta.country || null,
-//         meta.issueYear ?? meta.issue_year ?? meta.year ?? null,
-//         meta.condition ?? meta.condition_code ?? null,
-//         meta.catalogCode ?? meta.catalog_code ?? null,
-//         meta.faceValue ?? meta.face_value ?? null,
-//         meta.currency ?? null,
-//         meta.acquisitionDate ?? meta.acquisition_date ?? null,
-//         meta.visibility || 'public',
-//       ]
-//     );
-
-//     // depende del wrapper: a veces viene como [ [ {id: ...} ] , ...]
-//     const row0 = Array.isArray(idRows) ? idRows[0] : null;
-//     const itemId = Number(row0?.id);
-
-//     if (!Number.isFinite(itemId)) {
-//       throw new Error('No se pudo obtener el id insertado');
-//     }
-//     // ===============================================================
-
-//     // ================= IMÁGENES =================
-//     if (files.length) {
-//       const fs = require('fs');
-//       const path = require('path');
-
-//       const base = process.env.FILES_BASE_PATH || path.join(process.cwd(), 'uploads');
-//       if (!fs.existsSync(base)) fs.mkdirSync(base, { recursive: true });
-
-//       for (const [i, f] of files.entries()) {
-//         const filePath = path.join(
-//           base,
-//           `${itemId}-${Date.now()}-${i}-${f.filename}`.replace(/[^\w.\-]+/g, '_')
-//         );
-//         fs.writeFileSync(filePath, f.buffer);
-//         await db.execute(
-//           `
-//           INSERT INTO item_images (item_id, file_path, is_primary)
-//           VALUES (?, ?, ?);
-//           `,
-//           [itemId, filePath, i === 0 ? 1 : 0]
-//         );
-//       }
-//     }
-
-//     return reply.code(201).send({ id: itemId, message: 'item_creado' });
-//   } catch (e: any) {
-//     console.error('[POST /items] ERROR:', e);
-//     return reply.code(500).send({
-//       message: 'Ha ocurrido un error, por favor contactar con soporte',
-//       detail: String(e?.message || ''),
-//     });
-//   }
-// });
-
-
-
-
-// GET /me/items
-
 app.post('/items', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -886,126 +739,6 @@ reply.send(out);
 
 
 
-// app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any) => {
-//   try {
-//     const ownerId = ensureAuth(req);
-//     const q: any = req.query || {};
-//     const attrs = parseJsonSafely(q.attrs, undefined);
-
-//     const f = {
-//       q: q.q,
-//       country: q.country,
-//       condition: q.condition,
-//       yearFrom: q.yearFrom ? Number(q.yearFrom) : undefined,
-//       yearTo:   q.yearTo   ? Number(q.yearTo)   : undefined,
-//       tagIds: Array.isArray(q.tagIds) ? q.tagIds : (q.tagIds ? [q.tagIds] : []),
-//       tagNames: Array.isArray(q.tagNames) ? q.tagNames : (q.tagNames ? [q.tagNames] : []),
-//       tagsMode: q.tagsMode,
-//       attrs
-//     };
-
-//     const {
-//       where,
-//       params: whereParams,
-//       tagIds,
-//       tagNames,
-//       tagMode,
-//       attrFilters
-//     } = buildWhereFromFilter(ownerId, f);
-
-//     let join = '';
-//     const joinParams: any[] = [];
-
-//     if ((tagIds.length + tagNames.length) > 0) {
-//       let allTagIds = [...tagIds];
-
-//       if (tagNames.length) {
-//         const placeholders = tagNames.map(() => '?').join(',');
-//         const ownerFilter = await tagsOwnerWhere(ownerId);
-//         const [trs]: any = await db.execute(
-//           `SELECT id FROM tags WHERE ${ownerFilter.where} AND name IN (${placeholders})`,
-//           [...ownerFilter.params, ...tagNames]
-//         );
-//         allTagIds = allTagIds.concat(trs.map((r: any) => r.id));
-//       }
-
-//       const uniqueIds = Array.from(
-//         new Set(allTagIds.map(Number).filter(Number.isFinite))
-//       );
-
-//       if (uniqueIds.length) {
-//         if (tagMode === 'AND') {
-//           join += `
-//             JOIN (
-//               SELECT it.item_id
-//               FROM item_tags it
-//               WHERE it.tag_id IN (${uniqueIds.map(() => '?').join(',')})
-//               GROUP BY it.item_id
-//               HAVING COUNT(DISTINCT it.tag_id) = ${uniqueIds.length}
-//             ) tfilter ON tfilter.item_id = i.id`;
-//           joinParams.push(...uniqueIds);
-//         } else {
-//           join += `
-//             JOIN item_tags itf
-//               ON itf.item_id = i.id
-//              AND itf.tag_id IN (${uniqueIds.map(() => '?').join(',')})`;
-//           joinParams.push(...uniqueIds);
-//         }
-//       }
-//     }
-
-//     const { join: attrJoin, params: attrParams } = await buildAttrJoins(ownerId, attrFilters);
-//     join += attrJoin;
-//     joinParams.push(...attrParams);
-
-//     const offset =
-//       Number.isFinite(Number(q.offset)) && Number(q.offset) >= 0
-//         ? Number(q.offset)
-//         : 0;
-//     const limit =
-//       Number.isFinite(Number(q.limit)) && Number(q.limit) > 0
-//         ? Number(q.limit)
-//         : 20;
-
-//     const sql = `
-//       SELECT DISTINCT
-//         i.id,
-//         i.title,
-//         i.country,
-//         i.issue_year AS issueYear,
-//         i.created_at AS createdAt,
-//         (
-//           SELECT TOP 1 file_path
-//           FROM item_images
-//           WHERE item_id = i.id
-//           ORDER BY is_primary DESC, id ASC
-//         ) AS cover
-//       FROM philatelic_items i
-//       ${join}
-//       WHERE ${where.join(' AND ')}
-//       ORDER BY createdAt DESC
-//       OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
-
-//     const [rows]: any = await db.execute(sql, [...joinParams, ...whereParams]);
-
-//     // 🔹 normaliza la URL de cover
-//     const out = rows.map((r: any) => {
-//       const rel = toPublicUrl(r.cover);   // "/uploads/..."
-//       const abs = toAbsoluteUrl(rel);     // "https://filatelia-api.../uploads/..."
-//       return {
-//         ...r,
-//         cover: abs || rel,
-//       };
-//     });
-
-//     reply.send(out);
-//   } catch (e: any) {
-//     if (e.message === 'UNAUTHORIZED') {
-//       return reply.code(401).send({ message: 'unauthorized' });
-//     }
-//     reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
-//   }
-// });
 
 
 app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any) => {
@@ -1181,54 +914,6 @@ app.get('/items/search', { preHandler: authGuard }, async (req: any, reply: any)
   }
 });
 
-
-// app.get('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
-//   try {
-//     const ownerId = ensureAuth(req);
-//     const itemId = Number(req.params.id);
-//     if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'id inválido' });
-
-//     const [rows]: any = await db.execute(
-//       `SELECT *
-//          FROM philatelic_items
-//         WHERE id = ? AND owner_user_id = ?`,
-//       [itemId, ownerId]
-//     );
-//     const item = rows?.[0];
-//     if (!item) return reply.code(404).send({ message: 'not_found' });
-
-//     const [imgRows]: any = await db.execute(
-//       `SELECT id,
-//              file_path AS [file], 
-//              is_primary AS [primary]
-//          FROM item_images
-//         WHERE item_id = ?
-//         ORDER BY is_primary DESC, id ASC`,
-//       [itemId]
-//     );
-
-//     // 🔹 aquí el cambio
-//     item.images = (imgRows || []).map((im: any) => {
-//       const rel = toPublicUrl(im.file);   // "/uploads/..."
-//       const abs = toAbsoluteUrl(rel);     // "https://filatelia-api.../uploads/..."
-//       return {
-//         ...im,
-//         file: abs || rel,
-//       };
-//     });
-
-//     // opcional: normalizar cover si existe
-//     if (item.cover) {
-//       const relCover = toPublicUrl(item.cover);
-//       const absCover = toAbsoluteUrl(relCover);
-//       item.cover = absCover || relCover;
-//     }
-
-//     reply.send(item);
-//   } catch (e: any) {
-//     reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
-//   }
-// });
 
 app.get('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
@@ -1532,24 +1217,6 @@ app.post('/attributes', { preHandler: authGuard }, async (req: any, reply: any) 
     reply.send({ id: r.insertId, name, attr_type });
   } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
-
-// app.get('/attributes', { preHandler: authGuard }, async (req: any, reply: any) => {
-//   try {
-//     const ownerId = ensureAuth(req);
-//     const [rows]: any = await db.execute(
-//       `SELECT id,
-//               name,
-//               attr_type AS attrType,
-//               options_json AS optionsJson,
-//               created_at AS createdAt
-//          FROM attribute_definitions
-//         WHERE owner_user_id = ?
-//         ORDER BY name ASC`,
-//       [ownerId]
-//     );
-//     reply.send(rows);
-//   } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
-// });
 
 app.get('/attributes', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
@@ -4824,6 +4491,112 @@ app.get('/collections/:id/countries', { preHandler: authGuard }, async (req: any
   } catch (e: any) {
     req.log?.error(e, 'Error en GET /collections/:id/countries');
     return reply.code(500).send({ message: e?.message || 'internal_error' });
+  }
+});
+
+
+app.get('/me/items/stats', { preHandler: authGuard }, async (req: any, reply: any) => {
+  try {
+    const ownerId = ensureAuth(req);
+
+    // 1) TOTAL
+    const [rTotal]: any = await db.execute(
+      `
+      SELECT COUNT(1) AS total
+      FROM philatelic_items
+      WHERE owner_user_id = ?;
+      `,
+      [ownerId]
+    );
+    const total = Number(rTotal?.[0]?.total ?? 0);
+
+    // 2) TIPO DE ESTAMPILLA POR CANTIDAD (usa TAGS como "tipo")
+    const [rTypes]: any = await db.execute(
+      `
+      SELECT
+        t.name AS type,
+        COUNT(1) AS count
+      FROM item_tags it
+      INNER JOIN tags t
+        ON t.id = it.tag_id
+      INNER JOIN philatelic_items p
+        ON p.id = it.item_id
+      WHERE p.owner_user_id = ?
+        AND t.owner_user_id = ?
+      GROUP BY t.name
+      ORDER BY COUNT(1) DESC, t.name ASC;
+      `,
+      [ownerId, ownerId]
+    );
+
+    const byType = (rTypes || []).map((x: any) => ({
+      type: String(x.type ?? ''),
+      count: Number(x.count ?? 0),
+    }));
+
+    // 3) CONDICIÓN POR CANTIDAD
+    const [rCond]: any = await db.execute(
+      `
+      SELECT
+        ISNULL(NULLIF(LTRIM(RTRIM(condition_code)), ''), '(vacío)') AS condition,
+        COUNT(1) AS count
+      FROM philatelic_items
+      WHERE owner_user_id = ?
+      GROUP BY ISNULL(NULLIF(LTRIM(RTRIM(condition_code)), ''), '(vacío)')
+      ORDER BY COUNT(1) DESC;
+      `,
+      [ownerId]
+    );
+
+    const byCondition = (rCond || []).map((x: any) => ({
+      condition: String(x.condition ?? '(vacío)'),
+      count: Number(x.count ?? 0),
+    }));
+
+    // 4) POR PAÍS Y PRECIO (face_value) + moneda
+    // Nota: si face_value es NULL lo tratamos como 0 para sum/min/max
+    const [rCountry]: any = await db.execute(
+      `
+      SELECT
+        ISNULL(NULLIF(LTRIM(RTRIM(country)), ''), '(vacío)') AS country,
+        ISNULL(NULLIF(LTRIM(RTRIM(currency)), ''), '') AS currency,
+        COUNT(1) AS count,
+        SUM(COALESCE(face_value, 0)) AS totalValue,
+        AVG(CAST(COALESCE(face_value, 0) AS float)) AS avgValue,
+        MIN(COALESCE(face_value, 0)) AS minValue,
+        MAX(COALESCE(face_value, 0)) AS maxValue
+      FROM philatelic_items
+      WHERE owner_user_id = ?
+      GROUP BY
+        ISNULL(NULLIF(LTRIM(RTRIM(country)), ''), '(vacío)'),
+        ISNULL(NULLIF(LTRIM(RTRIM(currency)), ''), '')
+      ORDER BY COUNT(1) DESC, country ASC;
+      `,
+      [ownerId]
+    );
+
+    const byCountryPrice = (rCountry || []).map((x: any) => ({
+      country: String(x.country ?? '(vacío)'),
+      currency: String(x.currency ?? ''),
+      count: Number(x.count ?? 0),
+      totalValue: Number(x.totalValue ?? 0),
+      avgValue: Number(x.avgValue ?? 0),
+      minValue: Number(x.minValue ?? 0),
+      maxValue: Number(x.maxValue ?? 0),
+    }));
+
+    return reply.send({
+      total,
+      byType,
+      byCondition,
+      byCountryPrice,
+    });
+  } catch (e: any) {
+    console.error('[GET /me/items/stats] ERROR:', e);
+    return reply.code(500).send({
+      message: 'Ha ocurrido un error, por favor contactar con soporte',
+      detail: String(e?.message || ''),
+    });
   }
 });
 

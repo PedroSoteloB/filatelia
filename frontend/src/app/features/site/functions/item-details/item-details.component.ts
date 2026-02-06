@@ -538,37 +538,6 @@ export class ItemDetailsComponent implements OnInit {
 
     const saveTags$ = this.tagsTouched ? this.renameTagsOnly(id) : of(null);
 
-    // forkJoin({ itemRes: saveItem$, tagsRes: saveTags$ }).subscribe({
-      
-    //   next: () => {
-    //     // 🔒 NO usamos itemRes ni tagsRes
-    //     // el PUT /items solo devuelve { ok: true }
-      
-    //     const finalItem: MyItem = {
-    //       ...it,
-    //       ...payload,            // ← solo lo que el usuario editó
-    //       tags: it.tags,         // se mantienen
-    //       attributes: it.attributes,
-    //       images: it.images,
-    //       cover: it.cover,
-    //     };
-      
-    //     this.item.set(finalItem);
-    //     this.draft.set(toDraft(finalItem));
-    //     this.isEditing.set(false);
-      
-    //     this.touched.clear();
-    //     this.tagsTouched = false;
-    //     this.newTagName = '';
-      
-    //     this.saving.set(false);
-    //   },
-      
-    //   error: (err) => {
-    //     this.error.set(errorMessage(err, 'No se pudo guardar los cambios.'));
-    //     this.saving.set(false);
-    //   },
-    // });
     forkJoin({ itemRes: saveItem$, tagsRes: saveTags$ }).subscribe({
 
       next: () => {

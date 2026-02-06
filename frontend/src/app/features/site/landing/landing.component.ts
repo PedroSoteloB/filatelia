@@ -330,46 +330,10 @@ export class LandingComponent implements OnInit {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  // Catálogo público
-  // async search() { await this.loadPublic(true); }
-  // async loadMore() { await this.loadPublic(false); }
-// private async loadPublic(reset: boolean) {
-//     if (this.loading) return;
-
-//     if (reset) {
-//       this.offset = 0;
-//       this.items = [];
-//       this.canLoadMore = true;
-//     }
-//     if (!this.canLoadMore) return;
-
-//     this.loading = true;
-//     try {
-//       const params = new URLSearchParams({
-//         offset: String(this.offset),
-//         limit: String(this.limit)
-//       });
-//       if (this.q.trim()) params.set('q', this.q.trim());
-
-//       // 👇 ahora llama al backend en Azure
-//       const r = await fetch(`${API_BASE}/public/items?${params.toString()}`);
-//       const data: PublicItem[] = await r.json().catch(() => []);
-//       if (!r.ok) throw data as any;
-
-//       this.items = this.items.concat(data);
-//       this.offset += data.length;
-
-//       // 👇 ordenar en cliente si el usuario no está en "Novedades"
-//       if (this.sortBy !== 'server') this.sortItems();
-
-//       if (data.length < this.limit) this.canLoadMore = false;
-//     } finally {
-//       this.loading = false;
-//     }
-//   }
+  goDashboard() {
+    this.router.navigate(['/items/stats']); // cambia esta ruta si la tuya es otra
+  }
   
-
-  // 👇 ordenamiento en cliente
   sortItems() {
     if (this.sortBy === 'server') return; // respeta el orden por defecto del backend
     const byTitleAsc = (a:PublicItem,b:PublicItem) =>

@@ -52,6 +52,13 @@ export const routes: Routes = [
         .then(m => m.MyItemsComponent)
   } ,
   {
+    path: 'items/stats',
+    loadComponent: () =>
+      import('./features/site/functions/item-stats/item-stats.component')
+        .then(m => m.ItemStatsComponent)
+  },
+  
+  {
     path: 'items/mine/:id',
     loadComponent: () =>
       import('./features/site/functions/item-details/item-details.component')

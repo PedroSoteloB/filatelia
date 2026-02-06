@@ -1,0 +1,283 @@
+<div class="topbar">
+    <a class="brand" routerLink="/items/mine">
+      <img class="stamp" src="assets/stamp.svg" alt="Filatelia" />
+      <div class="title">
+        <h1>Dashboard</h1>
+        <p>Resumen de tu colección (cantidad, tipos, condición, país y precio).</p>
+      </div>
+    </a>
+  
+    <div class="actions">
+      <button class="btn light" routerLink="/items/mine">← Volver</button>
+      <button class="btn primary" (click)="fetchStats()" [disabled]="busy()">Actualizar</button>
+    </div>
+  </div>
+  
+  <div class="wrap">
+    <div *ngIf="error()" class="status error">{{ error() }}</div>
+  
+    <ng-container *ngIf="busy(); else contentTpl">
+      <div class="panel">
+        <div class="panel-title">Cargando…</div>
+        <div class="muted">Obteniendo métricas de tu colección.</div>
+      </div>
+    </ng-container>
+  
+    <ng-template #contentTpl>
+      <ng-container *ngIf="stats() as s; else emptyTpl">
+  
+        <!-- KPI -->
+        <section class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Total de estampillas</div>
+            <div class="kpi-value">{{ s.total }}</div>
+            <div class="kpi-hint muted">Total de ítems registrados</div>
+          </div>
+  
+          <div class="kpi-card">
+            <div class="kpi-label">Tipos distintos</div>
+            <div class="kpi-value">{{ (s.byType?.length || 0) }}</div>
+            <div class="kpi-hint muted">Cantidad de categorías/tipos</div>
+          </div>
+  
+          <div class="kpi-card">
+            <div class="kpi-label">Condiciones distintas</div>
+            <div class="kpi-value">{{ (s.byCondition?.length || 0) }}</div>
+            <div class="kpi-hint muted">Estados/condiciones encontradas</div>
+          </div>
+  
+          <div class="kpi-card">
+            <div class="kpi-label">Países distintos</div>
+            <div class="kpi-value">{{ (s.byCountryPrice?.length || 0) }}</div>
+            <div class="kpi-hint muted">Agrupado por país</div>
+          </div>
+        </section>
+  
+        <!-- GRID -->
+        <section class="dash-grid">
+  
+          <!-- (1) GRÁFICO 1: BARRAS HORIZONTALES (Tipos) -->
+          <div class="panel">
+            <div class="panel-title-row">
+              <h2 class="panel-title">Tipo de estampillas (Top {{ topN }})</h2>
+              <span class="muted small">barras horizontales</span>
+            </div>
+  
+            <ng-container *ngIf="s.byType?.length; else noTypesTpl">
+              <div class="bars">
+                <ng-container *ngFor="let r of takeTop(s.byType); let i = index">
+                  <div class="bar-row">
+                    <div class="bar-left">
+                      <div class="bar-key">{{ fmtText(r.key) }}</div>
+                      <div class="bar-count">{{ r.count }}</div>
+                    </div>
+  
+                    <div class="bar-track">
+                      <div
+                        class="bar-fill"
+                        [style.width]="barWidth(r.count, maxCount(s.byType))"
+                        [attr.aria-label]="'type-bar-' + i"
+                      ></div>
+                    </div>
+                  </div>
+                </ng-container>
+              </div>
+            </ng-container>
+  
+            <ng-template #noTypesTpl>
+              <div class="empty">
+                <div>
+                  <div class="title">Sin datos de tipo</div>
+                  <div class="muted small">Cuando el backend calcule “tipo”, lo verás aquí.</div>
+                </div>
+              </div>
+            </ng-template>
+          </div>
+  
+          <!-- (2) GRÁFICO 2: DONUT (Condición) -->
+          <div class="panel">
+            <div class="panel-title-row">
+              <h2 class="panel-title">Condición (Top {{ topN }})</h2>
+              <span class="muted small">donut</span>
+            </div>
+  
+            <ng-container *ngIf="s.byCondition?.length; else noCondTpl">
+              <div class="donut-row">
+                <!-- Donut: visualiza el % de la condición top respecto al total -->
+                <div
+                  class="donut"
+                  [style.--p]="pct(maxCount(s.byCondition), sumCount(s.byCondition))"
+                  aria-label="donut-cond"
+                >
+                  <div class="donut-center">
+                    <div class="donut-big">
+                      {{ pct(maxCount(s.byCondition), sumCount(s.byCondition)) }}%
+                    </div>
+                    <div class="donut-small muted">condición top</div>
+                  </div>
+                </div>
+  
+                <div class="donut-legend">
+                  <div class="muted small" style="margin-bottom: 6px;">Top condiciones</div>
+                  <div class="legend-list">
+                    <div class="legend-item" *ngFor="let r of takeTop(s.byCondition)">
+                      <div class="legend-key">{{ fmtText(r.key) }}</div>
+                      <div class="legend-val">
+                        {{ r.count }} ({{ pct(r.count, sumCount(s.byCondition)) }}%)
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </ng-container>
+  
+            <ng-template #noCondTpl>
+              <div class="empty">
+                <div>
+                  <div class="title">Sin datos de condición</div>
+                  <div class="muted small">Cuando haya condition_code, se mostrará aquí.</div>
+                </div>
+              </div>
+            </ng-template>
+          </div>
+  
+          <!-- (3) GRÁFICO 3: BARRAS VERTICALES MINI (Países por cantidad) -->
+          <div class="panel">
+            <div class="panel-title-row">
+              <h2 class="panel-title">Países (Top {{ topN }})</h2>
+              <span class="muted small">barras verticales</span>
+            </div>
+  
+            <ng-container *ngIf="s.byCountryPrice?.length; else noCountryBarsTpl">
+              <div class="vbars">
+                <ng-container *ngFor="let r of takeTopCountry(s.byCountryPrice); let i = index">
+                  <div class="vbar">
+                    <div
+                      class="vfill"
+                      [style.height]="barWidth(r.count, maxCountryCount(s.byCountryPrice))"
+                      [attr.aria-label]="'country-vbar-' + i"
+                    ></div>
+  
+                    <div class="vkey" [title]="fmtText(r.country)">
+                      {{ short(fmtText(r.country), 10) }}
+                    </div>
+                    <div class="vval muted">{{ r.count }}</div>
+                  </div>
+                </ng-container>
+              </div>
+            </ng-container>
+  
+            <ng-template #noCountryBarsTpl>
+              <div class="empty">
+                <div>
+                  <div class="title">Sin datos por país</div>
+                  <div class="muted small">Necesitas country para agrupar.</div>
+                </div>
+              </div>
+            </ng-template>
+          </div>
+  
+          <!-- (4) GRÁFICO 4: GAUGE / PROGRESO (Valor país top vs total) -->
+          <div class="panel">
+            <div class="panel-title-row">
+              <h2 class="panel-title">Concentración de valor</h2>
+              <span class="muted small">gauge</span>
+            </div>
+  
+            <ng-container *ngIf="s.byCountryPrice?.length; else noGaugeTpl">
+              <div class="gauge-wrap">
+                <div class="gauge-meta">
+                  <div class="muted small">País top por total valor</div>
+                  <div class="gauge-title">
+                    {{
+                      topCountryByTotal(s.byCountryPrice)?.country
+                        ? fmtText(topCountryByTotal(s.byCountryPrice).country)
+                        : '—'
+                    }}
+                  </div>
+                  <div class="muted small">
+                    {{ fmtMoney(topCountryByTotal(s.byCountryPrice)?.totalValue || 0) }}
+                    de
+                    {{ fmtMoney(sumCountryTotal(s.byCountryPrice)) }}
+                  </div>
+                </div>
+  
+                <div class="gauge">
+                  <div class="gauge-track"></div>
+                  <div
+                    class="gauge-fill"
+                    [style.width]="barWidth(topCountryByTotal(s.byCountryPrice)?.totalValue || 0, sumCountryTotal(s.byCountryPrice))"
+                  ></div>
+                  <div class="gauge-pct">
+                    {{ pct(topCountryByTotal(s.byCountryPrice)?.totalValue || 0, sumCountryTotal(s.byCountryPrice)) }}%
+                  </div>
+                </div>
+              </div>
+            </ng-container>
+  
+            <ng-template #noGaugeTpl>
+              <div class="empty">
+                <div>
+                  <div class="title">Sin datos de valor</div>
+                  <div class="muted small">Necesitas face_value para calcular totals.</div>
+                </div>
+              </div>
+            </ng-template>
+          </div>
+  
+          <!-- TABLA (se mantiene) -->
+          <div class="panel panel-wide">
+            <div class="panel-title-row">
+              <h2 class="panel-title">País y precio</h2>
+              <span class="muted small">conteo + métricas de valor facial</span>
+            </div>
+  
+            <ng-container *ngIf="s.byCountryPrice?.length; else noCountryTpl">
+              <div class="table-wrap">
+                <table class="tbl">
+                  <thead>
+                    <tr>
+                      <th>País</th>
+                      <th class="num">Cantidad</th>
+                      <th class="num">Total</th>
+                      <th class="num">Promedio</th>
+                      <th class="num">Mín</th>
+                      <th class="num">Máx</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let r of s.byCountryPrice">
+                      <td>{{ fmtText(r.country) }}</td>
+                      <td class="num">{{ r.count }}</td>
+                      <td class="num">{{ fmtMoney(r.totalValue) }}</td>
+                      <td class="num">{{ fmtMoney(r.avgValue) }}</td>
+                      <td class="num">{{ fmtMoney(r.minValue) }}</td>
+                      <td class="num">{{ fmtMoney(r.maxValue) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </ng-container>
+  
+            <ng-template #noCountryTpl>
+              <div class="empty">
+                <div>
+                  <div class="title">Sin datos por país</div>
+                  <div class="muted small">Necesitas country y face_value para calcular.</div>
+                </div>
+              </div>
+            </ng-template>
+          </div>
+  
+        </section>
+      </ng-container>
+    </ng-template>
+  
+    <ng-template #emptyTpl>
+      <div class="panel">
+        <div class="panel-title">Sin información</div>
+        <div class="muted">Aún no hay estadísticas disponibles.</div>
+      </div>
+    </ng-template>
+  </div>
+  
