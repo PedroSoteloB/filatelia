@@ -36,19 +36,19 @@
   
           <div class="kpi-card">
             <div class="kpi-label">Tipos distintos</div>
-            <div class="kpi-value">{{ (s.byType?.length || 0) }}</div>
+            <div class="kpi-value">{{ (s.byType.length || 0) }}</div>
             <div class="kpi-hint muted">Cantidad de categorías/tipos</div>
           </div>
   
           <div class="kpi-card">
             <div class="kpi-label">Condiciones distintas</div>
-            <div class="kpi-value">{{ (s.byCondition?.length || 0) }}</div>
+            <div class="kpi-value">{{ (s.byCondition.length || 0) }}</div>
             <div class="kpi-hint muted">Estados/condiciones encontradas</div>
           </div>
   
           <div class="kpi-card">
             <div class="kpi-label">Países distintos</div>
-            <div class="kpi-value">{{ (s.byCountryPrice?.length || 0) }}</div>
+            <div class="kpi-value">{{ (s.byCountryPrice.length || 0) }}</div>
             <div class="kpi-hint muted">Agrupado por país</div>
           </div>
         </section>
@@ -63,7 +63,7 @@
               <span class="muted small">barras horizontales</span>
             </div>
   
-            <ng-container *ngIf="s.byType?.length; else noTypesTpl">
+            <ng-container *ngIf="s.byType.length; else noTypesTpl">
               <div class="bars">
                 <ng-container *ngFor="let r of takeTop(s.byType); let i = index">
                   <div class="bar-row">
@@ -101,7 +101,7 @@
               <span class="muted small">donut</span>
             </div>
   
-            <ng-container *ngIf="s.byCondition?.length; else noCondTpl">
+            <ng-container *ngIf="s.byCondition.length; else noCondTpl">
               <div class="donut-row">
                 <!-- Donut: visualiza el % de la condición top respecto al total -->
                 <div
@@ -148,7 +148,7 @@
               <span class="muted small">barras verticales</span>
             </div>
   
-            <ng-container *ngIf="s.byCountryPrice?.length; else noCountryBarsTpl">
+            <ng-container *ngIf="s.byCountryPrice.length; else noCountryBarsTpl">
               <div class="vbars">
                 <ng-container *ngFor="let r of takeTopCountry(s.byCountryPrice); let i = index">
                   <div class="vbar">
@@ -184,35 +184,34 @@
               <span class="muted small">gauge</span>
             </div>
   
-            <ng-container *ngIf="s.byCountryPrice?.length; else noGaugeTpl">
-              <div class="gauge-wrap">
-                <div class="gauge-meta">
-                  <div class="muted small">País top por total valor</div>
-                  <div class="gauge-title">
-                    {{
-                      topCountryByTotal(s.byCountryPrice)?.country
-                        ? fmtText(topCountryByTotal(s.byCountryPrice).country)
-                        : '—'
-                    }}
-                  </div>
-                  <div class="muted small">
-                    {{ fmtMoney(topCountryByTotal(s.byCountryPrice)?.totalValue || 0) }}
-                    de
-                    {{ fmtMoney(sumCountryTotal(s.byCountryPrice)) }}
-                  </div>
-                </div>
+            <ng-container *ngIf="s.byCountryPrice.length; else noGaugeTpl">
   
-                <div class="gauge">
-                  <div class="gauge-track"></div>
-                  <div
-                    class="gauge-fill"
-                    [style.width]="barWidth(topCountryByTotal(s.byCountryPrice)?.totalValue || 0, sumCountryTotal(s.byCountryPrice))"
-                  ></div>
-                  <div class="gauge-pct">
-                    {{ pct(topCountryByTotal(s.byCountryPrice)?.totalValue || 0, sumCountryTotal(s.byCountryPrice)) }}%
+              <!-- FIX: guardamos el top en variable (evita null + no repetimos la función) -->
+              <ng-container *ngIf="topCountryByTotal(s.byCountryPrice) as top; else noGaugeTpl">
+                <div class="gauge-wrap">
+                  <div class="gauge-meta">
+                    <div class="muted small">País top por total valor</div>
+                    <div class="gauge-title">{{ fmtText(top.country) }}</div>
+                    <div class="muted small">
+                      {{ fmtMoney(top.totalValue || 0) }}
+                      de
+                      {{ fmtMoney(sumCountryTotal(s.byCountryPrice)) }}
+                    </div>
+                  </div>
+  
+                  <div class="gauge">
+                    <div class="gauge-track"></div>
+                    <div
+                      class="gauge-fill"
+                      [style.width]="barWidth(top.totalValue || 0, sumCountryTotal(s.byCountryPrice))"
+                    ></div>
+                    <div class="gauge-pct">
+                      {{ pct(top.totalValue || 0, sumCountryTotal(s.byCountryPrice)) }}%
+                    </div>
                   </div>
                 </div>
-              </div>
+              </ng-container>
+  
             </ng-container>
   
             <ng-template #noGaugeTpl>
@@ -232,7 +231,7 @@
               <span class="muted small">conteo + métricas de valor facial</span>
             </div>
   
-            <ng-container *ngIf="s.byCountryPrice?.length; else noCountryTpl">
+            <ng-container *ngIf="s.byCountryPrice.length; else noCountryTpl">
               <div class="table-wrap">
                 <table class="tbl">
                   <thead>
