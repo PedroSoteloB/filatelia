@@ -1,4 +1,5 @@
 <!-- src/app/features/site/landing/landing.component.html -->
+<!-- src/app/features/site/landing/landing.component.html -->
 <header class="topbar">
   <div class="topbar-inner container">
     <div class="brand" (click)="goInicio()" style="cursor:pointer">
@@ -13,38 +14,33 @@
         <circle cx="60" cy="50" r="23" fill="#85586F"></circle>
         <path d="M32 82h56" stroke="#85586F" stroke-width="6" stroke-linecap="round" />
       </svg>
+
       <div class="title">
         <span class="eyebrow">Catálogo personal</span>
         <h1>Filatelia</h1>
-        <p>Tu archivo digital privado de sellos postales</p>
+
+        <!-- 👇 NUEVO: saludo si está logueado; si no, el tagline normal -->
+        <p *ngIf="isAuth; else tagline">Hola, {{ displayName || 'Usuario' }}</p>
+        <ng-template #tagline>
+          <p>Tu archivo digital privado de sellos postales</p>
+        </ng-template>
       </div>
     </div>
 
     <nav class="actions">
       <a class="link" (click)="goInicio()">Inicio</a>
-
-      <!-- Versión autenticada -->
-      <!-- <ng-container *ngIf="isAuth; else anon">
-        <button class="btn nav" (click)="goUpload()">Nueva pieza</button>
-        <button class="btn nav" (click)="goMyItems()">Mis ítems</button>
-        <button class="btn nav" (click)="goSearch()">Búsqueda</button>
-        <button class="btn nav" (click)="goCollections()">Colecciones</button>
-        <button class="btn nav" (click)="goPresentation()">Presentaciones</button>
-        <button class="btn nav light" (click)="logout()">Cerrar sesión</button>
-      </ng-container> -->
       <ng-container *ngIf="isAuth; else anon">
         <button class="btn nav" (click)="goUpload()">Nueva pieza</button>
         <button class="btn nav" (click)="goMyItems()">Mis ítems</button>
         <button class="btn nav" (click)="goSearch()">Búsqueda</button>
         <button class="btn nav" (click)="goCollections()">Colecciones</button>
         <button class="btn nav" (click)="goPresentation()">Presentaciones</button>
-      
+
         <!-- NUEVO -->
         <button class="btn nav" (click)="goDashboard()">Dashboard</button>
-      
+
         <button class="btn nav light" (click)="logout()">Cerrar sesión</button>
       </ng-container>
-      
 
       <!-- Versión anónima -->
       <ng-template #anon>
@@ -53,6 +49,9 @@
     </nav>
   </div>
 </header>
+
+<!-- ... el resto de tu HTML queda igual ... -->
+
 
 <main class="hero">
   <div class="hero-inner container">
