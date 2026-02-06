@@ -13,7 +13,15 @@
     </svg>
     <div class="title">
       <h1>Filatelia</h1>
-      <p>Catálogo personal de sellos</p>
+
+      <!-- ✅ NUEVO: saludo si está logueado; si no, tagline normal -->
+      <p *ngIf="isAuth; else tagline">
+        Hola, {{ displayName() || 'Usuario' }}
+
+      </p>
+      <ng-template #tagline>
+        <p>Catálogo personal de sellos</p>
+      </ng-template>
     </div>
   </div>
 
@@ -22,12 +30,14 @@
 
     <!-- Versión autenticada -->
     <ng-container *ngIf="isAuth; else anon">
-      <button class="btn" (click)="goUpload()">Nueva pieza</button>
-      <button class="btn" (click)="goMyItems()">Mis ítems</button>
-      <button class="btn" (click)="goSearch()">Búsqueda</button>
-      <button class="btn" (click)="goCollections()">Mis colecciones</button>
-      <button class="btn" (click)="goPresentation()">Mis presentaciones</button>
-      <button class="btn light" (click)="logout()">Cerrar sesión</button>
+      <button class="btn nav" (click)="goUpload()">Nueva pieza</button>
+      <button class="btn nav" (click)="goMyItems()">Mis ítems</button>
+      <button class="btn nav" (click)="goSearch()">Búsqueda</button>
+      <button class="btn nav" (click)="goCollections()">Colecciones</button>
+      <button class="btn nav" (click)="goPresentation()">Presentaciones</button>
+      <button class="btn nav" (click)="goDashboard()">Dashboard</button>
+
+      <button class="btn nav light" (click)="logout()">Cerrar sesión</button>
     </ng-container>
 
     <!-- Versión anónima -->
