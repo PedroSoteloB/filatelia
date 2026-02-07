@@ -504,6 +504,17 @@
                   <button class="btn sm danger" *ngIf="isEditing()" (click)="cancelEdit()" [disabled]="saving()">
                     Cancelar
                   </button>
+
+                  <button
+  class="btn sm danger"
+  *ngIf="!isEditing()"
+  (click)="confirmDelete(it.id)"
+  [disabled]="saving() || busy()"
+  title="Eliminar pieza"
+>
+  Eliminar
+</button>
+
                 </div>
               </div>
             </header>
