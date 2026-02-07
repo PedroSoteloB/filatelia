@@ -423,6 +423,7 @@
   </div>
 </div>
 -->
+<!-- item-details.component.html (COMPLETO) -->
 <div class="item-details-page">
   <div class="details-inner">
     <a routerLink="/items/mine" class="back-link"> ← Volver al listado </a>
@@ -738,17 +739,17 @@
                   <!-- EDIT -->
                   <ng-template #tagsEditTpl>
                     <form class="tags-edit-form" (submit)="addNewTagFromInput(); $event.preventDefault()">
-                      <div class="tags-list" *ngIf="draftTags?.length; else noDraftTagsTpl">
+                      <div class="tags-list" *ngIf="draftTagNames?.length; else noDraftTagsTpl">
                         <span
                           class="tag-pill editable"
-                          *ngFor="let t of draftTags; let i = index; trackBy: trackByIndex"
+                          *ngFor="let name of draftTagNames; let i = index; trackBy: trackByIndex"
                           (click)="focusTag(i)"
                         >
                           #
                           <input
                             #tagInput
                             class="tag-edit-input"
-                            [ngModel]="t.name"
+                            [ngModel]="name"
                             (ngModelChange)="renameDraftTagAt(i, $event)"
                             [name]="'tag_' + i"
                             placeholder="Tag"
@@ -777,7 +778,6 @@
                         <p class="hint">No has agregado tags.</p>
                       </ng-template>
 
-                      <!-- ✅ input nuevo tag -->
                       <div class="inline-row" style="margin-top: 10px;">
                         <input
                           #newTagInput
@@ -798,7 +798,7 @@
                   </ng-template>
                 </section>
 
-                <!-- ✅ ATRIBUTOS -->
+                <!-- ✅ ATRIBUTOS (ESTE BLOQUE ASUME que tu TS YA TIENE draftAttrs, attrDefs y getAttrDefById) -->
                 <section class="section-card">
                   <h2 class="section-title">Atributos adicionales</h2>
 
@@ -811,7 +811,7 @@
                           <span class="attr-name">{{ a.name }}</span>
                         </div>
                         <p class="attr-value">
-                          {{ a.valueText ?? a.valueNumber ?? a.valueDate ?? a.value ?? '—' }}
+                          {{ (a as any).valueText ?? (a as any).valueNumber ?? (a as any).valueDate ?? a.value ?? '—' }}
                         </p>
                       </article>
                     </div>
@@ -823,7 +823,6 @@
 
                   <!-- EDIT -->
                   <ng-template #attrsEditTpl>
-                    <!-- lista editable -->
                     <div class="attrs-grid" *ngIf="draftAttrs?.length; else noDraftAttrsTpl">
                       <article class="attr-box" *ngFor="let a of draftAttrs; let i = index; trackBy: trackByIndex">
                         <div class="attr-header">
@@ -843,7 +842,6 @@
                           </button>
                         </div>
 
-                        <!-- input según tipo -->
                         <ng-container [ngSwitch]="a.attrType">
                           <input
                             *ngSwitchCase="'number'"
@@ -880,7 +878,6 @@
                       <p class="hint">No hay atributos.</p>
                     </ng-template>
 
-                    <!-- agregar atributo -->
                     <div class="section-card" style="margin-top: 12px;">
                       <div class="inline-row">
                         <select
@@ -890,7 +887,7 @@
                           [disabled]="saving()"
                         >
                           <option [ngValue]="null">Selecciona atributo…</option>
-                          <option *ngFor="let d of attrDefs; trackBy: trackByIndex" [ngValue]="d.id">
+                          <option *ngFor="let d of attrDefs; let idx = index; trackBy: trackByIndex" [ngValue]="d.id">
                             {{ d.name }} ({{ d.attrType }})
                           </option>
                         </select>
@@ -905,44 +902,39 @@
                         </button>
                       </div>
 
-                      <!-- input valor nuevo según tipo seleccionado -->
-                      <ng-container *ngIf="newAttrDefId as selId">
-                        <ng-container *ngIf="attrDefs?.length">
-                          <ng-container
-                            *ngIf="attrDefs.find(d => d.id === selId) as def"
-                            [ngSwitch]="def.attrType"
-                          >
-                            <input
-                              *ngSwitchCase="'number'"
-                              class="text-input"
-                              style="margin-top: 10px;"
-                              type="number"
-                              [(ngModel)]="newAttrValueNumber"
-                              name="newAttrValueNumber"
-                              placeholder="Valor numérico"
-                              [disabled]="saving()"
-                            />
+                      <!-- ✅ FIX BUILD: NO usar attrDefs.find(...) en template -->
+                      <ng-container *ngIf="getAttrDefById(newAttrDefId) as def">
+                        <ng-container [ngSwitch]="def.attrType">
+                          <input
+                            *ngSwitchCase="'number'"
+                            class="text-input"
+                            style="margin-top: 10px;"
+                            type="number"
+                            [(ngModel)]="newAttrValueNumber"
+                            name="newAttrValueNumber"
+                            placeholder="Valor numérico"
+                            [disabled]="saving()"
+                          />
 
-                            <input
-                              *ngSwitchCase="'date'"
-                              class="text-input"
-                              style="margin-top: 10px;"
-                              type="date"
-                              [(ngModel)]="newAttrValueDate"
-                              name="newAttrValueDate"
-                              [disabled]="saving()"
-                            />
+                          <input
+                            *ngSwitchCase="'date'"
+                            class="text-input"
+                            style="margin-top: 10px;"
+                            type="date"
+                            [(ngModel)]="newAttrValueDate"
+                            name="newAttrValueDate"
+                            [disabled]="saving()"
+                          />
 
-                            <input
-                              *ngSwitchDefault
-                              class="text-input"
-                              style="margin-top: 10px;"
-                              [(ngModel)]="newAttrValueText"
-                              name="newAttrValueText"
-                              placeholder="Valor"
-                              [disabled]="saving()"
-                            />
-                          </ng-container>
+                          <input
+                            *ngSwitchDefault
+                            class="text-input"
+                            style="margin-top: 10px;"
+                            [(ngModel)]="newAttrValueText"
+                            name="newAttrValueText"
+                            placeholder="Valor"
+                            [disabled]="saving()"
+                          />
                         </ng-container>
                       </ng-container>
 

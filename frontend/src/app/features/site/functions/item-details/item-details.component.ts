@@ -1368,4 +1368,10 @@ export class ItemDetailsComponent implements OnInit {
     if (!el) return;
     setTimeout(() => el.select(), 0);
   }
+
+  getAttrDefById(id: number | null) {
+    if (!id) return null;
+    return this.attrDefs.find((d) => d.id === id) ?? null;
+  }
+  
 }
