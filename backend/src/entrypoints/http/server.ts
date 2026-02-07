@@ -3551,20 +3551,66 @@ app.put('/presentations/:id', { preHandler: authGuard }, async (req: any, reply:
   }
 });
 
-app.delete('/presentations/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
-  try {
-    const ownerId = ensureAuth(req);
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id)) return reply.code(400).send({ message: 'id inválido' });
+// app.delete('/presentations/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+//     const id = Number(req.params.id);
+//     if (!Number.isFinite(id)) return reply.code(400).send({ message: 'id inválido' });
 
-    const [r]: any = await db.execute(
+//     const [r]: any = await db.execute(
+//       'DELETE FROM presentations WHERE id = ? AND owner_user_id = ?',
+//       [id, ownerId]
+//     );
+//     if (r.affectedRows === 0) return reply.code(404).send({ message: 'not_found' });
+//     reply.send({ ok: true });
+//   } catch (e:any) {
+//     reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
+//   }
+// });
+app.delete('/presentations/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
+  let tx: any = null;
+
+  try {
+    const ownerId = Number(ensureAuth(req));
+    const id = Number(req.params.id);
+
+    if (!Number.isFinite(ownerId) || ownerId <= 0) return reply.code(401).send({ message: 'unauthorized' });
+    if (!Number.isFinite(id) || id <= 0) return reply.code(400).send({ message: 'id inválido' });
+
+    // 1) verificar que existe y es del dueño
+    const [p]: any = await db.execute(
+      'SELECT TOP 1 id FROM presentations WHERE id = ? AND owner_user_id = ?',
+      [id, ownerId]
+    );
+    if (!p?.length) return reply.code(404).send({ message: 'not_found' });
+
+    // 2) transacción
+    tx = await db.getConnection?.() ?? null; // <- si tu pool soporta getConnection
+    const cx = tx ?? db;
+
+    if (tx?.beginTransaction) await tx.beginTransaction();
+
+    // 3) borrar hijos primero (assets)
+    await cx.execute(
+      'DELETE FROM presentation_assets WHERE presentation_id = ?',
+      [id]
+    );
+
+    // 4) borrar padre
+    const [r]: any = await cx.execute(
       'DELETE FROM presentations WHERE id = ? AND owner_user_id = ?',
       [id, ownerId]
     );
-    if (r.affectedRows === 0) return reply.code(404).send({ message: 'not_found' });
-    reply.send({ ok: true });
-  } catch (e:any) {
-    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
+
+    if (tx?.commit) await tx.commit();
+
+    if (r?.affectedRows === 0) return reply.code(404).send({ message: 'not_found' });
+    return reply.send({ ok: true });
+  } catch (e: any) {
+    try { if (tx?.rollback) await tx.rollback(); } catch {}
+    return reply.code(500).send({ message: e?.message || 'error_interno' });
+  } finally {
+    try { if (tx?.release) tx.release(); } catch {}
   }
 });
 
