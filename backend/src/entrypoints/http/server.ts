@@ -1172,17 +1172,13 @@ app.post('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: a
             // ids.push(ins.insertId);
             const [ins]: any = await db.execute(
               haveOwner
-                ? `INSERT INTO tags (name, owner_user_id)
-                   OUTPUT INSERTED.id AS id
-                   VALUES (?,?)`
-                : `INSERT INTO tags (name)
-                   OUTPUT INSERTED.id AS id
-                   VALUES (?)`,
+                ? `INSERT INTO tags (name, owner_user_id) OUTPUT INSERTED.id AS id VALUES (?,?)`
+                : `INSERT INTO tags (name) OUTPUT INSERTED.id AS id VALUES (?)`,
               haveOwner ? [nm, ownerId] : [nm]
             );
             
-            const newId = ins?.[0]?.id ?? ins?.recordset?.[0]?.id;
-            ids.push(Number(newId));
+            ids.push(Number(ins?.recordset?.[0]?.id));
+            
             
           }
         }
@@ -1190,12 +1186,21 @@ app.post('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: a
     }
 
     ids = Array.from(new Set(ids));
+    // for (const tid of ids) {
+    //   await db.execute(
+    //     'INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)',
+    //     [itemId, tid]
+    //   );
+    // }
+
     for (const tid of ids) {
       await db.execute(
-        'INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)',
-        [itemId, tid]
+        `IF NOT EXISTS (SELECT 1 FROM item_tags WHERE item_id = ? AND tag_id = ?)
+           INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)`,
+        [itemId, tid, itemId, tid]
       );
     }
+    
     reply.send({ ok: true, added: ids.length });
   } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
@@ -1244,24 +1249,19 @@ app.post('/attributes', { preHandler: authGuard }, async (req: any, reply: any) 
     // );
     // reply.send({ id: r.insertId, name, attr_type });
     const [r]: any = await db.execute(
-      `
-      INSERT INTO attribute_definitions (owner_user_id, name, attr_type, options_json)
-      OUTPUT INSERTED.id AS id
-      VALUES (?,?,?,?)
-      `,
+      `INSERT INTO attribute_definitions (owner_user_id, name, attr_type, options_json)
+       OUTPUT INSERTED.id AS id
+       VALUES (?,?,?,?)`,
       [
         ownerId,
         name,
-        ['text','number','date','list'].includes(String(attr_type))
-          ? String(attr_type)
-          : 'text',
+        ['text','number','date','list'].includes(String(attr_type)) ? String(attr_type) : 'text',
         options_json ? JSON.stringify(options_json) : null
       ]
     );
     
+    reply.send({ id: r?.recordset?.[0]?.id, name, attr_type });
     
-    const id = r?.[0]?.id ?? r?.recordset?.[0]?.id;
-    reply.send({ id, name, attr_type });
     
     
   } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
@@ -1440,23 +1440,18 @@ app.post('/items/:id/attributes', { preHandler: authGuard }, async (req: any, re
           // );
           // attributeId = Number(ins.insertId);
           const [ins]: any = await db.execute(
-            `
-            INSERT INTO attribute_definitions (owner_user_id, name, attr_type)
-            OUTPUT INSERTED.id AS id
-            VALUES (?,?,?)
-            `,
+            `INSERT INTO attribute_definitions (owner_user_id, name, attr_type)
+             OUTPUT INSERTED.id AS id
+             VALUES (?,?,?)`,
             [
               ownerId,
               nm,
-              ['text','number','date','list'].includes(String(a?.attrType))
-                ? String(a.attrType)
-                : 'text'
+              a?.attrType && ['text','number','date','list'].includes(String(a.attrType)) ? String(a.attrType) : 'text'
             ]
           );
           
+          attributeId = Number(ins?.recordset?.[0]?.id);
           
-          const newId = ins?.[0]?.id ?? ins?.recordset?.[0]?.id;
-          attributeId = Number(newId);
           
         }
       }
