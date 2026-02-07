@@ -1085,7 +1085,21 @@ app.post('/tags', { preHandler: authGuard }, async (req: any, reply: any) => {
     //   haveOwner ? [name, ownerId] : [name]
     // );
     // reply.send({ id: r.insertId, name });
-    const [r]: any = await db.execute(
+
+    // const [r]: any = await db.execute(
+    //   haveOwner
+    //     ? `INSERT INTO tags (name, owner_user_id)
+    //        OUTPUT INSERTED.id AS id
+    //        VALUES (?,?)`
+    //     : `INSERT INTO tags (name)
+    //        OUTPUT INSERTED.id AS id
+    //        VALUES (?)`,
+    //   haveOwner ? [name, ownerId] : [name]
+    // );
+    
+    // const id = r?.[0]?.id ?? r?.recordset?.[0]?.id;
+    // reply.send({ id, name });
+    const [rowsTag]: any = await db.execute(
       haveOwner
         ? `INSERT INTO tags (name, owner_user_id)
            OUTPUT INSERTED.id AS id
@@ -1096,8 +1110,8 @@ app.post('/tags', { preHandler: authGuard }, async (req: any, reply: any) => {
       haveOwner ? [name, ownerId] : [name]
     );
     
-    const id = r?.[0]?.id ?? r?.recordset?.[0]?.id;
-    reply.send({ id, name });
+    reply.send({ id: Number(rowsTag?.[0]?.id), name });
+    
     
   } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
@@ -1170,14 +1184,28 @@ app.post('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: a
             //   haveOwner ? [nm, ownerId] : [nm]
             // );
             // ids.push(ins.insertId);
-            const [ins]: any = await db.execute(
+
+            // const [ins]: any = await db.execute(
+            //   haveOwner
+            //     ? `INSERT INTO tags (name, owner_user_id) OUTPUT INSERTED.id AS id VALUES (?,?)`
+            //     : `INSERT INTO tags (name) OUTPUT INSERTED.id AS id VALUES (?)`,
+            //   haveOwner ? [nm, ownerId] : [nm]
+            // );
+            
+            // ids.push(Number(ins?.recordset?.[0]?.id));
+            
+            const [rowsInsTag]: any = await db.execute(
               haveOwner
-                ? `INSERT INTO tags (name, owner_user_id) OUTPUT INSERTED.id AS id VALUES (?,?)`
-                : `INSERT INTO tags (name) OUTPUT INSERTED.id AS id VALUES (?)`,
+                ? `INSERT INTO tags (name, owner_user_id)
+                   OUTPUT INSERTED.id AS id
+                   VALUES (?,?)`
+                : `INSERT INTO tags (name)
+                   OUTPUT INSERTED.id AS id
+                   VALUES (?)`,
               haveOwner ? [nm, ownerId] : [nm]
             );
             
-            ids.push(Number(ins?.recordset?.[0]?.id));
+            ids.push(Number(rowsInsTag?.[0]?.id));
             
             
           }
@@ -1185,7 +1213,9 @@ app.post('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: a
       }
     }
 
-    ids = Array.from(new Set(ids));
+    // ids = Array.from(new Set(ids));
+    ids = Array.from(new Set(ids)).filter((x) => Number.isFinite(x) && x > 0);
+
     // for (const tid of ids) {
     //   await db.execute(
     //     'INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)',
