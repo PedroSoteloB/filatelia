@@ -1537,108 +1537,6 @@ function rowsOf(res: any): any[] {
   return [];
 }
 
-const COL_CACHE: Record<string, string> = {};
-const PK_CACHE: Record<string, string> = {};
-
-async function resolveColumn(db: any, tableName: string, candidates: string[]) {
-  const cacheKey = `${tableName}::${candidates.join('|')}`;
-  if (COL_CACHE[cacheKey]) return COL_CACHE[cacheKey];
-
-  const res: any = await db.execute(
-    `
-    SELECT COLUMN_NAME
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_NAME = ?
-      AND COLUMN_NAME IN (${candidates.map(() => '?').join(',')})
-    `,
-    [tableName, ...candidates]
-  );
-
-  const cols = rowsOf(res)
-    .map((r: any) => String(r.COLUMN_NAME ?? '').trim())
-    .filter(Boolean);
-
-  // toma el primer candidato existente
-  for (const c of candidates) {
-    if (cols.some((x) => x.toLowerCase() === c.toLowerCase())) {
-      COL_CACHE[cacheKey] = c;
-      return c;
-    }
-  }
-
-  // para que NO sea ciego: listamos columnas reales
-  const allRes: any = await db.execute(
-    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ? ORDER BY ORDINAL_POSITION`,
-    [tableName]
-  );
-  const allCols = rowsOf(allRes).map((r: any) => r.COLUMN_NAME).join(', ');
-
-  throw new Error(`No se pudo detectar columna en ${tableName}. Candidatos: ${candidates.join(', ')}. Columnas reales: ${allCols}`);
-}
-
-async function resolveSinglePk(db: any, tableName: string): Promise<string> {
-  if (PK_CACHE[tableName]) return PK_CACHE[tableName];
-
-  const pkRes: any = await db.execute(
-    `
-    SELECT kcu.COLUMN_NAME
-    FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
-    JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
-      ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
-     AND tc.TABLE_NAME = kcu.TABLE_NAME
-    WHERE tc.TABLE_NAME = ?
-      AND tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
-    ORDER BY kcu.ORDINAL_POSITION
-    `,
-    [tableName]
-  );
-
-  const pkCols = rowsOf(pkRes)
-    .map((r: any) => String(r.COLUMN_NAME ?? '').trim())
-    .filter(Boolean);
-
-  if (pkCols.length === 1) {
-    const pk = pkCols[0]!;         // <- FIX TS (ya sabes que existe)
-    PK_CACHE[tableName] = pk;
-    return pk;
-  }
-
-  if (pkCols.length > 1) {
-    throw new Error(`PK compuesta en ${tableName}: ${pkCols.join(', ')}. Tu API necesita PK simple para devolver un solo ID.`);
-  }
-
-  // fallback: identity
-  const idRes: any = await db.execute(
-    `
-    SELECT TOP 1 c.name AS col
-    FROM sys.columns c
-    JOIN sys.objects o ON o.object_id = c.object_id
-    WHERE o.type='U' AND o.name=?
-      AND COLUMNPROPERTY(c.object_id, c.name, 'IsIdentity')=1
-    `,
-    [tableName]
-  );
-
-  const idRows = rowsOf(idRes);
-
-  if (idRows.length) {
-    const idCol = String(idRows[0]!.col ?? '').trim();  // <- FIX TS
-    if (idCol) {
-      PK_CACHE[tableName] = idCol;
-      return idCol;
-    }
-  }
-
-  const allRes: any = await db.execute(
-    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ? ORDER BY ORDINAL_POSITION`,
-    [tableName]
-  );
-  const allCols = rowsOf(allRes).map((r: any) => r.COLUMN_NAME).join(', ');
-
-  throw new Error(`No se pudo detectar PK para ${tableName}. No hay PRIMARY KEY ni identity. Columnas reales: ${allCols}`);
-}
-
-
 function normalizeUniqueNames(list: any[]): string[] {
   const arr = Array.isArray(list) ? list : [];
   const seen = new Set<string>();
@@ -1654,72 +1552,81 @@ function normalizeUniqueNames(list: any[]): string[] {
   return out;
 }
 
-
 // =================== TAGS UPSERT (DEFINITIVO) ===================
 app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
-    const ownerId = ensureAuth(req);
-    const ownerNum = Number(ownerId);
-    if (!Number.isFinite(ownerNum) || ownerNum <= 0) return reply.code(401).send({ message: 'unauthorized' });
+    const ownerId = Number(ensureAuth(req));
+    if (!Number.isFinite(ownerId) || ownerId <= 0) return reply.code(401).send({ message: 'unauthorized' });
 
     const itemId = Number(req.params.id);
     if (!Number.isFinite(itemId) || itemId <= 0) return reply.code(400).send({ message: 'itemId inválido' });
 
-    // valida item
-    const itRes: any = await db.execute(
-      'SELECT TOP 1 1 AS ok FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
-      [itemId, ownerNum]
-    );
-    if (!rowsOf(itRes).length) return reply.code(404).send({ message: 'item_not_found' });
-
-    // input
     const body = req.body || {};
     const names = normalizeUniqueNames(body.tagNames ?? body.tags ?? []);
     if (!names.length) return reply.code(400).send({ message: 'tagNames requerido (array)' });
 
-    // PK real de tags
-    const tagsPk = await resolveSinglePk(db, 'tags');
+    const tagsJson = JSON.stringify(names);
 
-    // columnas reales en item_tags (por si no son item_id/tag_id)
-    const itemTagsItemCol = await resolveColumn(db, 'item_tags', ['item_id', 'itemId']);
-    const itemTagsTagCol  = await resolveColumn(db, 'item_tags', ['tag_id', 'tagId', tagsPk]);
+    const res: any = await db.execute(
+      `
+      SET NOCOUNT ON;
+      SET XACT_ABORT ON;
 
-    const tagIds: number[] = [];
+      DECLARE @ownerId BIGINT = ?;
+      DECLARE @itemId  BIGINT = ?;
+      DECLARE @tagsJson NVARCHAR(MAX) = ?;
 
-    for (const nm of names) {
-      // UPSERT por (owner_user_id, name) y devuelve PK real
-      const mergeSql = `
-        MERGE tags WITH (HOLDLOCK) AS T
-        USING (SELECT ? AS owner_user_id, ? AS name) AS S
-          ON T.owner_user_id = S.owner_user_id AND T.name = S.name
-        WHEN NOT MATCHED THEN
-          INSERT (owner_user_id, name) VALUES (S.owner_user_id, S.name)
-        OUTPUT INSERTED.[${tagsPk}] AS tagPk;
-      `;
+      -- 0) validar item del owner
+      IF NOT EXISTS (SELECT 1 FROM philatelic_items WHERE id = @itemId AND owner_user_id = @ownerId)
+      BEGIN
+        SELECT CAST(404 AS INT) AS status, 'item_not_found' AS message;
+        RETURN;
+      END
 
-      const mRes: any = await db.execute(mergeSql, [ownerNum, nm]);
-      const mRows = rowsOf(mRes);
+      DECLARE @tagNames TABLE (name VARCHAR(60) PRIMARY KEY);
 
-      const tagId = mRows.length ? Number(mRows[0].tagPk) : null;
-      if (!tagId || !Number.isFinite(tagId) || tagId <= 0) {
-        return reply.code(500).send({ message: `no_se_pudo_obtener_id_tag: ${nm}` });
-      }
+      INSERT INTO @tagNames(name)
+      SELECT DISTINCT LEFT(LTRIM(RTRIM([value])), 60)
+      FROM OPENJSON(@tagsJson)
+      WHERE NULLIF(LTRIM(RTRIM([value])), '') IS NOT NULL;
 
-      tagIds.push(tagId);
+      -- 1) upsert tags
+      MERGE tags AS T
+      USING (SELECT name FROM @tagNames) AS S
+        ON T.owner_user_id = @ownerId AND T.name = S.name
+      WHEN NOT MATCHED THEN
+        INSERT (owner_user_id, name) VALUES (@ownerId, S.name);
 
-      // vincular sin duplicar
-      const linkRes: any = await db.execute(
-        `SELECT TOP 1 1 AS ok FROM item_tags WHERE [${itemTagsItemCol}] = ? AND [${itemTagsTagCol}] = ?`,
-        [itemId, tagId]
-      );
-
-      if (!rowsOf(linkRes).length) {
-        await db.execute(
-          `INSERT INTO item_tags ([${itemTagsItemCol}], [${itemTagsTagCol}]) VALUES (?, ?)`,
-          [itemId, tagId]
+      -- 2) link sin duplicar
+      INSERT INTO item_tags (item_id, tag_id)
+      SELECT DISTINCT @itemId, T.id
+      FROM tags T
+      JOIN @tagNames N ON N.name = T.name
+      WHERE T.owner_user_id = @ownerId
+        AND NOT EXISTS (
+          SELECT 1 FROM item_tags it
+          WHERE it.item_id = @itemId AND it.tag_id = T.id
         );
-      }
+
+      -- 3) devolver IDs de los tags (del owner)
+      SELECT 200 AS status, T.id AS id, T.name AS name
+      FROM tags T
+      JOIN @tagNames N ON N.name = T.name
+      WHERE T.owner_user_id = @ownerId
+      ORDER BY T.id;
+      `,
+      [ownerId, itemId, tagsJson]
+    );
+
+    const rows = rowsOf(res);
+
+    // si vino el "RETURN 404" del SQL
+    if (rows?.length && Number(rows[0]?.status) === 404) {
+      return reply.code(404).send({ message: 'item_not_found' });
     }
+
+    const tagIds = rows.map((r: any) => Number(r.id)).filter((n: number) => Number.isFinite(n) && n > 0);
+    if (!tagIds.length) return reply.code(500).send({ message: 'no_se_pudo_obtener_id_tag' });
 
     return reply.send({ ok: true, tagIds });
   } catch (e: any) {
@@ -1730,78 +1637,122 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
 // =================== ATTRIBUTES UPSERT (DEFINITIVO) ===================
 app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
-    const ownerId = ensureAuth(req);
-    const ownerNum = Number(ownerId);
-    if (!Number.isFinite(ownerNum) || ownerNum <= 0) return reply.code(401).send({ message: 'unauthorized' });
+    const ownerId = Number(ensureAuth(req));
+    if (!Number.isFinite(ownerId) || ownerId <= 0) return reply.code(401).send({ message: 'unauthorized' });
 
     const itemId = Number(req.params.id);
     if (!Number.isFinite(itemId) || itemId <= 0) return reply.code(400).send({ message: 'itemId inválido' });
-
-    const itRes: any = await db.execute(
-      'SELECT TOP 1 1 AS ok FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
-      [itemId, ownerNum]
-    );
-    if (!rowsOf(itRes).length) return reply.code(404).send({ message: 'item_not_found' });
 
     const body = req.body || {};
     const attrs = Array.isArray(body) ? body : (Array.isArray(body?.attributes) ? body.attributes : []);
     if (!attrs.length) return reply.code(400).send({ message: 'attributes requerido (array)' });
 
-    // PK real de attribute_definitions (te arregla el "Invalid column name 'id'")
-    const attrPk = await resolveSinglePk(db, 'attribute_definitions');
+    // normalizamos payload para mandarlo como JSON al SQL (como haces en /items)
+    const payload = attrs.map((a: any) => {
+      const name = String(a?.attributeName ?? a?.name ?? '').trim();
+      const attrType = String(a?.attrType ?? 'text').toLowerCase();
 
-    // columnas reales de item_attributes
-    const iaItemCol = await resolveColumn(db, 'item_attributes', ['item_id', 'itemId']);
-    const iaAttrCol = await resolveColumn(db, 'item_attributes', ['attribute_id', 'attributeId', attrPk]);
+      const valueText = a?.valueText ?? (typeof a?.value === 'string' ? a.value : null);
+      const valueNumber = a?.valueNumber ?? (Number.isFinite(Number(a?.value)) ? Number(a.value) : null);
+      const valueDate = a?.valueDate ?? null;
 
-    let upserted = 0;
+      return {
+        name,
+        attrType: ['text', 'number', 'date', 'list'].includes(attrType) ? attrType : 'text',
+        valueText: valueText ?? null,
+        valueNumber: valueNumber ?? null,
+        valueDate: valueDate ?? null,
+      };
+    }).filter((x: any) => !!x.name);
 
-    for (const a of attrs) {
-      const nm = String(a?.attributeName ?? a?.name ?? '').trim();
-      if (!nm) continue;
+    if (!payload.length) return reply.code(400).send({ message: 'attributes vacío' });
 
-      const attrType =
-        a?.attrType && ['text', 'number', 'date', 'list'].includes(String(a.attrType))
-          ? String(a.attrType)
-          : 'text';
+    const attrsJson = JSON.stringify(payload);
 
-      // upsert definition por (owner_user_id, name) y devuelve PK real
-      const mergeSql = `
-        MERGE attribute_definitions WITH (HOLDLOCK) AS T
-        USING (SELECT ? AS owner_user_id, ? AS name, ? AS attr_type) AS S
-          ON T.owner_user_id = S.owner_user_id AND T.name = S.name
-        WHEN NOT MATCHED THEN
-          INSERT (owner_user_id, name, attr_type) VALUES (S.owner_user_id, S.name, S.attr_type)
-        OUTPUT INSERTED.[${attrPk}] AS attrPk;
-      `;
+    const res: any = await db.execute(
+      `
+      SET NOCOUNT ON;
+      SET XACT_ABORT ON;
 
-      const mRes: any = await db.execute(mergeSql, [ownerNum, nm, attrType]);
-      const mRows = rowsOf(mRes);
+      DECLARE @ownerId BIGINT = ?;
+      DECLARE @itemId  BIGINT = ?;
+      DECLARE @attrsJson NVARCHAR(MAX) = ?;
 
-      const attributeId = mRows.length ? Number(mRows[0].attrPk) : null;
-      if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
-        return reply.code(500).send({ message: `no_se_pudo_obtener_id_attribute: ${nm}` });
-      }
+      -- 0) validar item del owner
+      IF NOT EXISTS (SELECT 1 FROM philatelic_items WHERE id = @itemId AND owner_user_id = @ownerId)
+      BEGIN
+        SELECT CAST(404 AS INT) AS status, 'item_not_found' AS message;
+        RETURN;
+      END
 
-      const vText = a?.valueText ?? (typeof a?.value === 'string' ? a.value : null);
-      const vNum  = a?.valueNumber ?? (Number.isFinite(Number(a?.value)) ? Number(a.value) : null);
-      const vDate = a?.valueDate ?? null;
-
-      await db.execute(
-        `DELETE FROM item_attributes WHERE [${iaItemCol}] = ? AND [${iaAttrCol}] = ?`,
-        [itemId, attributeId]
+      DECLARE @A TABLE (
+        name NVARCHAR(100),
+        attrType NVARCHAR(10),
+        valueText NVARCHAR(MAX),
+        valueNumber FLOAT,
+        valueDate DATE
       );
 
-      await db.execute(
-        `INSERT INTO item_attributes ([${iaItemCol}], [${iaAttrCol}], value_text, value_number, value_date)
-         VALUES (?, ?, ?, ?, ?)`,
-        [itemId, attributeId, vText ?? null, vNum ?? null, vDate ?? null]
+      INSERT INTO @A (name, attrType, valueText, valueNumber, valueDate)
+      SELECT
+        NULLIF(LTRIM(RTRIM(name)), ''),
+        COALESCE(LOWER(NULLIF(LTRIM(RTRIM(attrType)), '')), 'text'),
+        valueText,
+        valueNumber,
+        valueDate
+      FROM OPENJSON(@attrsJson)
+      WITH (
+        name       NVARCHAR(100) '$.name',
+        attrType   NVARCHAR(10)  '$.attrType',
+        valueText  NVARCHAR(MAX) '$.valueText',
+        valueNumber FLOAT        '$.valueNumber',
+        valueDate  DATE          '$.valueDate'
       );
 
-      upserted++;
+      -- 1) upsert definitions por (owner, name)
+      MERGE attribute_definitions AS D
+      USING (SELECT DISTINCT name, attrType FROM @A WHERE name IS NOT NULL) AS S
+        ON D.owner_user_id = @ownerId AND D.name = S.name
+      WHEN NOT MATCHED THEN
+        INSERT (owner_user_id, name, attr_type, created_at)
+        VALUES (@ownerId, S.name, S.attrType, SYSUTCDATETIME());
+
+      -- 2) borrar solo los attrs que vienen en este upsert (no borres todo el item)
+      DELETE IA
+      FROM item_attributes IA
+      JOIN attribute_definitions D
+        ON D.id = IA.attribute_id AND D.owner_user_id = @ownerId
+      JOIN @A A
+        ON A.name = D.name
+      WHERE IA.item_id = @itemId;
+
+      -- 3) insertar nuevos valores
+      INSERT INTO item_attributes (item_id, attribute_id, value_text, value_number, value_date)
+      SELECT
+        @itemId,
+        D.id,
+        A.valueText,
+        A.valueNumber,
+        A.valueDate
+      FROM @A A
+      JOIN attribute_definitions D
+        ON D.owner_user_id = @ownerId AND D.name = A.name;
+
+      -- 4) devolver count
+      SELECT 200 AS status, COUNT(1) AS upserted
+      FROM @A;
+      `,
+      [ownerId, itemId, attrsJson]
+    );
+
+    const rows = rowsOf(res);
+
+    if (rows?.length && Number(rows[0]?.status) === 404) {
+      return reply.code(404).send({ message: 'item_not_found' });
     }
 
-    return reply.send({ ok: true, count: upserted });
+    const upserted = Number(rows?.[0]?.upserted ?? 0);
+    return reply.send({ ok: true, count: Number.isFinite(upserted) ? upserted : 0 });
   } catch (e: any) {
     return reply.code(500).send({ message: String(e?.message || e || '') });
   }
