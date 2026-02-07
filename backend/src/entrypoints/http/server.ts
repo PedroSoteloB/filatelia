@@ -1248,7 +1248,7 @@ app.post('/attributes', { preHandler: authGuard }, async (req: any, reply: any) 
     //    options_json ? JSON.stringify(options_json) : null]
     // );
     // reply.send({ id: r.insertId, name, attr_type });
-    const [r]: any = await db.execute(
+    const [rowsR]: any = await db.execute(
       `INSERT INTO attribute_definitions (owner_user_id, name, attr_type, options_json)
        OUTPUT INSERTED.id AS id
        VALUES (?,?,?,?)`,
@@ -1260,7 +1260,8 @@ app.post('/attributes', { preHandler: authGuard }, async (req: any, reply: any) 
       ]
     );
     
-    reply.send({ id: r?.recordset?.[0]?.id, name, attr_type });
+    reply.send({ id: Number(rowsR?.[0]?.id), name, attr_type });
+    
     
     
     
@@ -1439,7 +1440,7 @@ app.post('/items/:id/attributes', { preHandler: authGuard }, async (req: any, re
           //   [ownerId, nm, a?.attrType && ['text','number','date','list'].includes(String(a.attrType)) ? a.attrType : 'text']
           // );
           // attributeId = Number(ins.insertId);
-          const [ins]: any = await db.execute(
+          const [rowsIns]: any = await db.execute(
             `INSERT INTO attribute_definitions (owner_user_id, name, attr_type)
              OUTPUT INSERTED.id AS id
              VALUES (?,?,?)`,
@@ -1450,7 +1451,8 @@ app.post('/items/:id/attributes', { preHandler: authGuard }, async (req: any, re
             ]
           );
           
-          attributeId = Number(ins?.recordset?.[0]?.id);
+          attributeId = Number(rowsIns?.[0]?.id);
+          
           
           
         }
