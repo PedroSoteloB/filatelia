@@ -1531,11 +1531,23 @@ app.delete('/items/:id/attributes/:attributeId', { preHandler: authGuard }, asyn
 
 function rowsOf(res: any): any[] {
   if (!res) return [];
-  if (Array.isArray(res)) return res;
+
+  // Caso típico: db.execute() devuelve [rows, meta]
+  if (Array.isArray(res)) {
+    if (Array.isArray(res[0])) return res[0];        // [ [..rows..], meta ]
+    if (res.length && typeof res[0] === 'object') return res; // [ {..}, {..} ]
+    return [];
+  }
+
   if (Array.isArray(res.recordset)) return res.recordset;
   if (Array.isArray(res.rows)) return res.rows;
+
+  // mssql a veces devuelve { recordsets: [ [...]] }
+  if (Array.isArray(res.recordsets) && Array.isArray(res.recordsets[0])) return res.recordsets[0];
+
   return [];
 }
+
 
 function normalizeUniqueNames(list: any[]): string[] {
   const arr = Array.isArray(list) ? list : [];
@@ -1552,18 +1564,24 @@ function normalizeUniqueNames(list: any[]): string[] {
   return out;
 }
 
-// =================== TAGS UPSERT (DEFINITIVO) ===================
+// =================== TAGS UPSERT (DEFINITIVO - REPLACE) ===================
 app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = Number(ensureAuth(req));
-    if (!Number.isFinite(ownerId) || ownerId <= 0) return reply.code(401).send({ message: 'unauthorized' });
+    if (!Number.isFinite(ownerId) || ownerId <= 0) {
+      return reply.code(401).send({ message: 'unauthorized' });
+    }
 
     const itemId = Number(req.params.id);
-    if (!Number.isFinite(itemId) || itemId <= 0) return reply.code(400).send({ message: 'itemId inválido' });
+    if (!Number.isFinite(itemId) || itemId <= 0) {
+      return reply.code(400).send({ message: 'itemId inválido' });
+    }
 
     const body = req.body || {};
     const names = normalizeUniqueNames(body.tagNames ?? body.tags ?? []);
-    if (!names.length) return reply.code(400).send({ message: 'tagNames requerido (array)' });
+    if (!names.length) {
+      return reply.code(400).send({ message: 'tagNames requerido (array)' });
+    }
 
     const tagsJson = JSON.stringify(names);
 
@@ -1590,14 +1608,25 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
       FROM OPENJSON(@tagsJson)
       WHERE NULLIF(LTRIM(RTRIM([value])), '') IS NOT NULL;
 
-      -- 1) upsert tags
+      -- 1) upsert tags (owner + name)
       MERGE tags AS T
       USING (SELECT name FROM @tagNames) AS S
         ON T.owner_user_id = @ownerId AND T.name = S.name
       WHEN NOT MATCHED THEN
         INSERT (owner_user_id, name) VALUES (@ownerId, S.name);
 
-      -- 2) link sin duplicar
+      -- 2) REPLACE: borrar links que ya no están (solo tags del owner)
+      DELETE IT
+      FROM item_tags IT
+      JOIN tags T ON T.id = IT.tag_id AND T.owner_user_id = @ownerId
+      WHERE IT.item_id = @itemId
+        AND NOT EXISTS (
+          SELECT 1
+          FROM @tagNames N
+          WHERE N.name = T.name
+        );
+
+      -- 3) link faltantes (sin duplicar)
       INSERT INTO item_tags (item_id, tag_id)
       SELECT DISTINCT @itemId, T.id
       FROM tags T
@@ -1608,7 +1637,7 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
           WHERE it.item_id = @itemId AND it.tag_id = T.id
         );
 
-      -- 3) devolver IDs de los tags (del owner)
+      -- 4) devolver IDs de los tags actuales (del owner)
       SELECT 200 AS status, T.id AS id, T.name AS name
       FROM tags T
       JOIN @tagNames N ON N.name = T.name
@@ -1625,8 +1654,13 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
       return reply.code(404).send({ message: 'item_not_found' });
     }
 
-    const tagIds = rows.map((r: any) => Number(r.id)).filter((n: number) => Number.isFinite(n) && n > 0);
-    if (!tagIds.length) return reply.code(500).send({ message: 'no_se_pudo_obtener_id_tag' });
+    const tagIds = rows
+      .map((r: any) => Number(r.id))
+      .filter((n: number) => Number.isFinite(n) && n > 0);
+
+    if (!tagIds.length) {
+      return reply.code(500).send({ message: 'no_se_pudo_obtener_id_tag' });
+    }
 
     return reply.send({ ok: true, tagIds });
   } catch (e: any) {
@@ -1634,38 +1668,50 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
   }
 });
 
-// =================== ATTRIBUTES UPSERT (DEFINITIVO) ===================
+
+// =================== ATTRIBUTES UPSERT (DEFINITIVO - SIN DUPLICADOS, SIN BORRAR OTROS) ===================
 app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = Number(ensureAuth(req));
-    if (!Number.isFinite(ownerId) || ownerId <= 0) return reply.code(401).send({ message: 'unauthorized' });
+    if (!Number.isFinite(ownerId) || ownerId <= 0) {
+      return reply.code(401).send({ message: 'unauthorized' });
+    }
 
     const itemId = Number(req.params.id);
-    if (!Number.isFinite(itemId) || itemId <= 0) return reply.code(400).send({ message: 'itemId inválido' });
+    if (!Number.isFinite(itemId) || itemId <= 0) {
+      return reply.code(400).send({ message: 'itemId inválido' });
+    }
 
     const body = req.body || {};
     const attrs = Array.isArray(body) ? body : (Array.isArray(body?.attributes) ? body.attributes : []);
-    if (!attrs.length) return reply.code(400).send({ message: 'attributes requerido (array)' });
+    if (!attrs.length) {
+      return reply.code(400).send({ message: 'attributes requerido (array)' });
+    }
 
-    // normalizamos payload para mandarlo como JSON al SQL (como haces en /items)
-    const payload = attrs.map((a: any) => {
-      const name = String(a?.attributeName ?? a?.name ?? '').trim();
-      const attrType = String(a?.attrType ?? 'text').toLowerCase();
+    // normalizamos payload para mandarlo como JSON al SQL
+    const payload = attrs
+      .map((a: any) => {
+        const name = String(a?.attributeName ?? a?.name ?? '').trim();
+        const attrTypeRaw = String(a?.attrType ?? 'text').toLowerCase();
+        const attrType = ['text', 'number', 'date', 'list'].includes(attrTypeRaw) ? attrTypeRaw : 'text';
 
-      const valueText = a?.valueText ?? (typeof a?.value === 'string' ? a.value : null);
-      const valueNumber = a?.valueNumber ?? (Number.isFinite(Number(a?.value)) ? Number(a.value) : null);
-      const valueDate = a?.valueDate ?? null;
+        const valueText = a?.valueText ?? (typeof a?.value === 'string' ? a.value : null);
+        const valueNumber = a?.valueNumber ?? (Number.isFinite(Number(a?.value)) ? Number(a.value) : null);
+        const valueDate = a?.valueDate ?? null;
 
-      return {
-        name,
-        attrType: ['text', 'number', 'date', 'list'].includes(attrType) ? attrType : 'text',
-        valueText: valueText ?? null,
-        valueNumber: valueNumber ?? null,
-        valueDate: valueDate ?? null,
-      };
-    }).filter((x: any) => !!x.name);
+        return {
+          name,
+          attrType,
+          valueText: valueText ?? null,
+          valueNumber: valueNumber ?? null,
+          valueDate: valueDate ?? null,
+        };
+      })
+      .filter((x: any) => !!x.name);
 
-    if (!payload.length) return reply.code(400).send({ message: 'attributes vacío' });
+    if (!payload.length) {
+      return reply.code(400).send({ message: 'attributes vacío' });
+    }
 
     const attrsJson = JSON.stringify(payload);
 
@@ -1685,12 +1731,15 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
         RETURN;
       END
 
+      ------------------------------------------------------------------
+      -- 1) Parse JSON -> tabla @A
+      ------------------------------------------------------------------
       DECLARE @A TABLE (
-        name NVARCHAR(100),
-        attrType NVARCHAR(10),
-        valueText NVARCHAR(MAX),
-        valueNumber FLOAT,
-        valueDate DATE
+        name NVARCHAR(100) NOT NULL,
+        attrType NVARCHAR(10) NULL,
+        valueText NVARCHAR(MAX) NULL,
+        valueNumber FLOAT NULL,
+        valueDate DATE NULL
       );
 
       INSERT INTO @A (name, attrType, valueText, valueNumber, valueDate)
@@ -1702,45 +1751,80 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
         valueDate
       FROM OPENJSON(@attrsJson)
       WITH (
-        name       NVARCHAR(100) '$.name',
-        attrType   NVARCHAR(10)  '$.attrType',
-        valueText  NVARCHAR(MAX) '$.valueText',
+        name        NVARCHAR(100) '$.name',
+        attrType    NVARCHAR(10)  '$.attrType',
+        valueText   NVARCHAR(MAX) '$.valueText',
         valueNumber FLOAT        '$.valueNumber',
-        valueDate  DATE          '$.valueDate'
-      );
+        valueDate   DATE         '$.valueDate'
+      )
+      WHERE NULLIF(LTRIM(RTRIM(name)), '') IS NOT NULL;
 
-      -- 1) upsert definitions por (owner, name)
+      ------------------------------------------------------------------
+      -- 2) Dedup dentro del request: un solo registro por name
+      --    (si llegan repetidos, nos quedamos con el último "válido")
+      ------------------------------------------------------------------
+      ;WITH ranked AS (
+        SELECT
+          A.*,
+          ROW_NUMBER() OVER (
+            PARTITION BY LOWER(A.name)
+            ORDER BY
+              CASE
+                WHEN A.valueText IS NOT NULL OR A.valueNumber IS NOT NULL OR A.valueDate IS NOT NULL THEN 1
+                ELSE 0
+              END DESC
+          ) AS rn
+        FROM @A A
+      )
+      SELECT *
+      INTO #A1
+      FROM ranked
+      WHERE rn = 1;
+
+      ------------------------------------------------------------------
+      -- 3) Upsert definitions por (owner, name)
+      ------------------------------------------------------------------
       MERGE attribute_definitions AS D
-      USING (SELECT DISTINCT name, attrType FROM @A WHERE name IS NOT NULL) AS S
+      USING (SELECT DISTINCT name, attrType FROM #A1) AS S
         ON D.owner_user_id = @ownerId AND D.name = S.name
       WHEN NOT MATCHED THEN
         INSERT (owner_user_id, name, attr_type, created_at)
         VALUES (@ownerId, S.name, S.attrType, SYSUTCDATETIME());
 
-      -- 2) borrar solo los attrs que vienen en este upsert (no borres todo el item)
-      DELETE IA
-      FROM item_attributes IA
-      JOIN attribute_definitions D
-        ON D.id = IA.attribute_id AND D.owner_user_id = @ownerId
-      JOIN @A A
-        ON A.name = D.name
-      WHERE IA.item_id = @itemId;
+      ------------------------------------------------------------------
+      -- 4) Upsert valores en item_attributes SIN BORRAR OTROS ATRIBUTOS
+      --    - Actualiza si ya existe (item_id + attribute_id)
+      --    - Inserta si no existe
+      --    (y NO toca atributos del item que NO vienen en este request)
+      ------------------------------------------------------------------
+      ;WITH src AS (
+        SELECT
+          @itemId AS item_id,
+          D.id    AS attribute_id,
+          A.valueText   AS value_text,
+          A.valueNumber AS value_number,
+          A.valueDate   AS value_date
+        FROM #A1 A
+        JOIN attribute_definitions D
+          ON D.owner_user_id = @ownerId AND D.name = A.name
+      )
+      MERGE item_attributes AS T
+      USING src AS S
+        ON T.item_id = S.item_id AND T.attribute_id = S.attribute_id
+      WHEN MATCHED THEN
+        UPDATE SET
+          value_text   = S.value_text,
+          value_number = S.value_number,
+          value_date   = S.value_date
+      WHEN NOT MATCHED THEN
+        INSERT (item_id, attribute_id, value_text, value_number, value_date)
+        VALUES (S.item_id, S.attribute_id, S.value_text, S.value_number, S.value_date);
 
-      -- 3) insertar nuevos valores
-      INSERT INTO item_attributes (item_id, attribute_id, value_text, value_number, value_date)
-      SELECT
-        @itemId,
-        D.id,
-        A.valueText,
-        A.valueNumber,
-        A.valueDate
-      FROM @A A
-      JOIN attribute_definitions D
-        ON D.owner_user_id = @ownerId AND D.name = A.name;
-
-      -- 4) devolver count
+      ------------------------------------------------------------------
+      -- 5) devolver count (cantidad de atributos únicos procesados)
+      ------------------------------------------------------------------
       SELECT 200 AS status, COUNT(1) AS upserted
-      FROM @A;
+      FROM #A1;
       `,
       [ownerId, itemId, attrsJson]
     );
