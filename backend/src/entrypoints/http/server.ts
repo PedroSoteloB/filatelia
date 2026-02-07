@@ -2724,7 +2724,7 @@ app.delete('/collections/:id', { preHandler: authGuard }, async (req: any, reply
     );
     if (pres?.length) {
       return reply.code(409).send({
-        message: 'no_se_puede_eliminar',
+        message: 'No se puede eliminar por que tiene una presentacion vinculada',
         reason: 'presentacion_vinculada',
         detail: 'No se pudo eliminar la colección porque tiene una presentación vinculada.',
       });
@@ -2737,7 +2737,7 @@ app.delete('/collections/:id', { preHandler: authGuard }, async (req: any, reply
     );
     if (child?.length) {
       return reply.code(409).send({
-        message: 'no_se_puede_eliminar',
+        message: 'No se puede eliminar por que tiene una presentacion vinculada',
         reason: 'tiene_subcolecciones',
         detail: 'No se pudo eliminar la colección porque tiene subcolecciones.',
       });

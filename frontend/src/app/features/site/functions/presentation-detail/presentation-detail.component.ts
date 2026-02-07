@@ -417,4 +417,30 @@ export class PresentationDetailComponent implements OnInit {
     this.error.set(msg);
     console.error(e);
   }
+  async deletePresentation() {
+    const p = this.pres();
+    if (!p) return;
+  
+    const ok = confirm(
+      `¿Eliminar la presentación #${p.id}?\n\nEsto borrará la presentación (y probablemente sus recursos si tu BD tiene cascada o lo manejas en backend).`
+    );
+    if (!ok) return;
+  
+    try {
+      this.saving.set(true);
+      await firstValueFrom(
+        this.http.delete(`${API_BASE}/presentations/${p.id}`, {
+          headers: this.authHeaders()
+        })
+      );
+  
+      // redirige al listado
+      this.router.navigate(['/presentations']);
+    } catch (e: any) {
+      this.handleError(e);
+    } finally {
+      this.saving.set(false);
+    }
+  }
+  
 }

@@ -11,6 +11,15 @@
       <span class="muted">Col: {{ p.collection_id }}</span>
       <span class="dot"></span>
       <span class="muted">Actualizado: {{ p.updated_at | date:'short' }}</span>
+        <!-- ✅ NUEVO: eliminar presentación -->
+  <span class="dot"></span>
+  <button
+    type="button"
+    class="btn danger"
+    (click)="deletePresentation()"
+    [disabled]="saving() || loading()">
+    Eliminar presentación
+  </button>
     </div>
   </header>
 
