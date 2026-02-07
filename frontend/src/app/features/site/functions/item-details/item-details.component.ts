@@ -2044,14 +2044,25 @@ export class ItemDetailsComponent implements OnInit {
         ? this.http.post(
             `${API_BASE}/items/${itemId}/attributes/upsert`,
             {
+              // attributes: this.draftAttrs.map((a) => ({
+              //   attributeId: Number(a.attributeId) > 0 ? Number(a.attributeId) : null,
+              //   attributeName: Number(a.attributeId) > 0 ? null : String(a.name ?? '').trim(),
+              //   attrType: String(a.attrType ?? 'text'),
+              //   valueText: a.valueText ?? null,
+              //   valueNumber: a.valueNumber ?? null,
+              //   valueDate: a.valueDate ?? null,
+
+                
+              // })),
               attributes: this.draftAttrs.map((a) => ({
                 attributeId: Number(a.attributeId) > 0 ? Number(a.attributeId) : null,
-                attributeName: Number(a.attributeId) > 0 ? null : String(a.name ?? '').trim(),
+                attributeName: String(a.name ?? '').trim(), // <-- SIEMPRE
                 attrType: String(a.attrType ?? 'text'),
                 valueText: a.valueText ?? null,
                 valueNumber: a.valueNumber ?? null,
                 valueDate: a.valueDate ?? null,
               })),
+              
             },
             { headers: this.buildHeaders() }
           )
