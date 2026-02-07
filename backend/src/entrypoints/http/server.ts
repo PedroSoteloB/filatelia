@@ -1532,14 +1532,14 @@ app.delete('/items/:id/attributes/:attributeId', { preHandler: authGuard }, asyn
 
 
 // ------------------- TAGS UPSERT (NUEVO) -------------------
-// ------------------- TAGS UPSERT (SOLUCIÓN DEFINITIVA) -------------------
+// ------------------- TAGS UPSERT (1 SENTENCIA POR EXECUTE, NO OUTPUT, NO IF) -------------------
 app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
     const itemId = Number(req.params.id);
     if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'itemId inválido' });
 
-    // 0) validar item
+    // 0) validar item (1 sola sentencia)
     const itRes: any = await db.execute(
       'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
       [itemId, ownerId]
@@ -1547,75 +1547,86 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
     const itRows = itRes?.recordset ?? itRes;
     if (!itRows?.length) return reply.code(404).send({ message: 'item_not_found' });
 
-    // 1) leer tags
+    // 1) input
     const { tagNames = [] } = req.body || {};
     const names: string[] = Array.isArray(tagNames)
       ? tagNames.map((x: any) => String(x ?? '').trim()).filter(Boolean)
       : [];
-
     if (!names.length) return reply.code(400).send({ message: 'tagNames requerido (array)' });
 
+    // unique (case-insensitive, preserva casing original)
     const uniqueNames = Array.from(new Set(names.map((n) => n.toLowerCase())))
       .map((k) => names.find((n) => n.toLowerCase() === k)!)
       .filter(Boolean);
 
-    const createdOrFound: number[] = [];
+    const tagIds: number[] = [];
 
     for (const nm of uniqueNames) {
-      // A) Insertar SOLO si no existe (NO intento leer id aquí)
-      await db.execute(
-        `IF NOT EXISTS (
-           SELECT 1
-           FROM tags
-           WHERE owner_user_id = ? AND name = ?
-         )
-         INSERT INTO tags (name, owner_user_id)
-         VALUES (?, ?);`,
-        [ownerId, nm, nm, ownerId]
-      );
-
-      // B) Ahora SÍ: obtener id con SELECT (esto tu wrapper lo devuelve bien)
-      const idRes: any = await db.execute(
-        `SELECT TOP 1 id
-           FROM tags
-          WHERE owner_user_id = ? AND name = ?`,
+      // A) buscar tagId (1 sola sentencia)
+      const findRes: any = await db.execute(
+        'SELECT TOP 1 id FROM tags WHERE owner_user_id = ? AND name = ?',
         [ownerId, nm]
       );
-      const idRows = idRes?.recordset ?? idRes;
+      const findRows = findRes?.recordset ?? findRes;
+      let tagId: number | null = findRows?.length ? Number(findRows[0].id) : null;
 
-      const tagId = idRows?.length ? Number(idRows[0].id) : null;
+      // B) si no existe -> INSERT (1 sola sentencia)
+      if (!tagId || !Number.isFinite(tagId) || tagId <= 0) {
+        await db.execute(
+          'INSERT INTO tags (name, owner_user_id) VALUES (?, ?)',
+          [nm, ownerId]
+        );
+
+        // C) volver a buscar id (1 sola sentencia)
+        const find2Res: any = await db.execute(
+          'SELECT TOP 1 id FROM tags WHERE owner_user_id = ? AND name = ?',
+          [ownerId, nm]
+        );
+        const find2Rows = find2Res?.recordset ?? find2Res;
+        tagId = find2Rows?.length ? Number(find2Rows[0].id) : null;
+      }
 
       if (!tagId || !Number.isFinite(tagId) || tagId <= 0) {
         return reply.code(500).send({ message: `no_se_pudo_obtener_id_tag: ${nm}` });
       }
 
-      createdOrFound.push(tagId);
+      tagIds.push(tagId);
 
-      // C) vincular al item (sin duplicar)
-      await db.execute(
-        `IF NOT EXISTS (SELECT 1 FROM item_tags WHERE item_id = ? AND tag_id = ?)
-           INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?);`,
-        [itemId, tagId, itemId, tagId]
+      // D) verificar vínculo (1 sola sentencia)
+      const linkRes: any = await db.execute(
+        'SELECT TOP 1 1 AS ok FROM item_tags WHERE item_id = ? AND tag_id = ?',
+        [itemId, tagId]
       );
+      const linkRows = linkRes?.recordset ?? linkRes;
+
+      // E) si no existe vínculo -> INSERT (1 sola sentencia)
+      if (!linkRows?.length) {
+        await db.execute(
+          'INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)',
+          [itemId, tagId]
+        );
+      }
     }
 
-    reply.send({ ok: true, tagIds: createdOrFound });
+    return reply.send({ ok: true, tagIds });
   } catch (e: any) {
-    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
+    // DEVUELVO EL ERROR REAL para que NO sea “ciego”
+    const raw = String(e?.message || e || '');
+    return reply.code(500).send({ message: raw || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
 
 
 // ------------------- ATTRIBUTES UPSERT (SQL SERVER OK) -------------------
-// ------------------- ATTRIBUTES UPSERT (SOLUCIÓN DEFINITIVA) -------------------
+// ------------------- ATTRIBUTES UPSERT (1 SENTENCIA POR EXECUTE, NO OUTPUT, NO IF) -------------------
 app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
     const itemId = Number(req.params.id);
     if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'itemId inválido' });
 
-    // 0) validar item
+    // 0) validar item (1 sola sentencia)
     const itRes: any = await db.execute(
       'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
       [itemId, ownerId]
@@ -1639,55 +1650,58 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
           ? String(a.attrType)
           : 'text';
 
-      // A) crear definition SOLO si no existe (NO intento leer id aquí)
-      await db.execute(
-        `IF NOT EXISTS (
-           SELECT 1
-           FROM attribute_definitions
-           WHERE owner_user_id = ? AND name = ?
-         )
-         INSERT INTO attribute_definitions (owner_user_id, name, attr_type)
-         VALUES (?, ?, ?);`,
-        [ownerId, nm, ownerId, nm, attrType]
-      );
-
-      // B) obtener attributeId con SELECT (esto sí lo devuelve tu wrapper)
-      const idRes: any = await db.execute(
-        `SELECT TOP 1 id
-           FROM attribute_definitions
-          WHERE owner_user_id = ? AND name = ?`,
+      // A) buscar attributeId (1 sola sentencia)
+      const findRes: any = await db.execute(
+        'SELECT TOP 1 id FROM attribute_definitions WHERE owner_user_id = ? AND name = ?',
         [ownerId, nm]
       );
-      const idRows = idRes?.recordset ?? idRes;
-      const attributeId: number | null = idRows?.length ? Number(idRows[0].id) : null;
+      const findRows = findRes?.recordset ?? findRes;
+      let attributeId: number | null = findRows?.length ? Number(findRows[0].id) : null;
+
+      // B) si no existe -> INSERT (1 sola sentencia)
+      if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
+        await db.execute(
+          'INSERT INTO attribute_definitions (owner_user_id, name, attr_type) VALUES (?, ?, ?)',
+          [ownerId, nm, attrType]
+        );
+
+        // C) volver a buscar id (1 sola sentencia)
+        const find2Res: any = await db.execute(
+          'SELECT TOP 1 id FROM attribute_definitions WHERE owner_user_id = ? AND name = ?',
+          [ownerId, nm]
+        );
+        const find2Rows = find2Res?.recordset ?? find2Res;
+        attributeId = find2Rows?.length ? Number(find2Rows[0].id) : null;
+      }
 
       if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
         return reply.code(500).send({ message: `no_se_pudo_obtener_id_attribute: ${nm}` });
       }
 
-      // C) valores
+      // D) valores (solo uno debería ir con data real según tu attrType)
       const vText = a?.valueText ?? (typeof a?.value === 'string' ? a.value : null);
       const vNum  = a?.valueNumber ?? (Number.isFinite(Number(a?.value)) ? Number(a.value) : null);
       const vDate = a?.valueDate ?? null;
 
-      // D) upsert item_attributes por (item_id, attribute_id)
+      // E) upsert item_attributes por (item_id, attribute_id) con DELETE + INSERT (2 sentencias separadas)
       await db.execute(
-        `DELETE FROM item_attributes WHERE item_id = ? AND attribute_id = ?;`,
+        'DELETE FROM item_attributes WHERE item_id = ? AND attribute_id = ?',
         [itemId, attributeId]
       );
 
       await db.execute(
-        `INSERT INTO item_attributes (item_id, attribute_id, value_text, value_number, value_date)
-         VALUES (?, ?, ?, ?, ?);`,
+        'INSERT INTO item_attributes (item_id, attribute_id, value_text, value_number, value_date) VALUES (?, ?, ?, ?, ?)',
         [itemId, attributeId, vText ?? null, vNum ?? null, vDate ?? null]
       );
 
       upserted++;
     }
 
-    reply.send({ ok: true, count: upserted });
+    return reply.send({ ok: true, count: upserted });
   } catch (e: any) {
-    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
+    // DEVUELVE EL ERROR REAL (no "ciego")
+    const raw = String(e?.message || e || '');
+    return reply.code(500).send({ message: raw || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
 
