@@ -1079,12 +1079,12 @@ app.post('/tags', { preHandler: authGuard }, async (req: any, reply: any) => {
     );
     if (dup.length) return reply.code(409).send({ message: 'tag ya existe' });
 
-    // const [r]: any = await db.execute(
-    //   haveOwner ? `INSERT INTO tags (name, owner_user_id) VALUES (?,?)`
-    //             : `INSERT INTO tags (name) VALUES (?)`,
-    //   haveOwner ? [name, ownerId] : [name]
-    // );
-    // reply.send({ id: r.insertId, name });
+    const [r]: any = await db.execute(
+      haveOwner ? `INSERT INTO tags (name, owner_user_id) VALUES (?,?)`
+                : `INSERT INTO tags (name) VALUES (?)`,
+      haveOwner ? [name, ownerId] : [name]
+    );
+    reply.send({ id: r.insertId, name });
 
     // const [r]: any = await db.execute(
     //   haveOwner
@@ -1099,19 +1099,7 @@ app.post('/tags', { preHandler: authGuard }, async (req: any, reply: any) => {
     
     // const id = r?.[0]?.id ?? r?.recordset?.[0]?.id;
     // reply.send({ id, name });
-    const [rowsTag]: any = await db.execute(
-      haveOwner
-        ? `INSERT INTO tags (name, owner_user_id)
-           OUTPUT INSERTED.id AS id
-           VALUES (?,?)`
-        : `INSERT INTO tags (name)
-           OUTPUT INSERTED.id AS id
-           VALUES (?)`,
-      haveOwner ? [name, ownerId] : [name]
-    );
-    
-    reply.send({ id: Number(rowsTag?.[0]?.id), name });
-    
+
     
   } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
@@ -1178,12 +1166,12 @@ app.post('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: a
         for (const nm of names) {
           if (foundByName.has(nm)) ids.push(foundByName.get(nm)!);
           else {
-            // const [ins]: any = await db.execute(
-            //   haveOwner ? `INSERT INTO tags (name, owner_user_id) VALUES (?,?)`
-            //             : `INSERT INTO tags (name) VALUES (?)`,
-            //   haveOwner ? [nm, ownerId] : [nm]
-            // );
-            // ids.push(ins.insertId);
+            const [ins]: any = await db.execute(
+              haveOwner ? `INSERT INTO tags (name, owner_user_id) VALUES (?,?)`
+                        : `INSERT INTO tags (name) VALUES (?)`,
+              haveOwner ? [nm, ownerId] : [nm]
+            );
+            ids.push(ins.insertId);
 
             // const [ins]: any = await db.execute(
             //   haveOwner
@@ -1194,39 +1182,21 @@ app.post('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: a
             
             // ids.push(Number(ins?.recordset?.[0]?.id));
             
-            const ins: any = await db.execute(
-              haveOwner
-                ? `INSERT INTO tags (name, owner_user_id) OUTPUT INSERTED.id AS id VALUES (?,?)`
-                : `INSERT INTO tags (name) OUTPUT INSERTED.id AS id VALUES (?)`,
-              haveOwner ? [nm, ownerId] : [nm]
-            );
-            
-            ids.push(Number(ins?.recordset?.[0]?.id));
-            
-            
-            
+          
           }
         }
       }
     }
 
-    // ids = Array.from(new Set(ids));
-    ids = Array.from(new Set(ids)).filter((x) => Number.isFinite(x) && x > 0);
-
-    // for (const tid of ids) {
-    //   await db.execute(
-    //     'INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)',
-    //     [itemId, tid]
-    //   );
-    // }
-
-    for (const tid of ids) {
+      ids = Array.from(new Set(ids));
+        for (const tid of ids) {
       await db.execute(
-        `IF NOT EXISTS (SELECT 1 FROM item_tags WHERE item_id = ? AND tag_id = ?)
-           INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)`,
-        [itemId, tid, itemId, tid]
+        'INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)',
+        [itemId, tid]
       );
     }
+
+
     
     reply.send({ ok: true, added: ids.length });
   } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
@@ -1268,27 +1238,27 @@ app.post('/attributes', { preHandler: authGuard }, async (req: any, reply: any) 
     );
     if (dup.length) return reply.code(409).send({ message: 'attribute ya existe' });
 
-    // const [r]: any = await db.execute(
-    //   `INSERT INTO attribute_definitions (owner_user_id, name, attr_type, options_json)
-    //    VALUES (?,?,?,?)`,
-    //   [ownerId, name, ['text','number','date','list'].includes(String(attr_type)) ? attr_type : 'text',
-    //    options_json ? JSON.stringify(options_json) : null]
-    // );
-    // reply.send({ id: r.insertId, name, attr_type });
-    const r: any = await db.execute(
+    const [r]: any = await db.execute(
       `INSERT INTO attribute_definitions (owner_user_id, name, attr_type, options_json)
-       OUTPUT INSERTED.id AS id
        VALUES (?,?,?,?)`,
-      [
-        ownerId,
-        name,
-        ['text', 'number', 'date', 'list'].includes(String(attr_type)) ? String(attr_type) : 'text',
-        options_json ? JSON.stringify(options_json) : null
-      ]
+      [ownerId, name, ['text','number','date','list'].includes(String(attr_type)) ? attr_type : 'text',
+       options_json ? JSON.stringify(options_json) : null]
     );
+    reply.send({ id: r.insertId, name, attr_type });
+    // const r: any = await db.execute(
+    //   `INSERT INTO attribute_definitions (owner_user_id, name, attr_type, options_json)
+    //    OUTPUT INSERTED.id AS id
+    //    VALUES (?,?,?,?)`,
+    //   [
+    //     ownerId,
+    //     name,
+    //     ['text', 'number', 'date', 'list'].includes(String(attr_type)) ? String(attr_type) : 'text',
+    //     options_json ? JSON.stringify(options_json) : null
+    //   ]
+    // );
     
-    const newId = Number(r?.recordset?.[0]?.id);
-    reply.send({ id: newId, name, attr_type: ['text', 'number', 'date', 'list'].includes(String(attr_type)) ? String(attr_type) : 'text' });
+    // const newId = Number(r?.recordset?.[0]?.id);
+    // reply.send({ id: newId, name, attr_type: ['text', 'number', 'date', 'list'].includes(String(attr_type)) ? String(attr_type) : 'text' });
     
     
     
@@ -1463,24 +1433,24 @@ app.post('/items/:id/attributes', { preHandler: authGuard }, async (req: any, re
         );
         if (ex.length) attributeId = Number(ex[0].id);
         else {
-          // const [ins]: any = await db.execute(
-          //   `INSERT INTO attribute_definitions (owner_user_id, name, attr_type)
-          //    VALUES (?,?,?)`,
-          //   [ownerId, nm, a?.attrType && ['text','number','date','list'].includes(String(a.attrType)) ? a.attrType : 'text']
-          // );
-          // attributeId = Number(ins.insertId);
-          const ins: any = await db.execute(
+          const [ins]: any = await db.execute(
             `INSERT INTO attribute_definitions (owner_user_id, name, attr_type)
-             OUTPUT INSERTED.id AS id
              VALUES (?,?,?)`,
-            [
-              ownerId,
-              nm,
-              a?.attrType && ['text','number','date','list'].includes(String(a.attrType)) ? String(a.attrType) : 'text'
-            ]
+            [ownerId, nm, a?.attrType && ['text','number','date','list'].includes(String(a.attrType)) ? a.attrType : 'text']
           );
+          attributeId = Number(ins.insertId);
+          // const ins: any = await db.execute(
+          //   `INSERT INTO attribute_definitions (owner_user_id, name, attr_type)
+          //    OUTPUT INSERTED.id AS id
+          //    VALUES (?,?,?)`,
+          //   [
+          //     ownerId,
+          //     nm,
+          //     a?.attrType && ['text','number','date','list'].includes(String(a.attrType)) ? String(a.attrType) : 'text'
+          //   ]
+          // );
           
-          attributeId = Number(ins?.recordset?.[0]?.id);
+          // attributeId = Number(ins?.recordset?.[0]?.id);
           
           
           
