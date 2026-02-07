@@ -3567,52 +3567,63 @@ app.put('/presentations/:id', { preHandler: authGuard }, async (req: any, reply:
 //     reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
 //   }
 // });
+
 app.delete('/presentations/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
-  let tx: any = null;
+  const conn = await db.getConnection();
 
   try {
     const ownerId = Number(ensureAuth(req));
     const id = Number(req.params.id);
 
-    if (!Number.isFinite(ownerId) || ownerId <= 0) return reply.code(401).send({ message: 'unauthorized' });
-    if (!Number.isFinite(id) || id <= 0) return reply.code(400).send({ message: 'id inválido' });
+    if (!Number.isFinite(ownerId) || ownerId <= 0) {
+      return reply.code(401).send({ message: 'unauthorized' });
+    }
+    if (!Number.isFinite(id) || id <= 0) {
+      return reply.code(400).send({ message: 'id inválido' });
+    }
 
-    // 1) verificar que existe y es del dueño
-    const [p]: any = await db.execute(
+    // valida que exista y sea del owner
+    const [rows]: any = await conn.execute(
       'SELECT TOP 1 id FROM presentations WHERE id = ? AND owner_user_id = ?',
       [id, ownerId]
     );
-    if (!p?.length) return reply.code(404).send({ message: 'not_found' });
+    if (!rows?.length) {
+      return reply.code(404).send({ message: 'not_found' });
+    }
 
-    // 2) transacción
-    tx = await db.getConnection?.() ?? null; // <- si tu pool soporta getConnection
-    const cx = tx ?? db;
+    await conn.beginTransaction();
 
-    if (tx?.beginTransaction) await tx.beginTransaction();
-
-    // 3) borrar hijos primero (assets)
-    await cx.execute(
+    // ✅ 1) borrar hijos primero (assets)
+    await conn.execute(
       'DELETE FROM presentation_assets WHERE presentation_id = ?',
       [id]
     );
 
-    // 4) borrar padre
-    const [r]: any = await cx.execute(
+    // ✅ 2) borrar padre
+    const [r]: any = await conn.execute(
       'DELETE FROM presentations WHERE id = ? AND owner_user_id = ?',
       [id, ownerId]
     );
 
-    if (tx?.commit) await tx.commit();
+    // por seguridad
+    if (!r?.affectedRows) {
+      await conn.rollback();
+      return reply.code(404).send({ message: 'not_found' });
+    }
 
-    if (r?.affectedRows === 0) return reply.code(404).send({ message: 'not_found' });
+    await conn.commit();
     return reply.send({ ok: true });
   } catch (e: any) {
-    try { if (tx?.rollback) await tx.rollback(); } catch {}
-    return reply.code(500).send({ message: e?.message || 'error_interno' });
+    try { await conn.rollback(); } catch {}
+    return reply.code(500).send({
+      message: 'error_interno',
+      detail: e?.message || 'Ha ocurrido un error al eliminar la presentación.',
+    });
   } finally {
-    try { if (tx?.release) tx.release(); } catch {}
+    conn.release();
   }
 });
+
 
 // =================== PRESENTATION ASSETS ===================
 function parseMeta(raw: any) {
