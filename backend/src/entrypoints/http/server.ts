@@ -2696,47 +2696,65 @@ app.delete('/collections/:id/items/:itemId', { preHandler: authGuard }, async (r
 //     reply.send({ ok: true });
 //   } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 // });
+
 app.delete('/collections/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = Number(ensureAuth(req));
     const id = Number(req.params.id);
+
     if (!Number.isFinite(ownerId) || ownerId <= 0) return reply.code(401).send({ message: 'unauthorized' });
     if (!Number.isFinite(id) || id <= 0) return reply.code(400).send({ message: 'id inválido' });
 
     const [rows]: any = await db.execute(
-      'SELECT TOP 1 id FROM collections WHERE id = ? AND owner_user_id = ?',
-      [id, ownerId]
-    );
-    if (!rows?.length) return reply.code(404).send({ message: 'not_found' });
-
-    await db.execute(
       `
+      SET NOCOUNT ON;
       SET XACT_ABORT ON;
+
+      DECLARE @ownerId BIGINT = ?;
+      DECLARE @id BIGINT = ?;
+
+      IF NOT EXISTS (SELECT 1 FROM collections WHERE id=@id AND owner_user_id=@ownerId)
+      BEGIN
+        SELECT 404 AS status, 'not_found' AS message;
+        RETURN;
+      END
+
       BEGIN TRAN;
 
       -- 1) soltar hijas
       UPDATE collections
       SET parent_collection_id = NULL
-      WHERE owner_user_id = ? AND parent_collection_id = ?;
+      WHERE owner_user_id=@ownerId AND parent_collection_id=@id;
 
-      -- 2) borrar items linkeados
+      -- 2) soltar presentaciones (FK_presentations_collection)
+      UPDATE presentations
+      SET collection_id = NULL
+      WHERE collection_id = @id AND owner_user_id = @ownerId;
+
+      -- 3) borrar links
       DELETE FROM collection_items
-      WHERE collection_id = ?;
+      WHERE collection_id = @id;
 
-      -- 3) borrar colección
+      -- 4) borrar colección
       DELETE FROM collections
-      WHERE id = ? AND owner_user_id = ?;
+      WHERE id=@id AND owner_user_id=@ownerId;
 
       COMMIT;
+
+      SELECT 200 AS status, 'deleted' AS message;
       `,
-      [ownerId, id, id, id, ownerId]
+      [ownerId, id]
     );
+
+    const r0 = Array.isArray(rows) ? rows[0] : null;
+    if (Number(r0?.status) === 404) return reply.code(404).send({ message: 'not_found' });
 
     return reply.send({ ok: true });
   } catch (e: any) {
-    return reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
+    return reply.code(500).send({ message: e?.message || String(e) });
   }
 });
+
 
 // ------------------- SAVED SEARCHES -------------------
 app.post('/saved-searches', { preHandler: authGuard }, async (req: any, reply: any) => {
