@@ -1,4 +1,4 @@
-<!-- item-details.component.html (COMPLETO) -->
+<!-- item-details.component.html (COMPLETO) 
 <div class="item-details-page">
   <div class="details-inner">
     <a routerLink="/items/mine" class="back-link"> ← Volver al listado </a>
@@ -10,14 +10,14 @@
     <ng-template #contentTpl>
       <ng-container *ngIf="!error(); else errorTpl">
         <ng-container *ngIf="item() as it">
-          <!-- CARD PRINCIPAL -->
+        
           <section class="details-card">
-            <!-- Encabezado -->
+         
             <header class="details-header">
               <div class="title-block">
                 <span class="eyebrow">Ficha filatélica</span>
 
-                <!-- TÍTULO (view / edit) -->
+             
                 <h1 *ngIf="!isEditing()">{{ it.title || 'Sin título' }}</h1>
                 <input
                   *ngIf="isEditing()"
@@ -28,7 +28,7 @@
                   [disabled]="saving()"
                 />
 
-                <!-- SUBTÍTULO (País • Año) -->
+            
                 <p class="subtitle" *ngIf="!isEditing() && (it.country || it.issueYear)">
                   <span *ngIf="it.country">{{ it.country | titlecase }}</span>
                   <span *ngIf="it.country && it.issueYear"> • </span>
@@ -57,7 +57,7 @@
                 </div>
               </div>
 
-              <!-- Derecha: fechas + acciones -->
+            
               <div class="header-right">
                 <div class="header-meta" *ngIf="it.createdAt || it.updatedAt">
                   <div *ngIf="it.createdAt">
@@ -95,12 +95,12 @@
               </div>
             </header>
 
-            <!-- Layout 2 columnas -->
+       
             <div class="details-layout">
-              <!-- Columna izquierda: imagen -->
+         
               <aside class="left-column">
                 <div class="image-card">
-                  <!-- ✅ GALERÍA / CARRUSEL (contenida, no rompe el layout) -->
+                  
                   <div class="gallery" *ngIf="getGalleryUrls(it).length; else noCover">
                     <button
                       type="button"
@@ -133,7 +133,7 @@
                       ›
                     </button>
 
-                    <!-- Puntos -->
+
                     <div class="dots" *ngIf="getGalleryUrls(it).length > 1">
                       <button
                         type="button"
@@ -145,7 +145,7 @@
                       ></button>
                     </div>
 
-                    <!-- Miniaturas -->
+                    
                     <div class="thumbs" *ngIf="getGalleryUrls(it).length > 1">
                       <button
                         type="button"
@@ -176,7 +176,7 @@
                       {{ it.visibility === 'public' ? 'Público' : 'Privado' }}
                     </span>
 
-                    <!-- Contador -->
+                    
                     <span class="badge soft" *ngIf="getGalleryUrls(it).length">
                       {{ getGalleryUrls(it).length }} img
                     </span>
@@ -184,14 +184,14 @@
                 </div>
               </aside>
 
-              <!-- Columna derecha: información -->
+              
               <section class="right-column">
-                <!-- Card de metadatos -->
+                
                 <section class="section-card">
                   <h2 class="section-title">Datos principales</h2>
 
                   <dl class="meta-grid">
-                    <!-- País -->
+                    
                     <div>
                       <dt>País</dt>
                       <dd *ngIf="!isEditing()">
@@ -208,7 +208,7 @@
                       </dd>
                     </div>
 
-                    <!-- Año de emisión -->
+                    
                     <div>
                       <dt>Año de emisión</dt>
                       <dd *ngIf="!isEditing()">{{ it.issueYear || '—' }}</dd>
@@ -225,7 +225,7 @@
                       </dd>
                     </div>
 
-                    <!-- Condición -->
+
                     <div>
                       <dt>Condición</dt>
                       <dd *ngIf="!isEditing()">{{ it.conditionCode || '—' }}</dd>
@@ -240,7 +240,7 @@
                       </dd>
                     </div>
 
-                    <!-- Código de catálogo -->
+                    
                     <div>
                       <dt>Código de catálogo</dt>
                       <dd *ngIf="!isEditing()">{{ it.catalogCode || '—' }}</dd>
@@ -255,7 +255,7 @@
                       </dd>
                     </div>
 
-                    <!-- Valor facial -->
+                    
                     <div>
                       <dt>Valor facial</dt>
 
@@ -292,7 +292,7 @@
                       </dd>
                     </div>
 
-                    <!-- Fecha de adquisición -->
+                    
                     <div>
                       <dt>Fecha de adquisición</dt>
 
@@ -313,7 +313,7 @@
                   </dl>
                 </section>
 
-                <!-- Card descripción -->
+             
                 <section class="section-card">
                   <h2 class="section-title">Descripción</h2>
 
@@ -330,11 +330,11 @@
                   ></textarea>
                 </section>
 
-                <!-- ✅ Card tags (MEJORADO) -->
+                
                 <section class="section-card">
                   <h2 class="section-title">Tags</h2>
 
-                  <!-- VIEW -->
+
                   <ng-container *ngIf="!isEditing(); else tagsEditTpl">
                     <div class="tags-list" *ngIf="it.tags?.length; else noTagsTpl">
                       <span class="tag-pill" *ngFor="let t of it.tags">#{{ t.name }}</span>
@@ -345,10 +345,10 @@
                     </ng-template>
                   </ng-container>
 
-                  <!-- EDIT -->
+                  
                   <ng-template #tagsEditTpl>
                     <form class="tags-edit-form" (submit)="addNewTagFromInput(); $event.preventDefault()">
-                      <!-- Lista editable -->
+                    
                       <div class="tags-list" *ngIf="draftTagNames?.length; else noDraftTagsTpl">
                         <span
                           class="tag-pill editable"
@@ -396,7 +396,7 @@
                   </ng-template>
                 </section>
 
-                <!-- Card atributos (solo lectura por ahora) -->
+                
                 <section class="section-card" *ngIf="it.attributes?.length">
                   <h2 class="section-title">Atributos adicionales</h2>
                   <div class="attrs-grid">
@@ -409,6 +409,548 @@
                     </article>
                   </div>
                   <p class="hint" *ngIf="isEditing()">(Edición de atributos)</p>
+                </section>
+              </section>
+            </div>
+          </section>
+        </ng-container>
+      </ng-container>
+
+      <ng-template #errorTpl>
+        <div class="error-box">{{ error() }}</div>
+      </ng-template>
+    </ng-template>
+  </div>
+</div>
+-->
+<div class="item-details-page">
+  <div class="details-inner">
+    <a routerLink="/items/mine" class="back-link"> ← Volver al listado </a>
+
+    <ng-container *ngIf="busy(); else contentTpl">
+      <div class="loading">Cargando detalles…</div>
+    </ng-container>
+
+    <ng-template #contentTpl>
+      <ng-container *ngIf="!error(); else errorTpl">
+        <ng-container *ngIf="item() as it">
+          <section class="details-card">
+            <header class="details-header">
+              <div class="title-block">
+                <span class="eyebrow">Ficha filatélica</span>
+
+                <h1 *ngIf="!isEditing()">{{ it.title || 'Sin título' }}</h1>
+                <input
+                  *ngIf="isEditing()"
+                  class="text-input title-input"
+                  [ngModel]="draftValue.title"
+                  (ngModelChange)="patchDraft({ title: $event })"
+                  placeholder="Título"
+                  [disabled]="saving()"
+                />
+
+                <p class="subtitle" *ngIf="!isEditing() && (it.country || it.issueYear)">
+                  <span *ngIf="it.country">{{ it.country | titlecase }}</span>
+                  <span *ngIf="it.country && it.issueYear"> • </span>
+                  <span *ngIf="it.issueYear">{{ it.issueYear }}</span>
+                </p>
+
+                <div class="subtitle edit-subtitle" *ngIf="isEditing()">
+                  <div class="inline-row">
+                    <input
+                      class="text-input"
+                      [ngModel]="draftValue.country"
+                      (ngModelChange)="patchDraft({ country: $event })"
+                      placeholder="País"
+                      [disabled]="saving()"
+                    />
+                    <input
+                      class="text-input"
+                      [ngModel]="draftValue.issueYear"
+                      (ngModelChange)="patchDraft({ issueYear: $event })"
+                      type="number"
+                      placeholder="Año"
+                      min="0"
+                      [disabled]="saving()"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div class="header-right">
+                <div class="header-meta" *ngIf="it.createdAt || it.updatedAt">
+                  <div *ngIf="it.createdAt">
+                    <span class="meta-label">Creado</span>
+                    <span class="meta-value">
+                      {{ it.createdAt | date: 'dd/MM/yyyy HH:mm':'UTC' }}
+                    </span>
+                  </div>
+                  <div *ngIf="it.updatedAt">
+                    <span class="meta-label">Actualizado</span>
+                    <span class="meta-value">
+                      {{ it.updatedAt | date: 'dd/MM/yyyy HH:mm':'UTC' }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="actions">
+                  <button class="btn sm" *ngIf="!isEditing()" (click)="startEdit()">Editar</button>
+
+                  <button class="btn sm" *ngIf="isEditing()" (click)="saveEdit()" [disabled]="saving()">
+                    {{ saving() ? 'Guardando…' : 'Guardar' }}
+                  </button>
+
+                  <button class="btn sm danger" *ngIf="isEditing()" (click)="cancelEdit()" [disabled]="saving()">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </header>
+
+            <div class="details-layout">
+              <aside class="left-column">
+                <div class="image-card">
+                  <div class="gallery" *ngIf="getGalleryUrls(it).length; else noCover">
+                    <button
+                      type="button"
+                      class="nav prev"
+                      (click)="prevImage(it)"
+                      [disabled]="getGalleryUrls(it).length <= 1"
+                      aria-label="Imagen anterior"
+                      title="Anterior"
+                    >
+                      ‹
+                    </button>
+
+                    <div class="stage">
+                      <img
+                        class="stage-img"
+                        [src]="getGalleryUrls(it)[activeImageIndex]"
+                        [alt]="it.title || 'Pieza filatélica'"
+                        loading="lazy"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      class="nav next"
+                      (click)="nextImage(it)"
+                      [disabled]="getGalleryUrls(it).length <= 1"
+                      aria-label="Imagen siguiente"
+                      title="Siguiente"
+                    >
+                      ›
+                    </button>
+
+                    <div class="dots" *ngIf="getGalleryUrls(it).length > 1">
+                      <button
+                        type="button"
+                        class="dot"
+                        *ngFor="let _ of getGalleryUrls(it); let i = index; trackBy: trackByIndex"
+                        [class.active]="i === activeImageIndex"
+                        (click)="goToImage(i)"
+                        aria-label="Ir a imagen"
+                      ></button>
+                    </div>
+
+                    <div class="thumbs" *ngIf="getGalleryUrls(it).length > 1">
+                      <button
+                        type="button"
+                        class="thumb"
+                        *ngFor="let url of getGalleryUrls(it); let i = index; trackBy: trackByIndex"
+                        (click)="goToImage(i)"
+                        [class.active]="i === activeImageIndex"
+                        aria-label="Seleccionar imagen"
+                        title="Seleccionar imagen"
+                      >
+                        <img [src]="url" alt="Miniatura" loading="lazy" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <ng-template #noCover>
+                    <div class="no-cover">Sin imagen</div>
+                  </ng-template>
+
+                  <div class="image-caption">
+                    <span class="badge">{{ it.country ? (it.country | titlecase) : 'País no definido' }}</span>
+                    <span class="badge" *ngIf="it.issueYear">Año {{ it.issueYear }}</span>
+
+                    <span class="badge soft" *ngIf="it.visibility">
+                      {{ it.visibility === 'public' ? 'Público' : 'Privado' }}
+                    </span>
+
+                    <span class="badge soft" *ngIf="getGalleryUrls(it).length">
+                      {{ getGalleryUrls(it).length }} img
+                    </span>
+                  </div>
+                </div>
+              </aside>
+
+              <section class="right-column">
+                <section class="section-card">
+                  <h2 class="section-title">Datos principales</h2>
+
+                  <dl class="meta-grid">
+                    <div>
+                      <dt>País</dt>
+                      <dd *ngIf="!isEditing()">{{ it.country ? (it.country | titlecase) : '—' }}</dd>
+                      <dd *ngIf="isEditing()">
+                        <input
+                          class="text-input"
+                          [ngModel]="draftValue.country"
+                          (ngModelChange)="patchDraft({ country: $event })"
+                          placeholder="País"
+                          [disabled]="saving()"
+                        />
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt>Año de emisión</dt>
+                      <dd *ngIf="!isEditing()">{{ it.issueYear || '—' }}</dd>
+                      <dd *ngIf="isEditing()">
+                        <input
+                          class="text-input"
+                          [ngModel]="draftValue.issueYear"
+                          (ngModelChange)="patchDraft({ issueYear: $event })"
+                          type="number"
+                          placeholder="Año"
+                          min="0"
+                          [disabled]="saving()"
+                        />
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt>Condición</dt>
+                      <dd *ngIf="!isEditing()">{{ it.conditionCode || '—' }}</dd>
+                      <dd *ngIf="isEditing()">
+                        <input
+                          class="text-input"
+                          [ngModel]="draftValue.conditionCode"
+                          (ngModelChange)="patchDraft({ conditionCode: $event })"
+                          placeholder="Condición (ej: F)"
+                          [disabled]="saving()"
+                        />
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt>Código de catálogo</dt>
+                      <dd *ngIf="!isEditing()">{{ it.catalogCode || '—' }}</dd>
+                      <dd *ngIf="isEditing()">
+                        <input
+                          class="text-input"
+                          [ngModel]="draftValue.catalogCode"
+                          (ngModelChange)="patchDraft({ catalogCode: $event })"
+                          placeholder="Código de catálogo"
+                          [disabled]="saving()"
+                        />
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt>Valor facial</dt>
+
+                      <dd *ngIf="!isEditing()">
+                        <ng-container *ngIf="it.faceValue !== null && it.faceValue !== undefined; else dash">
+                          {{ it.faceValue }}
+                          <span *ngIf="it.currency">({{ it.currency }})</span>
+                        </ng-container>
+                        <ng-template #dash>—</ng-template>
+                      </dd>
+
+                      <dd *ngIf="isEditing()">
+                        <div class="inline-row">
+                          <input
+                            class="text-input"
+                            [ngModel]="draftValue.faceValue"
+                            (ngModelChange)="patchDraft({ faceValue: $event })"
+                            type="number"
+                            placeholder="Valor"
+                            min="0"
+                            step="0.01"
+                            [disabled]="saving()"
+                          />
+                          <input
+                            class="text-input"
+                            [ngModel]="draftValue.currency"
+                            (ngModelChange)="patchDraft({ currency: $event })"
+                            placeholder="Moneda (ej: EUR)"
+                            [disabled]="saving()"
+                          />
+                        </div>
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt>Fecha de adquisición</dt>
+
+                      <dd *ngIf="!isEditing()">
+                        {{ it.acquisitionDate ? (it.acquisitionDate | date: 'dd/MM/yyyy':'UTC') : '—' }}
+                      </dd>
+
+                      <dd *ngIf="isEditing()">
+                        <input
+                          class="text-input"
+                          [ngModel]="draftValue.acquisitionDate"
+                          (ngModelChange)="patchDraft({ acquisitionDate: $event })"
+                          type="date"
+                          [disabled]="saving()"
+                        />
+                      </dd>
+                    </div>
+                  </dl>
+                </section>
+
+                <section class="section-card">
+                  <h2 class="section-title">Descripción</h2>
+
+                  <p class="description-text" *ngIf="!isEditing()">{{ it.description || '—' }}</p>
+
+                  <textarea
+                    *ngIf="isEditing()"
+                    class="text-area"
+                    [ngModel]="draftValue.description"
+                    (ngModelChange)="patchDraft({ description: $event })"
+                    rows="4"
+                    placeholder="Escribe una descripción..."
+                    [disabled]="saving()"
+                  ></textarea>
+                </section>
+
+                <!-- ✅ TAGS -->
+                <section class="section-card">
+                  <h2 class="section-title">Tags</h2>
+
+                  <!-- VIEW -->
+                  <ng-container *ngIf="!isEditing(); else tagsEditTpl">
+                    <div class="tags-list" *ngIf="it.tags?.length; else noTagsTpl">
+                      <span class="tag-pill" *ngFor="let t of it.tags">#{{ t.name }}</span>
+                    </div>
+
+                    <ng-template #noTagsTpl>
+                      <p class="hint">—</p>
+                    </ng-template>
+                  </ng-container>
+
+                  <!-- EDIT -->
+                  <ng-template #tagsEditTpl>
+                    <form class="tags-edit-form" (submit)="addNewTagFromInput(); $event.preventDefault()">
+                      <div class="tags-list" *ngIf="draftTags?.length; else noDraftTagsTpl">
+                        <span
+                          class="tag-pill editable"
+                          *ngFor="let t of draftTags; let i = index; trackBy: trackByIndex"
+                          (click)="focusTag(i)"
+                        >
+                          #
+                          <input
+                            #tagInput
+                            class="tag-edit-input"
+                            [ngModel]="t.name"
+                            (ngModelChange)="renameDraftTagAt(i, $event)"
+                            [name]="'tag_' + i"
+                            placeholder="Tag"
+                            (keydown.enter)="$event.preventDefault()"
+                            [disabled]="saving()"
+                            autocomplete="off"
+                            spellcheck="false"
+                            (focus)="selectAll($event)"
+                            (click)="$event.stopPropagation()"
+                          />
+
+                          <button
+                            type="button"
+                            class="tag-x"
+                            (click)="removeDraftTagAt(i); $event.stopPropagation()"
+                            aria-label="Quitar tag"
+                            [disabled]="saving()"
+                            title="Eliminar"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      </div>
+
+                      <ng-template #noDraftTagsTpl>
+                        <p class="hint">No has agregado tags.</p>
+                      </ng-template>
+
+                      <!-- ✅ input nuevo tag -->
+                      <div class="inline-row" style="margin-top: 10px;">
+                        <input
+                          #newTagInput
+                          class="text-input"
+                          [(ngModel)]="newTagName"
+                          name="newTagName"
+                          placeholder="Agregar tag (Enter)…"
+                          [disabled]="saving()"
+                          (keydown.enter)="addNewTagFromInput(); $event.preventDefault()"
+                        />
+                        <button type="button" class="btn sm" (click)="addNewTagFromInput()" [disabled]="saving()">
+                          Añadir
+                        </button>
+                      </div>
+
+                      <p class="hint">Puedes renombrar, agregar o quitar tags. Se guarda al presionar “Guardar”.</p>
+                    </form>
+                  </ng-template>
+                </section>
+
+                <!-- ✅ ATRIBUTOS -->
+                <section class="section-card">
+                  <h2 class="section-title">Atributos adicionales</h2>
+
+                  <!-- VIEW -->
+                  <ng-container *ngIf="!isEditing(); else attrsEditTpl">
+                    <div class="attrs-grid" *ngIf="it.attributes?.length; else noAttrsTpl">
+                      <article class="attr-box" *ngFor="let a of it.attributes">
+                        <div class="attr-header">
+                          <span class="attr-chip">{{ a.attrType || 'Texto' }}</span>
+                          <span class="attr-name">{{ a.name }}</span>
+                        </div>
+                        <p class="attr-value">
+                          {{ a.valueText ?? a.valueNumber ?? a.valueDate ?? a.value ?? '—' }}
+                        </p>
+                      </article>
+                    </div>
+
+                    <ng-template #noAttrsTpl>
+                      <p class="hint">—</p>
+                    </ng-template>
+                  </ng-container>
+
+                  <!-- EDIT -->
+                  <ng-template #attrsEditTpl>
+                    <!-- lista editable -->
+                    <div class="attrs-grid" *ngIf="draftAttrs?.length; else noDraftAttrsTpl">
+                      <article class="attr-box" *ngFor="let a of draftAttrs; let i = index; trackBy: trackByIndex">
+                        <div class="attr-header">
+                          <span class="attr-chip">{{ a.attrType || 'Texto' }}</span>
+                          <span class="attr-name">{{ a.name }}</span>
+
+                          <button
+                            type="button"
+                            class="tag-x"
+                            title="Eliminar atributo"
+                            aria-label="Eliminar atributo"
+                            (click)="removeDraftAttrAt(i)"
+                            [disabled]="saving()"
+                            style="margin-left:auto;"
+                          >
+                            ×
+                          </button>
+                        </div>
+
+                        <!-- input según tipo -->
+                        <ng-container [ngSwitch]="a.attrType">
+                          <input
+                            *ngSwitchCase="'number'"
+                            class="text-input"
+                            type="number"
+                            [ngModel]="a.valueNumber"
+                            (ngModelChange)="updateDraftAttrValue(i, $event)"
+                            placeholder="Valor numérico"
+                            [disabled]="saving()"
+                          />
+
+                          <input
+                            *ngSwitchCase="'date'"
+                            class="text-input"
+                            type="date"
+                            [ngModel]="a.valueDate"
+                            (ngModelChange)="updateDraftAttrValue(i, $event)"
+                            [disabled]="saving()"
+                          />
+
+                          <input
+                            *ngSwitchDefault
+                            class="text-input"
+                            [ngModel]="a.valueText"
+                            (ngModelChange)="updateDraftAttrValue(i, $event)"
+                            placeholder="Valor"
+                            [disabled]="saving()"
+                          />
+                        </ng-container>
+                      </article>
+                    </div>
+
+                    <ng-template #noDraftAttrsTpl>
+                      <p class="hint">No hay atributos.</p>
+                    </ng-template>
+
+                    <!-- agregar atributo -->
+                    <div class="section-card" style="margin-top: 12px;">
+                      <div class="inline-row">
+                        <select
+                          class="text-input"
+                          [ngModel]="newAttrDefId"
+                          (ngModelChange)="setNewAttrDef($event)"
+                          [disabled]="saving()"
+                        >
+                          <option [ngValue]="null">Selecciona atributo…</option>
+                          <option *ngFor="let d of attrDefs; trackBy: trackByIndex" [ngValue]="d.id">
+                            {{ d.name }} ({{ d.attrType }})
+                          </option>
+                        </select>
+
+                        <button
+                          type="button"
+                          class="btn sm"
+                          (click)="addOrUpdateDraftAttrFromNew()"
+                          [disabled]="saving() || !newAttrDefId"
+                        >
+                          Añadir / Actualizar
+                        </button>
+                      </div>
+
+                      <!-- input valor nuevo según tipo seleccionado -->
+                      <ng-container *ngIf="newAttrDefId as selId">
+                        <ng-container *ngIf="attrDefs?.length">
+                          <ng-container
+                            *ngIf="attrDefs.find(d => d.id === selId) as def"
+                            [ngSwitch]="def.attrType"
+                          >
+                            <input
+                              *ngSwitchCase="'number'"
+                              class="text-input"
+                              style="margin-top: 10px;"
+                              type="number"
+                              [(ngModel)]="newAttrValueNumber"
+                              name="newAttrValueNumber"
+                              placeholder="Valor numérico"
+                              [disabled]="saving()"
+                            />
+
+                            <input
+                              *ngSwitchCase="'date'"
+                              class="text-input"
+                              style="margin-top: 10px;"
+                              type="date"
+                              [(ngModel)]="newAttrValueDate"
+                              name="newAttrValueDate"
+                              [disabled]="saving()"
+                            />
+
+                            <input
+                              *ngSwitchDefault
+                              class="text-input"
+                              style="margin-top: 10px;"
+                              [(ngModel)]="newAttrValueText"
+                              name="newAttrValueText"
+                              placeholder="Valor"
+                              [disabled]="saving()"
+                            />
+                          </ng-container>
+                        </ng-container>
+                      </ng-container>
+
+                      <p class="hint" style="margin-top: 8px;">
+                        Puedes agregar, actualizar o quitar atributos. Se guarda al presionar “Guardar”.
+                      </p>
+                    </div>
+                  </ng-template>
                 </section>
               </section>
             </div>
