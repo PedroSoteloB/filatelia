@@ -1194,18 +1194,15 @@ app.post('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: a
             
             // ids.push(Number(ins?.recordset?.[0]?.id));
             
-            const [rowsInsTag]: any = await db.execute(
+            const ins: any = await db.execute(
               haveOwner
-                ? `INSERT INTO tags (name, owner_user_id)
-                   OUTPUT INSERTED.id AS id
-                   VALUES (?,?)`
-                : `INSERT INTO tags (name)
-                   OUTPUT INSERTED.id AS id
-                   VALUES (?)`,
+                ? `INSERT INTO tags (name, owner_user_id) OUTPUT INSERTED.id AS id VALUES (?,?)`
+                : `INSERT INTO tags (name) OUTPUT INSERTED.id AS id VALUES (?)`,
               haveOwner ? [nm, ownerId] : [nm]
             );
             
-            ids.push(Number(rowsInsTag?.[0]?.id));
+            ids.push(Number(ins?.recordset?.[0]?.id));
+            
             
             
           }
@@ -1278,19 +1275,21 @@ app.post('/attributes', { preHandler: authGuard }, async (req: any, reply: any) 
     //    options_json ? JSON.stringify(options_json) : null]
     // );
     // reply.send({ id: r.insertId, name, attr_type });
-    const [rowsR]: any = await db.execute(
+    const r: any = await db.execute(
       `INSERT INTO attribute_definitions (owner_user_id, name, attr_type, options_json)
        OUTPUT INSERTED.id AS id
        VALUES (?,?,?,?)`,
       [
         ownerId,
         name,
-        ['text','number','date','list'].includes(String(attr_type)) ? String(attr_type) : 'text',
+        ['text', 'number', 'date', 'list'].includes(String(attr_type)) ? String(attr_type) : 'text',
         options_json ? JSON.stringify(options_json) : null
       ]
     );
     
-    reply.send({ id: Number(rowsR?.[0]?.id), name, attr_type });
+    const newId = Number(r?.recordset?.[0]?.id);
+    reply.send({ id: newId, name, attr_type: ['text', 'number', 'date', 'list'].includes(String(attr_type)) ? String(attr_type) : 'text' });
+    
     
     
     
@@ -1470,7 +1469,7 @@ app.post('/items/:id/attributes', { preHandler: authGuard }, async (req: any, re
           //   [ownerId, nm, a?.attrType && ['text','number','date','list'].includes(String(a.attrType)) ? a.attrType : 'text']
           // );
           // attributeId = Number(ins.insertId);
-          const [rowsIns]: any = await db.execute(
+          const ins: any = await db.execute(
             `INSERT INTO attribute_definitions (owner_user_id, name, attr_type)
              OUTPUT INSERTED.id AS id
              VALUES (?,?,?)`,
@@ -1481,7 +1480,8 @@ app.post('/items/:id/attributes', { preHandler: authGuard }, async (req: any, re
             ]
           );
           
-          attributeId = Number(rowsIns?.[0]?.id);
+          attributeId = Number(ins?.recordset?.[0]?.id);
+          
           
           
           
