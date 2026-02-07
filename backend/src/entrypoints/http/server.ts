@@ -1529,6 +1529,156 @@ app.delete('/items/:id/attributes/:attributeId', { preHandler: authGuard }, asyn
   } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
+
+
+// ------------------- TAGS UPSERT (NUEVO) -------------------
+app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
+  try {
+    const ownerId = ensureAuth(req);
+    const itemId = Number(req.params.id);
+    if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'itemId inválido' });
+
+    const [it]: any = await db.execute(
+      'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
+      [itemId, ownerId]
+    );
+    if (!it?.length) return reply.code(404).send({ message: 'item_not_found' });
+
+    const { tagNames = [] } = req.body || {};
+    const names: string[] = Array.isArray(tagNames)
+      ? tagNames.map((x: any) => String(x ?? '').trim()).filter(Boolean)
+      : [];
+
+    if (!names.length) return reply.code(400).send({ message: 'tagNames requerido (array)' });
+
+    // evita duplicados por nombre (case-insensitive opcional)
+    const uniqueNames = Array.from(new Set(names));
+
+    const createdOrFound: number[] = [];
+
+    for (const nm of uniqueNames) {
+      // 1) buscar id
+      const [rowsFind]: any = await db.execute(
+        `SELECT TOP 1 id
+           FROM tags
+          WHERE owner_user_id = ? AND name = ?`,
+        [ownerId, nm]
+      );
+
+      let tagId: number | null = rowsFind?.length ? Number(rowsFind[0].id) : null;
+
+      // 2) si no existe -> insertar y leer SCOPE_IDENTITY()
+      if (!tagId || !Number.isFinite(tagId) || tagId <= 0) {
+        const [rowsIns]: any = await db.execute(
+          `INSERT INTO tags (name, owner_user_id)
+           VALUES (?, ?);
+           SELECT CAST(SCOPE_IDENTITY() AS INT) AS id;`,
+          [nm, ownerId]
+        );
+
+        tagId = rowsIns?.length ? Number(rowsIns[0].id) : null;
+      }
+
+      if (!tagId || !Number.isFinite(tagId) || tagId <= 0) {
+        return reply.code(500).send({ message: `no_se_pudo_obtener_id_tag: ${nm}` });
+      }
+
+      createdOrFound.push(tagId);
+
+      // 3) vincular al item (sin duplicar)
+      await db.execute(
+        `IF NOT EXISTS (SELECT 1 FROM item_tags WHERE item_id = ? AND tag_id = ?)
+           INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?);`,
+        [itemId, tagId, itemId, tagId]
+      );
+    }
+
+    reply.send({ ok: true, tagIds: createdOrFound });
+  } catch (e: any) {
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
+  }
+});
+
+// ------------------- ATTRIBUTES UPSERT (NUEVO) -------------------
+app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
+  try {
+    const ownerId = ensureAuth(req);
+    const itemId = Number(req.params.id);
+    if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'itemId inválido' });
+
+    const [it]: any = await db.execute(
+      'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
+      [itemId, ownerId]
+    );
+    if (!it?.length) return reply.code(404).send({ message: 'item_not_found' });
+
+    const body = req.body || {};
+    const attrs = Array.isArray(body) ? body : (Array.isArray(body?.attributes) ? body.attributes : []);
+    if (!attrs.length) return reply.code(400).send({ message: 'attributes requerido (array)' });
+
+    let upserted = 0;
+
+    for (const a of attrs) {
+      const nm = String(a?.attributeName ?? '').trim();
+      if (!nm) continue;
+
+      const attrType =
+        a?.attrType && ['text', 'number', 'date', 'list'].includes(String(a.attrType))
+          ? String(a.attrType)
+          : 'text';
+
+      // 1) buscar id del atributo
+      const [rowsFind]: any = await db.execute(
+        `SELECT TOP 1 id
+           FROM attribute_definitions
+          WHERE owner_user_id = ? AND name = ?`,
+        [ownerId, nm]
+      );
+
+      let attributeId: number | null = rowsFind?.length ? Number(rowsFind[0].id) : null;
+
+      // 2) si no existe -> insertar y leer SCOPE_IDENTITY()
+      if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
+        const [rowsIns]: any = await db.execute(
+          `INSERT INTO attribute_definitions (owner_user_id, name, attr_type)
+           VALUES (?, ?, ?);
+           SELECT CAST(SCOPE_IDENTITY() AS INT) AS id;`,
+          [ownerId, nm, attrType]
+        );
+
+        attributeId = rowsIns?.length ? Number(rowsIns[0].id) : null;
+      }
+
+      if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
+        return reply.code(500).send({ message: `no_se_pudo_obtener_id_attribute: ${nm}` });
+      }
+
+      // valores
+      const vText = a?.valueText ?? (typeof a?.value === 'string' ? a.value : null);
+      const vNum = a?.valueNumber ?? (Number.isFinite(Number(a?.value)) ? Number(a.value) : null);
+      const vDate = a?.valueDate ?? null;
+
+      // 3) upsert por (item_id, attribute_id)
+      await db.execute(
+        `DELETE FROM item_attributes WHERE item_id = ? AND attribute_id = ?;`,
+        [itemId, attributeId]
+      );
+
+      await db.execute(
+        `INSERT INTO item_attributes (item_id, attribute_id, value_text, value_number, value_date)
+         VALUES (?,?,?,?,?);`,
+        [itemId, attributeId, vText ?? null, vNum ?? null, vDate ?? null]
+      );
+
+      upserted++;
+    }
+
+    reply.send({ ok: true, count: upserted });
+  } catch (e: any) {
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
+  }
+});
+
 // ------------------- COLLECTIONS -------------------
 function toAbsFromFsOrUrl(p?: string | null): string | null {
   if (!p) return null;
