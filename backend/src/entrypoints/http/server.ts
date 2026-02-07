@@ -1539,7 +1539,7 @@ function rowsOf(res: any): any[] {
 }
 
 // ------------------- TAGS UPSERT (NUEVO) -------------------
-// ------------------- TAGS UPSERT (ROBUSTO) -------------------
+
 app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     // 1) ownerId SIEMPRE desde JWT
@@ -1576,7 +1576,7 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
     const tagIds: number[] = [];
 
     for (const nm of uniqueNames) {
-      // A) buscar tagId
+      // A) buscar tagId (del owner)
       const findRes: any = await db.execute(
         'SELECT TOP 1 id FROM tags WHERE owner_user_id = ? AND name = ?',
         [ownerId, nm]
@@ -1591,7 +1591,31 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
           [nm, ownerId]
         );
 
-        // C) re-buscar id (por owner + name)
+        // 🔥 CAMBIO 1: fallback por name sin owner (agarra el último)
+        const pickRes: any = await db.execute(
+          'SELECT TOP 1 id, owner_user_id FROM tags WHERE name = ? ORDER BY id DESC',
+          [nm]
+        );
+        const pickRows = rowsOf(pickRes);
+
+        const pickedId: number | null = pickRows.length ? Number(pickRows[0].id) : null;
+        const pickedOwner: any = pickRows.length ? pickRows[0].owner_user_id : null;
+
+        if (!pickedId || !Number.isFinite(pickedId) || pickedId <= 0) {
+          return reply.code(500).send({ message: `no_se_pudo_obtener_id_tag: ${nm}` });
+        }
+
+        // 🔥 CAMBIO 2: si owner quedó NULL/0, lo corregimos; si es otro owner, 409
+        if (pickedOwner === null || Number(pickedOwner) === 0) {
+          await db.execute(
+            'UPDATE tags SET owner_user_id = ? WHERE id = ?',
+            [ownerId, pickedId]
+          );
+        } else if (Number(pickedOwner) !== Number(ownerId)) {
+          return reply.code(409).send({ message: `tag_name_conflict: ${nm}` });
+        }
+
+        // 🔥 CAMBIO 3: ahora sí re-buscar por owner+name
         const find2Res: any = await db.execute(
           'SELECT TOP 1 id FROM tags WHERE owner_user_id = ? AND name = ? ORDER BY id DESC',
           [ownerId, nm]
@@ -1631,7 +1655,6 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
 
 
 // ------------------- ATTRIBUTES UPSERT (SQL SERVER OK) -------------------
-// ------------------- ATTRIBUTES UPSERT (ROBUSTO) -------------------
 app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     // 1) ownerId SIEMPRE desde JWT
@@ -1678,7 +1701,6 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
         const defRows = rowsOf(defRes);
         attributeId = defRows.length ? Number(defRows[0].id) : null;
 
-        // si mandaron un id que no es del owner => 400 (no revienta)
         if (!attributeId) {
           return reply.code(400).send({ message: `attributeId no válido para owner: ${reqAttrId}` });
         }
@@ -1701,6 +1723,31 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
             [ownerId, nm, attrType]
           );
 
+          // 🔥 CAMBIO 1: fallback por name sin owner (agarra el último)
+          const pickRes: any = await db.execute(
+            'SELECT TOP 1 id, owner_user_id FROM attribute_definitions WHERE name = ? ORDER BY id DESC',
+            [nm]
+          );
+          const pickRows = rowsOf(pickRes);
+
+          const pickedId: number | null = pickRows.length ? Number(pickRows[0].id) : null;
+          const pickedOwner: any = pickRows.length ? pickRows[0].owner_user_id : null;
+
+          if (!pickedId || !Number.isFinite(pickedId) || pickedId <= 0) {
+            return reply.code(500).send({ message: `no_se_pudo_obtener_id_attribute: ${nm}` });
+          }
+
+          // 🔥 CAMBIO 2: si owner quedó NULL/0, lo corregimos; si es otro owner, 409
+          if (pickedOwner === null || Number(pickedOwner) === 0) {
+            await db.execute(
+              'UPDATE attribute_definitions SET owner_user_id = ? WHERE id = ?',
+              [ownerId, pickedId]
+            );
+          } else if (Number(pickedOwner) !== Number(ownerId)) {
+            return reply.code(409).send({ message: `attribute_name_conflict: ${nm}` });
+          }
+
+          // 🔥 CAMBIO 3: ahora sí re-buscar por owner+name
           const find2Res: any = await db.execute(
             'SELECT TOP 1 id FROM attribute_definitions WHERE owner_user_id = ? AND name = ? ORDER BY id DESC',
             [ownerId, nm]
@@ -1739,6 +1786,7 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
     return reply.code(500).send({ message: raw || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
+
 
 
 // ------------------- COLLECTIONS -------------------
