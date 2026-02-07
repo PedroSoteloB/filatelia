@@ -2702,56 +2702,58 @@ app.delete('/collections/:id', { preHandler: authGuard }, async (req: any, reply
     const ownerId = Number(ensureAuth(req));
     const id = Number(req.params.id);
 
-    if (!Number.isFinite(ownerId) || ownerId <= 0) return reply.code(401).send({ message: 'unauthorized' });
-    if (!Number.isFinite(id) || id <= 0) return reply.code(400).send({ message: 'id inválido' });
+    if (!Number.isFinite(ownerId) || ownerId <= 0) {
+      return reply.code(401).send({ message: 'unauthorized' });
+    }
+    if (!Number.isFinite(id) || id <= 0) {
+      return reply.code(400).send({ message: 'id inválido' });
+    }
 
-    const [rows]: any = await db.execute(
-      `
-      SET NOCOUNT ON;
-      SET XACT_ABORT ON;
-
-      DECLARE @ownerId BIGINT = ?;
-      DECLARE @id BIGINT = ?;
-
-      IF NOT EXISTS (SELECT 1 FROM collections WHERE id=@id AND owner_user_id=@ownerId)
-      BEGIN
-        SELECT 404 AS status, 'not_found' AS message;
-        RETURN;
-      END
-
-      BEGIN TRAN;
-
-      -- 1) soltar hijas
-      UPDATE collections
-      SET parent_collection_id = NULL
-      WHERE owner_user_id=@ownerId AND parent_collection_id=@id;
-
-      -- 2) soltar presentaciones (FK_presentations_collection)
-      UPDATE presentations
-      SET collection_id = NULL
-      WHERE collection_id = @id AND owner_user_id = @ownerId;
-
-      -- 3) borrar links
-      DELETE FROM collection_items
-      WHERE collection_id = @id;
-
-      -- 4) borrar colección
-      DELETE FROM collections
-      WHERE id=@id AND owner_user_id=@ownerId;
-
-      COMMIT;
-
-      SELECT 200 AS status, 'deleted' AS message;
-      `,
-      [ownerId, id]
+    const [col]: any = await db.execute(
+      'SELECT TOP 1 id FROM collections WHERE id = ? AND owner_user_id = ?',
+      [id, ownerId]
     );
+    if (!col?.length) {
+      return reply.code(404).send({ message: 'not_found' });
+    }
 
-    const r0 = Array.isArray(rows) ? rows[0] : null;
-    if (Number(r0?.status) === 404) return reply.code(404).send({ message: 'not_found' });
+    // ✅ Control 1: presentaciones vinculadas
+    const [pres]: any = await db.execute(
+      'SELECT TOP 1 id FROM presentations WHERE collection_id = ? AND owner_user_id = ?',
+      [id, ownerId]
+    );
+    if (pres?.length) {
+      return reply.code(409).send({
+        message: 'no_se_puede_eliminar',
+        reason: 'presentacion_vinculada',
+        detail: 'No se pudo eliminar la colección porque tiene una presentación vinculada.',
+      });
+    }
+
+    // ✅ Control 2: subcolecciones (hijas)
+    const [child]: any = await db.execute(
+      'SELECT TOP 1 id FROM collections WHERE parent_collection_id = ? AND owner_user_id = ?',
+      [id, ownerId]
+    );
+    if (child?.length) {
+      return reply.code(409).send({
+        message: 'no_se_puede_eliminar',
+        reason: 'tiene_subcolecciones',
+        detail: 'No se pudo eliminar la colección porque tiene subcolecciones.',
+      });
+    }
+
+    // ✅ Ya es seguro borrar (no habrá FK error)
+    await db.execute('DELETE FROM collection_items WHERE collection_id = ?', [id]);
+    await db.execute('DELETE FROM collections WHERE id = ? AND owner_user_id = ?', [id, ownerId]);
 
     return reply.send({ ok: true });
   } catch (e: any) {
-    return reply.code(500).send({ message: e?.message || String(e) });
+    // 🔒 No devolvemos el “cannot delete...” del SQL al usuario final
+    return reply.code(500).send({
+      message: 'error_interno',
+      detail: 'Ha ocurrido un error al eliminar la colección.',
+    });
   }
 });
 
