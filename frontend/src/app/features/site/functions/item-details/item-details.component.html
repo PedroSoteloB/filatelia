@@ -424,6 +424,7 @@
 </div>
 -->
 <!-- item-details.component.html (COMPLETO) -->
+<!-- item-details.component.html (COMPLETO - alineado a tu TS) -->
 <div class="item-details-page">
   <div class="details-inner">
     <a routerLink="/items/mine" class="back-link"> ← Volver al listado </a>
@@ -436,10 +437,12 @@
       <ng-container *ngIf="!error(); else errorTpl">
         <ng-container *ngIf="item() as it">
           <section class="details-card">
+            <!-- HEADER -->
             <header class="details-header">
               <div class="title-block">
                 <span class="eyebrow">Ficha filatélica</span>
 
+                <!-- TÍTULO -->
                 <h1 *ngIf="!isEditing()">{{ it.title || 'Sin título' }}</h1>
                 <input
                   *ngIf="isEditing()"
@@ -450,6 +453,7 @@
                   [disabled]="saving()"
                 />
 
+                <!-- SUBTITLE -->
                 <p class="subtitle" *ngIf="!isEditing() && (it.country || it.issueYear)">
                   <span *ngIf="it.country">{{ it.country | titlecase }}</span>
                   <span *ngIf="it.country && it.issueYear"> • </span>
@@ -482,15 +486,11 @@
                 <div class="header-meta" *ngIf="it.createdAt || it.updatedAt">
                   <div *ngIf="it.createdAt">
                     <span class="meta-label">Creado</span>
-                    <span class="meta-value">
-                      {{ it.createdAt | date: 'dd/MM/yyyy HH:mm':'UTC' }}
-                    </span>
+                    <span class="meta-value">{{ it.createdAt | date: 'dd/MM/yyyy HH:mm':'UTC' }}</span>
                   </div>
                   <div *ngIf="it.updatedAt">
                     <span class="meta-label">Actualizado</span>
-                    <span class="meta-value">
-                      {{ it.updatedAt | date: 'dd/MM/yyyy HH:mm':'UTC' }}
-                    </span>
+                    <span class="meta-value">{{ it.updatedAt | date: 'dd/MM/yyyy HH:mm':'UTC' }}</span>
                   </div>
                 </div>
 
@@ -508,7 +508,9 @@
               </div>
             </header>
 
+            <!-- BODY -->
             <div class="details-layout">
+              <!-- LEFT -->
               <aside class="left-column">
                 <div class="image-card">
                   <div class="gallery" *ngIf="getGalleryUrls(it).length; else noCover">
@@ -588,7 +590,9 @@
                 </div>
               </aside>
 
+              <!-- RIGHT -->
               <section class="right-column">
+                <!-- DATOS -->
                 <section class="section-card">
                   <h2 class="section-title">Datos principales</h2>
 
@@ -653,13 +657,11 @@
 
                     <div>
                       <dt>Valor facial</dt>
-
                       <dd *ngIf="!isEditing()">
-                        <ng-container *ngIf="it.faceValue !== null && it.faceValue !== undefined; else dash">
-                          {{ it.faceValue }}
-                          <span *ngIf="it.currency">({{ it.currency }})</span>
+                        <ng-container *ngIf="it.faceValue !== null && it.faceValue !== undefined; else dashFV">
+                          {{ it.faceValue }} <span *ngIf="it.currency">({{ it.currency }})</span>
                         </ng-container>
-                        <ng-template #dash>—</ng-template>
+                        <ng-template #dashFV>—</ng-template>
                       </dd>
 
                       <dd *ngIf="isEditing()">
@@ -687,11 +689,9 @@
 
                     <div>
                       <dt>Fecha de adquisición</dt>
-
                       <dd *ngIf="!isEditing()">
                         {{ it.acquisitionDate ? (it.acquisitionDate | date: 'dd/MM/yyyy':'UTC') : '—' }}
                       </dd>
-
                       <dd *ngIf="isEditing()">
                         <input
                           class="text-input"
@@ -705,6 +705,7 @@
                   </dl>
                 </section>
 
+                <!-- DESCRIPCIÓN -->
                 <section class="section-card">
                   <h2 class="section-title">Descripción</h2>
 
@@ -721,7 +722,7 @@
                   ></textarea>
                 </section>
 
-                <!-- ✅ TAGS -->
+                <!-- TAGS -->
                 <section class="section-card">
                   <h2 class="section-title">Tags</h2>
 
@@ -730,26 +731,23 @@
                     <div class="tags-list" *ngIf="it.tags?.length; else noTagsTpl">
                       <span class="tag-pill" *ngFor="let t of it.tags">#{{ t.name }}</span>
                     </div>
-
-                    <ng-template #noTagsTpl>
-                      <p class="hint">—</p>
-                    </ng-template>
+                    <ng-template #noTagsTpl><p class="hint">—</p></ng-template>
                   </ng-container>
 
                   <!-- EDIT -->
                   <ng-template #tagsEditTpl>
                     <form class="tags-edit-form" (submit)="addNewTagFromInput(); $event.preventDefault()">
-                      <div class="tags-list" *ngIf="draftTagNames?.length; else noDraftTagsTpl">
+                      <div class="tags-list" *ngIf="draftTags?.length; else noDraftTagsTpl">
                         <span
                           class="tag-pill editable"
-                          *ngFor="let name of draftTagNames; let i = index; trackBy: trackByIndex"
+                          *ngFor="let t of draftTags; let i = index; trackBy: trackByIndex"
                           (click)="focusTag(i)"
                         >
                           #
                           <input
                             #tagInput
                             class="tag-edit-input"
-                            [ngModel]="name"
+                            [ngModel]="t.name"
                             (ngModelChange)="renameDraftTagAt(i, $event)"
                             [name]="'tag_' + i"
                             placeholder="Tag"
@@ -798,20 +796,26 @@
                   </ng-template>
                 </section>
 
-                <!-- ✅ ATRIBUTOS (ESTE BLOQUE ASUME que tu TS YA TIENE draftAttrs, attrDefs y getAttrDefById) -->
+                <!-- ATRIBUTOS -->
                 <section class="section-card">
                   <h2 class="section-title">Atributos adicionales</h2>
 
-                  <!-- VIEW -->
+                  <!-- VIEW: soporta lo que venga del API (valueText/valueNumber/valueDate/value) -->
                   <ng-container *ngIf="!isEditing(); else attrsEditTpl">
                     <div class="attrs-grid" *ngIf="it.attributes?.length; else noAttrsTpl">
                       <article class="attr-box" *ngFor="let a of it.attributes">
                         <div class="attr-header">
-                          <span class="attr-chip">{{ a.attrType || 'Texto' }}</span>
-                          <span class="attr-name">{{ a.name }}</span>
+                          <span class="attr-chip">{{ a?.attrType || 'text' }}</span>
+                          <span class="attr-name">{{ a?.name || '—' }}</span>
                         </div>
+
                         <p class="attr-value">
-                          {{ (a as any).valueText ?? (a as any).valueNumber ?? (a as any).valueDate ?? a.value ?? '—' }}
+                          {{
+                            (a?.valueText ?? null) !== null ? a.valueText :
+                            ((a?.valueNumber ?? null) !== null ? a.valueNumber :
+                            ((a?.valueDate ?? null) !== null ? a.valueDate :
+                            ((a?.value ?? null) !== null ? a.value : '—')))
+                          }}
                         </p>
                       </article>
                     </div>
@@ -821,12 +825,12 @@
                     </ng-template>
                   </ng-container>
 
-                  <!-- EDIT -->
+                  <!-- EDIT: usa draftAttrs (que sí existe en tu TS) -->
                   <ng-template #attrsEditTpl>
                     <div class="attrs-grid" *ngIf="draftAttrs?.length; else noDraftAttrsTpl">
                       <article class="attr-box" *ngFor="let a of draftAttrs; let i = index; trackBy: trackByIndex">
                         <div class="attr-header">
-                          <span class="attr-chip">{{ a.attrType || 'Texto' }}</span>
+                          <span class="attr-chip">{{ a.attrType || 'text' }}</span>
                           <span class="attr-name">{{ a.name }}</span>
 
                           <button
@@ -878,6 +882,7 @@
                       <p class="hint">No hay atributos.</p>
                     </ng-template>
 
+                    <!-- NUEVO ATRIBUTO -->
                     <div class="section-card" style="margin-top: 12px;">
                       <div class="inline-row">
                         <select
@@ -902,7 +907,6 @@
                         </button>
                       </div>
 
-                      <!-- ✅ FIX BUILD: NO usar attrDefs.find(...) en template -->
                       <ng-container *ngIf="getAttrDefById(newAttrDefId) as def">
                         <ng-container [ngSwitch]="def.attrType">
                           <input
@@ -956,3 +960,4 @@
     </ng-template>
   </div>
 </div>
+
