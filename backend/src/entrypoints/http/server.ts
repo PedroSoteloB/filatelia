@@ -1532,20 +1532,22 @@ app.delete('/items/:id/attributes/:attributeId', { preHandler: authGuard }, asyn
 
 
 // ------------------- TAGS UPSERT (NUEVO) -------------------
-// ------------------- TAGS UPSERT (NUEVO) -------------------
+// ------------------- TAGS UPSERT (SOLUCIÓN DEFINITIVA) -------------------
 app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
     const itemId = Number(req.params.id);
     if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'itemId inválido' });
 
-    const it: any = await db.execute(
+    // 0) validar item
+    const itRes: any = await db.execute(
       'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
       [itemId, ownerId]
     );
-    const itRows = it?.recordset ?? it;
+    const itRows = itRes?.recordset ?? itRes;
     if (!itRows?.length) return reply.code(404).send({ message: 'item_not_found' });
 
+    // 1) leer tags
     const { tagNames = [] } = req.body || {};
     const names: string[] = Array.isArray(tagNames)
       ? tagNames.map((x: any) => String(x ?? '').trim()).filter(Boolean)
@@ -1560,29 +1562,28 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
     const createdOrFound: number[] = [];
 
     for (const nm of uniqueNames) {
-      // 1) buscar id
-      const findRes: any = await db.execute(
+      // A) Insertar SOLO si no existe (NO intento leer id aquí)
+      await db.execute(
+        `IF NOT EXISTS (
+           SELECT 1
+           FROM tags
+           WHERE owner_user_id = ? AND name = ?
+         )
+         INSERT INTO tags (name, owner_user_id)
+         VALUES (?, ?);`,
+        [ownerId, nm, nm, ownerId]
+      );
+
+      // B) Ahora SÍ: obtener id con SELECT (esto tu wrapper lo devuelve bien)
+      const idRes: any = await db.execute(
         `SELECT TOP 1 id
            FROM tags
           WHERE owner_user_id = ? AND name = ?`,
         [ownerId, nm]
       );
-      const findRows = findRes?.recordset ?? findRes;
+      const idRows = idRes?.recordset ?? idRes;
 
-      let tagId: number | null = findRows?.length ? Number(findRows[0].id) : null;
-
-      // 2) si no existe -> insertar y devolver id
-      if (!tagId || !Number.isFinite(tagId) || tagId <= 0) {
-        const insRes: any = await db.execute(
-          `INSERT INTO tags (name, owner_user_id)
-           OUTPUT INSERTED.id AS id
-           VALUES (?, ?);`,
-          [nm, ownerId]
-        );
-        const insRows = insRes?.recordset ?? insRes;
-
-        tagId = insRows?.length ? Number(insRows[0].id) : null;
-      }
+      const tagId = idRows?.length ? Number(idRows[0].id) : null;
 
       if (!tagId || !Number.isFinite(tagId) || tagId <= 0) {
         return reply.code(500).send({ message: `no_se_pudo_obtener_id_tag: ${nm}` });
@@ -1590,7 +1591,7 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
 
       createdOrFound.push(tagId);
 
-      // 3) vincular al item (sin duplicar)
+      // C) vincular al item (sin duplicar)
       await db.execute(
         `IF NOT EXISTS (SELECT 1 FROM item_tags WHERE item_id = ? AND tag_id = ?)
            INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?);`,
@@ -1605,15 +1606,16 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
 });
 
 
-// ------------------- ATTRIBUTES UPSERT (NUEVO) -------------------
+
 // ------------------- ATTRIBUTES UPSERT (SQL SERVER OK) -------------------
+// ------------------- ATTRIBUTES UPSERT (SOLUCIÓN DEFINITIVA) -------------------
 app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
     const itemId = Number(req.params.id);
     if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'itemId inválido' });
 
-    // 0) validar que el item exista y sea del owner
+    // 0) validar item
     const itRes: any = await db.execute(
       'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
       [itemId, ownerId]
@@ -1621,6 +1623,7 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
     const itRows = itRes?.recordset ?? itRes;
     if (!itRows?.length) return reply.code(404).send({ message: 'item_not_found' });
 
+    // 1) leer attributes
     const body = req.body || {};
     const attrs = Array.isArray(body) ? body : (Array.isArray(body?.attributes) ? body.attributes : []);
     if (!attrs.length) return reply.code(400).send({ message: 'attributes requerido (array)' });
@@ -1636,45 +1639,38 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
           ? String(a.attrType)
           : 'text';
 
-      // 1) buscar id del atributo
-      const findRes: any = await db.execute(
+      // A) crear definition SOLO si no existe (NO intento leer id aquí)
+      await db.execute(
+        `IF NOT EXISTS (
+           SELECT 1
+           FROM attribute_definitions
+           WHERE owner_user_id = ? AND name = ?
+         )
+         INSERT INTO attribute_definitions (owner_user_id, name, attr_type)
+         VALUES (?, ?, ?);`,
+        [ownerId, nm, ownerId, nm, attrType]
+      );
+
+      // B) obtener attributeId con SELECT (esto sí lo devuelve tu wrapper)
+      const idRes: any = await db.execute(
         `SELECT TOP 1 id
            FROM attribute_definitions
           WHERE owner_user_id = ? AND name = ?`,
         [ownerId, nm]
       );
-      const findRows = findRes?.recordset ?? findRes;
-
-      let attributeId: number | null = findRows?.length ? Number(findRows[0].id) : null;
-
-      // 2) si no existe -> insertar y devolver id (robusto en SQL Server)
-      if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
-        const insRes: any = await db.execute(
-          `INSERT INTO attribute_definitions (owner_user_id, name, attr_type)
-           OUTPUT INSERTED.id AS id
-           VALUES (?, ?, ?);`,
-          [ownerId, nm, attrType]
-        );
-        const insRows = insRes?.recordset ?? insRes;
-
-        attributeId = insRows?.length ? Number(insRows[0].id) : null;
-      }
+      const idRows = idRes?.recordset ?? idRes;
+      const attributeId: number | null = idRows?.length ? Number(idRows[0].id) : null;
 
       if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
         return reply.code(500).send({ message: `no_se_pudo_obtener_id_attribute: ${nm}` });
       }
 
-      // 3) valores (solo uno debería ir con data real según tu attrType)
-      const vText =
-        a?.valueText ?? (typeof a?.value === 'string' ? a.value : null);
+      // C) valores
+      const vText = a?.valueText ?? (typeof a?.value === 'string' ? a.value : null);
+      const vNum  = a?.valueNumber ?? (Number.isFinite(Number(a?.value)) ? Number(a.value) : null);
+      const vDate = a?.valueDate ?? null;
 
-      const vNum =
-        a?.valueNumber ?? (Number.isFinite(Number(a?.value)) ? Number(a.value) : null);
-
-      const vDate =
-        a?.valueDate ?? null;
-
-      // 4) upsert por (item_id, attribute_id) con delete+insert
+      // D) upsert item_attributes por (item_id, attribute_id)
       await db.execute(
         `DELETE FROM item_attributes WHERE item_id = ? AND attribute_id = ?;`,
         [itemId, attributeId]
@@ -1694,6 +1690,7 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
     reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
+
 
 // ------------------- COLLECTIONS -------------------
 function toAbsFromFsOrUrl(p?: string | null): string | null {
