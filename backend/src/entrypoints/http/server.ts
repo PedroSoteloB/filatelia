@@ -1657,7 +1657,6 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
 // ------------------- ATTRIBUTES UPSERT (SQL SERVER OK) -------------------
 app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
-    // 1) ownerId SIEMPRE desde JWT
     const ownerId = ensureAuth(req);
     if (!ownerId || !Number.isFinite(Number(ownerId))) {
       return reply.code(401).send({ message: 'unauthorized' });
@@ -1666,15 +1665,12 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
     const itemId = Number(req.params.id);
     if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'itemId inválido' });
 
-    // 2) validar item del owner
     const itRes: any = await db.execute(
       'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
       [itemId, ownerId]
     );
-    const itRows = rowsOf(itRes);
-    if (!itRows.length) return reply.code(404).send({ message: 'item_not_found' });
+    if (!rowsOf(itRes).length) return reply.code(404).send({ message: 'item_not_found' });
 
-    // 3) leer attrs
     const body = req.body || {};
     const attrs = Array.isArray(body) ? body : (Array.isArray(body?.attributes) ? body.attributes : []);
     if (!attrs.length) return reply.code(400).send({ message: 'attributes requerido (array)' });
@@ -1692,23 +1688,67 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
 
       let attributeId: number | null = null;
 
-      // A) si viene attributeId: validar que sea del owner
+      // ========= A) si viene attributeId, intentar usarlo / adoptarlo =========
       if (Number.isFinite(reqAttrId) && reqAttrId > 0) {
+        // traigo también owner_user_id para decidir
         const defRes: any = await db.execute(
-          'SELECT TOP 1 id FROM attribute_definitions WHERE id = ? AND owner_user_id = ?',
-          [reqAttrId, ownerId]
+          'SELECT TOP 1 id, owner_user_id, name FROM attribute_definitions WHERE id = ?',
+          [reqAttrId]
         );
         const defRows = rowsOf(defRes);
-        attributeId = defRows.length ? Number(defRows[0].id) : null;
 
-        if (!attributeId) {
-          return reply.code(400).send({ message: `attributeId no válido para owner: ${reqAttrId}` });
+        if (defRows.length) {
+          const row = defRows[0];
+          const defOwner = row.owner_user_id ?? null;
+          const defName = String(row.name ?? '').trim();
+
+          // 1) si es mío -> usar id
+          if (Number(defOwner) === Number(ownerId)) {
+            attributeId = Number(row.id);
+          }
+          // 2) si está NULL/0 -> adoptarlo (lo vuelvo mío) y usar id
+          else if (defOwner === null || Number(defOwner) === 0) {
+            await db.execute(
+              'UPDATE attribute_definitions SET owner_user_id = ? WHERE id = ?',
+              [ownerId, reqAttrId]
+            );
+            attributeId = reqAttrId;
+          }
+          // 3) si es de otro owner -> NO usar ese id, caer a resolver por name
+          else {
+            // si no mandaron name, uso el name de la definición que vino
+            const fallbackName = nm || defName;
+
+            // resolver por owner+name
+            const findMineRes: any = await db.execute(
+              'SELECT TOP 1 id FROM attribute_definitions WHERE owner_user_id = ? AND name = ?',
+              [ownerId, fallbackName]
+            );
+            const findMineRows = rowsOf(findMineRes);
+            attributeId = findMineRows.length ? Number(findMineRows[0].id) : null;
+
+            // si no existe, crear mi definition
+            if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
+              await db.execute(
+                'INSERT INTO attribute_definitions (owner_user_id, name, attr_type) VALUES (?, ?, ?)',
+                [ownerId, fallbackName, attrType]
+              );
+
+              const pickRes: any = await db.execute(
+                'SELECT TOP 1 id FROM attribute_definitions WHERE owner_user_id = ? AND name = ? ORDER BY id DESC',
+                [ownerId, fallbackName]
+              );
+              const pickRows = rowsOf(pickRes);
+              attributeId = pickRows.length ? Number(pickRows[0].id) : null;
+            }
+          }
         }
-      } else {
-        // B) si NO viene id: necesito name
+      }
+
+      // ========= B) si aún no tengo attributeId, resolver por name =========
+      if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
         if (!nm) continue;
 
-        // buscar por (owner, name)
         const findRes: any = await db.execute(
           'SELECT TOP 1 id FROM attribute_definitions WHERE owner_user_id = ? AND name = ?',
           [ownerId, nm]
@@ -1716,44 +1756,18 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
         const findRows = rowsOf(findRes);
         attributeId = findRows.length ? Number(findRows[0].id) : null;
 
-        // si no existe, insert simple
         if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
           await db.execute(
             'INSERT INTO attribute_definitions (owner_user_id, name, attr_type) VALUES (?, ?, ?)',
             [ownerId, nm, attrType]
           );
 
-          // 🔥 CAMBIO 1: fallback por name sin owner (agarra el último)
           const pickRes: any = await db.execute(
-            'SELECT TOP 1 id, owner_user_id FROM attribute_definitions WHERE name = ? ORDER BY id DESC',
-            [nm]
-          );
-          const pickRows = rowsOf(pickRes);
-
-          const pickedId: number | null = pickRows.length ? Number(pickRows[0].id) : null;
-          const pickedOwner: any = pickRows.length ? pickRows[0].owner_user_id : null;
-
-          if (!pickedId || !Number.isFinite(pickedId) || pickedId <= 0) {
-            return reply.code(500).send({ message: `no_se_pudo_obtener_id_attribute: ${nm}` });
-          }
-
-          // 🔥 CAMBIO 2: si owner quedó NULL/0, lo corregimos; si es otro owner, 409
-          if (pickedOwner === null || Number(pickedOwner) === 0) {
-            await db.execute(
-              'UPDATE attribute_definitions SET owner_user_id = ? WHERE id = ?',
-              [ownerId, pickedId]
-            );
-          } else if (Number(pickedOwner) !== Number(ownerId)) {
-            return reply.code(409).send({ message: `attribute_name_conflict: ${nm}` });
-          }
-
-          // 🔥 CAMBIO 3: ahora sí re-buscar por owner+name
-          const find2Res: any = await db.execute(
             'SELECT TOP 1 id FROM attribute_definitions WHERE owner_user_id = ? AND name = ? ORDER BY id DESC',
             [ownerId, nm]
           );
-          const find2Rows = rowsOf(find2Res);
-          attributeId = find2Rows.length ? Number(find2Rows[0].id) : null;
+          const pickRows = rowsOf(pickRes);
+          attributeId = pickRows.length ? Number(pickRows[0].id) : null;
         }
 
         if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
@@ -1761,12 +1775,11 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
         }
       }
 
-      // C) valores
+      // ========= C) valores =========
       const vText = a?.valueText ?? (typeof a?.value === 'string' ? a.value : null);
       const vNum  = a?.valueNumber ?? (Number.isFinite(Number(a?.value)) ? Number(a.value) : null);
       const vDate = a?.valueDate ?? null;
 
-      // D) upsert item_attributes (delete + insert)
       await db.execute(
         'DELETE FROM item_attributes WHERE item_id = ? AND attribute_id = ?',
         [itemId, attributeId]
@@ -1786,6 +1799,7 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
     return reply.code(500).send({ message: raw || 'Ha ocurrido un error, por favor contactar con soporte' });
   }
 });
+
 
 
 
