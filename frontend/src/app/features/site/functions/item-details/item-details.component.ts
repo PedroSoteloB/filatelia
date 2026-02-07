@@ -237,6 +237,8 @@ export class ItemDetailsComponent implements OnInit {
   saving = signal(false);
   error = signal<string | null>(null);
   item = signal<MyItem | null>(null);
+  attrLocalError = signal<string | null>(null);
+
 
   isEditing = signal(false);
   draft = signal<ItemDraft | null>(null);
@@ -630,18 +632,23 @@ export class ItemDetailsComponent implements OnInit {
     const def = this.attrDefs.find((d) => Number(d.id) === Number(this.newAttrDefId));
     if (!def) return;
   
-    // ✅ VALIDACIÓN: si ya existe ese atributo, no permitimos duplicarlo
+    // ✅ VALIDACIÓN LOCAL (no global)
     const exists = this.draftAttrs.some((a) => Number(a.attributeId) === Number(def.id));
     if (exists) {
-      this.error.set(`El atributo "${def.name}" ya existe. Modifica el valor en la tarjeta de arriba (no se puede duplicar).`);
+      this.attrLocalError.set(
+        `El atributo "${def.name}" ya existe. Modifica el valor en la tarjeta de arriba (no se puede duplicar).`
+      );
       return;
     }
+  
+    // ✅ limpiar error local si pasa validación
+    this.attrLocalError.set(null);
   
     const attrType = String(def.attrType ?? 'text');
   
     const next: DraftAttr = {
-      attributeId: def.id,
-      name: def.name,
+      attributeId: Number(def.id),
+      name: String(def.name ?? ''),
       attrType,
       valueText: null,
       valueNumber: null,
@@ -649,18 +656,18 @@ export class ItemDetailsComponent implements OnInit {
     };
   
     if (attrType === 'number') {
-      next.valueNumber = Number.isFinite(Number(this.newAttrValueNumber)) ? Number(this.newAttrValueNumber) : null;
+      const n = Number(this.newAttrValueNumber);
+      next.valueNumber = Number.isFinite(n) ? n : null;
     } else if (attrType === 'date') {
       next.valueDate = this.newAttrValueDate ? String(this.newAttrValueDate) : null;
     } else {
       next.valueText = String(this.newAttrValueText ?? '').trim() || null;
     }
   
-    // ✅ ADD ONLY (en UI): solo agregamos si no existe (ya validamos arriba)
     this.draftAttrs = [...this.draftAttrs, next];
     this.attrsChanged = true;
   
-    // limpiar drafts
+    // reset inputs
     this.newAttrDefId = null;
     this.newAttrValueText = '';
     this.newAttrValueNumber = null;

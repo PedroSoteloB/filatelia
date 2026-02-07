@@ -905,6 +905,10 @@
                         >
                           Añadir / Actualizar
                         </button>
+                        <div *ngIf="attrLocalError()" class="attr-error">
+                          {{ attrLocalError() }}
+                        </div>
+                        
                       </div>
 
                       <ng-container *ngIf="getAttrDefById(newAttrDefId) as def">
