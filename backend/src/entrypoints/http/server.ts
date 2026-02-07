@@ -1661,23 +1661,18 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
 
 
 // =================== ATTRIBUTES UPSERT (DEFINITIVO - SIN DUPLICADOS, SIN BORRAR OTROS) ===================
+// =================== ATTRIBUTES UPSERT (UNICO POR ATRIBUTO) ===================
 app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = Number(ensureAuth(req));
-    if (!Number.isFinite(ownerId) || ownerId <= 0) {
-      return reply.code(401).send({ message: 'unauthorized' });
-    }
+    if (!Number.isFinite(ownerId) || ownerId <= 0) return reply.code(401).send({ message: 'unauthorized' });
 
     const itemId = Number(req.params.id);
-    if (!Number.isFinite(itemId) || itemId <= 0) {
-      return reply.code(400).send({ message: 'itemId inválido' });
-    }
+    if (!Number.isFinite(itemId) || itemId <= 0) return reply.code(400).send({ message: 'itemId inválido' });
 
     const body = req.body || {};
     const attrs = Array.isArray(body) ? body : (Array.isArray(body?.attributes) ? body.attributes : []);
-    if (!attrs.length) {
-      return reply.code(400).send({ message: 'attributes requerido (array)' });
-    }
+    if (!attrs.length) return reply.code(400).send({ message: 'attributes requerido (array)' });
 
     const payload = attrs
       .map((a: any) => {
@@ -1689,23 +1684,16 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
         const valueNumber = a?.valueNumber ?? (Number.isFinite(Number(a?.value)) ? Number(a.value) : null);
         const valueDate = a?.valueDate ?? null;
 
-        return {
-          name,
-          attrType,
-          valueText: valueText ?? null,
-          valueNumber: valueNumber ?? null,
-          valueDate: valueDate ?? null,
-        };
+        return { name, attrType, valueText: valueText ?? null, valueNumber: valueNumber ?? null, valueDate: valueDate ?? null };
       })
       .filter((x: any) => !!x.name);
 
-    if (!payload.length) {
-      return reply.code(400).send({ message: 'attributes vacío' });
-    }
+    if (!payload.length) return reply.code(400).send({ message: 'attributes vacío' });
 
-    const attrsJson = JSON.stringify(payload);
+    // ⚠️ Si vas a permitir solo 1 por request, toma el primero (o el último)
+    const one = payload[payload.length - 1];
+    const attrsJson = JSON.stringify([one]);
 
-    // ✅ destructuring igual que /items para leer bien rows
     const [rowsRaw]: any = await db.execute(
       `
       SET NOCOUNT ON;
@@ -1715,16 +1703,12 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
       DECLARE @itemId  BIGINT = ?;
       DECLARE @attrsJson NVARCHAR(MAX) = ?;
 
-      -- 0) validar item del owner
       IF NOT EXISTS (SELECT 1 FROM philatelic_items WHERE id = @itemId AND owner_user_id = @ownerId)
       BEGIN
         SELECT CAST(404 AS INT) AS status, 'item_not_found' AS message;
         RETURN;
       END
 
-      ------------------------------------------------------------------
-      -- 1) Parse JSON -> tabla @A (sin dedupe por name)
-      ------------------------------------------------------------------
       DECLARE @A TABLE (
         name NVARCHAR(100) NOT NULL,
         attrType NVARCHAR(10) NULL,
@@ -1750,9 +1734,7 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
       )
       WHERE NULLIF(LTRIM(RTRIM(name)), '') IS NOT NULL;
 
-      ------------------------------------------------------------------
-      -- 2) Upsert definitions por (owner, name) (solo asegura exista el atributo)
-      ------------------------------------------------------------------
+      -- asegurar definición
       MERGE attribute_definitions AS D
       USING (SELECT DISTINCT name, attrType FROM @A) AS S
         ON D.owner_user_id = @ownerId AND D.name = S.name
@@ -1760,45 +1742,36 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
         INSERT (owner_user_id, name, attr_type, created_at)
         VALUES (@ownerId, S.name, S.attrType, SYSUTCDATETIME());
 
-      ------------------------------------------------------------------
-      -- 3) ADD ONLY: insertar nuevos valores SIN REEMPLAZAR
-      --    (evitamos duplicado exacto: mismo atributo_id + mismo valor)
-      ------------------------------------------------------------------
-      INSERT INTO item_attributes (item_id, attribute_id, value_text, value_number, value_date)
-      SELECT
-        @itemId,
-        D.id,
-        A.valueText,
-        A.valueNumber,
-        A.valueDate
-      FROM @A A
-      JOIN attribute_definitions D
-        ON D.owner_user_id = @ownerId AND D.name = A.name
-      WHERE NOT EXISTS (
-        SELECT 1
-        FROM item_attributes IA
-        WHERE IA.item_id = @itemId
-          AND IA.attribute_id = D.id
-          AND ISNULL(IA.value_text, '') = ISNULL(A.valueText, '')
-          AND ISNULL(IA.value_number, 0) = ISNULL(A.valueNumber, 0)
-          AND ISNULL(CONVERT(VARCHAR(10), IA.value_date, 120), '') = ISNULL(CONVERT(VARCHAR(10), A.valueDate, 120), '')
-      );
+      DECLARE @attributeId BIGINT;
+      SELECT TOP 1 @attributeId = D.id
+      FROM attribute_definitions D
+      JOIN @A A ON A.name = D.name
+      WHERE D.owner_user_id = @ownerId;
 
-      SELECT 200 AS status, @@ROWCOUNT AS inserted;
+      -- ✅ Validación: si ya existe (item_id, attribute_id) => 409
+      IF EXISTS (SELECT 1 FROM item_attributes WHERE item_id = @itemId AND attribute_id = @attributeId)
+      BEGIN
+        SELECT CAST(409 AS INT) AS status, 'attribute_already_exists' AS message, @attributeId AS attributeId;
+        RETURN;
+      END
+
+      -- insertar (solo si no existe)
+      INSERT INTO item_attributes (item_id, attribute_id, value_text, value_number, value_date)
+      SELECT @itemId, @attributeId, A.valueText, A.valueNumber, A.valueDate
+      FROM @A A;
+
+      SELECT 200 AS status, 'inserted' AS message, @attributeId AS attributeId;
       `,
       [ownerId, itemId, attrsJson]
     );
 
     const rows = Array.isArray(rowsRaw) ? rowsRaw : rowsOf(rowsRaw);
 
-    if (rows?.length && Number(rows[0]?.status) === 404) {
-      return reply.code(404).send({ message: 'item_not_found' });
-    }
+    if (rows?.length && Number(rows[0]?.status) === 404) return reply.code(404).send({ message: 'item_not_found' });
+    if (rows?.length && Number(rows[0]?.status) === 409) return reply.code(409).send({ message: 'attribute_already_exists' });
 
-    const inserted = Number(rows?.[0]?.inserted ?? 0);
-    return reply.send({ ok: true, inserted: Number.isFinite(inserted) ? inserted : 0 });
+    return reply.send({ ok: true });
   } catch (e: any) {
-    // Si te salta error de "unique constraint" aquí, es porque tu tabla no permite múltiples valores por atributo
     return reply.code(500).send({ message: String(e?.message || e || '') });
   }
 });
