@@ -1532,17 +1532,19 @@ app.delete('/items/:id/attributes/:attributeId', { preHandler: authGuard }, asyn
 
 
 // ------------------- TAGS UPSERT (NUEVO) -------------------
+// ------------------- TAGS UPSERT (NUEVO) -------------------
 app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
     const itemId = Number(req.params.id);
     if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'itemId inválido' });
 
-    const [it]: any = await db.execute(
+    const it: any = await db.execute(
       'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
       [itemId, ownerId]
     );
-    if (!it?.length) return reply.code(404).send({ message: 'item_not_found' });
+    const itRows = it?.recordset ?? it;
+    if (!itRows?.length) return reply.code(404).send({ message: 'item_not_found' });
 
     const { tagNames = [] } = req.body || {};
     const names: string[] = Array.isArray(tagNames)
@@ -1551,32 +1553,35 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
 
     if (!names.length) return reply.code(400).send({ message: 'tagNames requerido (array)' });
 
-    // evita duplicados por nombre (case-insensitive opcional)
-    const uniqueNames = Array.from(new Set(names));
+    const uniqueNames = Array.from(new Set(names.map((n) => n.toLowerCase())))
+      .map((k) => names.find((n) => n.toLowerCase() === k)!)
+      .filter(Boolean);
 
     const createdOrFound: number[] = [];
 
     for (const nm of uniqueNames) {
       // 1) buscar id
-      const [rowsFind]: any = await db.execute(
+      const findRes: any = await db.execute(
         `SELECT TOP 1 id
            FROM tags
           WHERE owner_user_id = ? AND name = ?`,
         [ownerId, nm]
       );
+      const findRows = findRes?.recordset ?? findRes;
 
-      let tagId: number | null = rowsFind?.length ? Number(rowsFind[0].id) : null;
+      let tagId: number | null = findRows?.length ? Number(findRows[0].id) : null;
 
-      // 2) si no existe -> insertar y leer SCOPE_IDENTITY()
+      // 2) si no existe -> insertar y devolver id
       if (!tagId || !Number.isFinite(tagId) || tagId <= 0) {
-        const [rowsIns]: any = await db.execute(
+        const insRes: any = await db.execute(
           `INSERT INTO tags (name, owner_user_id)
-           VALUES (?, ?);
-           SELECT CAST(SCOPE_IDENTITY() AS INT) AS id;`,
+           OUTPUT INSERTED.id AS id
+           VALUES (?, ?);`,
           [nm, ownerId]
         );
+        const insRows = insRes?.recordset ?? insRes;
 
-        tagId = rowsIns?.length ? Number(rowsIns[0].id) : null;
+        tagId = insRows?.length ? Number(insRows[0].id) : null;
       }
 
       if (!tagId || !Number.isFinite(tagId) || tagId <= 0) {
@@ -1599,18 +1604,22 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
   }
 });
 
+
 // ------------------- ATTRIBUTES UPSERT (NUEVO) -------------------
+// ------------------- ATTRIBUTES UPSERT (SQL SERVER OK) -------------------
 app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
     const itemId = Number(req.params.id);
     if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'itemId inválido' });
 
-    const [it]: any = await db.execute(
+    // 0) validar que el item exista y sea del owner
+    const itRes: any = await db.execute(
       'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
       [itemId, ownerId]
     );
-    if (!it?.length) return reply.code(404).send({ message: 'item_not_found' });
+    const itRows = itRes?.recordset ?? itRes;
+    if (!itRows?.length) return reply.code(404).send({ message: 'item_not_found' });
 
     const body = req.body || {};
     const attrs = Array.isArray(body) ? body : (Array.isArray(body?.attributes) ? body.attributes : []);
@@ -1628,37 +1637,44 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
           : 'text';
 
       // 1) buscar id del atributo
-      const [rowsFind]: any = await db.execute(
+      const findRes: any = await db.execute(
         `SELECT TOP 1 id
            FROM attribute_definitions
           WHERE owner_user_id = ? AND name = ?`,
         [ownerId, nm]
       );
+      const findRows = findRes?.recordset ?? findRes;
 
-      let attributeId: number | null = rowsFind?.length ? Number(rowsFind[0].id) : null;
+      let attributeId: number | null = findRows?.length ? Number(findRows[0].id) : null;
 
-      // 2) si no existe -> insertar y leer SCOPE_IDENTITY()
+      // 2) si no existe -> insertar y devolver id (robusto en SQL Server)
       if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
-        const [rowsIns]: any = await db.execute(
+        const insRes: any = await db.execute(
           `INSERT INTO attribute_definitions (owner_user_id, name, attr_type)
-           VALUES (?, ?, ?);
-           SELECT CAST(SCOPE_IDENTITY() AS INT) AS id;`,
+           OUTPUT INSERTED.id AS id
+           VALUES (?, ?, ?);`,
           [ownerId, nm, attrType]
         );
+        const insRows = insRes?.recordset ?? insRes;
 
-        attributeId = rowsIns?.length ? Number(rowsIns[0].id) : null;
+        attributeId = insRows?.length ? Number(insRows[0].id) : null;
       }
 
       if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
         return reply.code(500).send({ message: `no_se_pudo_obtener_id_attribute: ${nm}` });
       }
 
-      // valores
-      const vText = a?.valueText ?? (typeof a?.value === 'string' ? a.value : null);
-      const vNum = a?.valueNumber ?? (Number.isFinite(Number(a?.value)) ? Number(a.value) : null);
-      const vDate = a?.valueDate ?? null;
+      // 3) valores (solo uno debería ir con data real según tu attrType)
+      const vText =
+        a?.valueText ?? (typeof a?.value === 'string' ? a.value : null);
 
-      // 3) upsert por (item_id, attribute_id)
+      const vNum =
+        a?.valueNumber ?? (Number.isFinite(Number(a?.value)) ? Number(a.value) : null);
+
+      const vDate =
+        a?.valueDate ?? null;
+
+      // 4) upsert por (item_id, attribute_id) con delete+insert
       await db.execute(
         `DELETE FROM item_attributes WHERE item_id = ? AND attribute_id = ?;`,
         [itemId, attributeId]
@@ -1666,7 +1682,7 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
 
       await db.execute(
         `INSERT INTO item_attributes (item_id, attribute_id, value_text, value_number, value_date)
-         VALUES (?,?,?,?,?);`,
+         VALUES (?, ?, ?, ?, ?);`,
         [itemId, attributeId, vText ?? null, vNum ?? null, vDate ?? null]
       );
 
