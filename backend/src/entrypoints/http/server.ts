@@ -1530,6 +1530,7 @@ app.delete('/items/:id/attributes/:attributeId', { preHandler: authGuard }, asyn
 });
 
 
+// =================== HELPERS ===================
 function rowsOf(res: any): any[] {
   if (!res) return [];
   if (Array.isArray(res)) return res;
@@ -1538,111 +1539,112 @@ function rowsOf(res: any): any[] {
   return [];
 }
 
-// ------------------- TAGS UPSERT (NUEVO) -------------------
+// cache en memoria (no toca tu pool)
+const PK_CACHE: Record<string, string> = {};
 
+async function resolvePkColumn(db: any, tableName: string, candidates: string[]) {
+  if (PK_CACHE[tableName]) return PK_CACHE[tableName];
+
+  // ojo: INFORMATION_SCHEMA.COLUMNS es estándar en SQL Server
+  const res: any = await db.execute(
+    `
+    SELECT COLUMN_NAME
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = ?
+      AND COLUMN_NAME IN (${candidates.map(() => '?').join(',')})
+    `,
+    [tableName, ...candidates]
+  );
+
+  const rows = rowsOf(res);
+  const found = rows.map((r: any) => String(r.COLUMN_NAME ?? r.column_name ?? '').trim()).filter(Boolean);
+
+  // prioridad: el primer candidato que exista
+  for (const c of candidates) {
+    if (found.some((x) => x.toLowerCase() === c.toLowerCase())) {
+      PK_CACHE[tableName] = c;
+      return c;
+    }
+  }
+
+  throw new Error(`No se pudo detectar PK para ${tableName}. Candidatos: ${candidates.join(', ')}`);
+}
+
+function normalizeUniqueNames(names: any[]): string[] {
+  const arr = Array.isArray(names) ? names : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const x of arr) {
+    const s = String(x ?? '').trim();
+    if (!s) continue;
+    const k = s.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(s);
+  }
+  return out;
+}
+
+// =================== TAGS UPSERT (DEFINITIVO) ===================
 app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
-    // 1) ownerId SIEMPRE desde JWT
+    // ownerId SIEMPRE desde JWT
     const ownerId = ensureAuth(req);
-    if (!ownerId || !Number.isFinite(Number(ownerId))) {
+    const ownerNum = Number(ownerId);
+    if (!Number.isFinite(ownerNum) || ownerNum <= 0) {
       return reply.code(401).send({ message: 'unauthorized' });
     }
 
     const itemId = Number(req.params.id);
-    if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'itemId inválido' });
+    if (!Number.isFinite(itemId) || itemId <= 0) {
+      return reply.code(400).send({ message: 'itemId inválido' });
+    }
 
-    // 2) validar item del owner
+    // validar item del owner
     const itRes: any = await db.execute(
       'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
-      [itemId, ownerId]
+      [itemId, ownerNum]
     );
-    const itRows = rowsOf(itRes);
-    if (!itRows.length) return reply.code(404).send({ message: 'item_not_found' });
+    if (!rowsOf(itRes).length) return reply.code(404).send({ message: 'item_not_found' });
 
-    // 3) input
+    // input
     const body = req.body || {};
-    const tagNamesRaw = body.tagNames ?? body.tags ?? [];
-    const names: string[] = Array.isArray(tagNamesRaw)
-      ? tagNamesRaw.map((x: any) => String(x ?? '').trim()).filter(Boolean)
-      : [];
-
+    const names = normalizeUniqueNames(body.tagNames ?? body.tags ?? []);
     if (!names.length) return reply.code(400).send({ message: 'tagNames requerido (array)' });
 
-    // unique case-insensitive
-    const uniqueNames = Array.from(new Set(names.map((n) => n.toLowerCase())))
-      .map((k) => names.find((n) => n.toLowerCase() === k)!)
-      .filter(Boolean);
+    // detectar PK real de tags (por seguridad)
+    const tagsPk = await resolvePkColumn(db, 'tags', ['id', 'tag_id']);
 
     const tagIds: number[] = [];
 
-    for (const nm of uniqueNames) {
-      // A) buscar tagId (del owner)
-      const findRes: any = await db.execute(
-        'SELECT TOP 1 id FROM tags WHERE owner_user_id = ? AND name = ?',
-        [ownerId, nm]
-      );
-      const findRows = rowsOf(findRes);
-      let tagId: number | null = findRows.length ? Number(findRows[0].id) : null;
+    for (const nm of names) {
+      // 1) UPSERT (MERGE) + DEVUELVE ID (1 sola sentencia)
+      const mergeSql = `
+        MERGE tags WITH (HOLDLOCK) AS T
+        USING (SELECT ? AS owner_user_id, ? AS name) AS S
+          ON T.owner_user_id = S.owner_user_id AND T.name = S.name
+        WHEN NOT MATCHED THEN
+          INSERT (owner_user_id, name) VALUES (S.owner_user_id, S.name)
+        OUTPUT INSERTED.[${tagsPk}] AS id;
+      `;
 
-      // B) si no existe: INSERT simple
-      if (!tagId || !Number.isFinite(tagId) || tagId <= 0) {
-        await db.execute(
-          'INSERT INTO tags (name, owner_user_id) VALUES (?, ?)',
-          [nm, ownerId]
-        );
+      const mergeRes: any = await db.execute(mergeSql, [ownerNum, nm]);
+      const mergeRows = rowsOf(mergeRes);
 
-        // 🔥 CAMBIO 1: fallback por name sin owner (agarra el último)
-        const pickRes: any = await db.execute(
-          'SELECT TOP 1 id, owner_user_id FROM tags WHERE name = ? ORDER BY id DESC',
-          [nm]
-        );
-        const pickRows = rowsOf(pickRes);
-
-        const pickedId: number | null = pickRows.length ? Number(pickRows[0].id) : null;
-        const pickedOwner: any = pickRows.length ? pickRows[0].owner_user_id : null;
-
-        if (!pickedId || !Number.isFinite(pickedId) || pickedId <= 0) {
-          return reply.code(500).send({ message: `no_se_pudo_obtener_id_tag: ${nm}` });
-        }
-
-        // 🔥 CAMBIO 2: si owner quedó NULL/0, lo corregimos; si es otro owner, 409
-        if (pickedOwner === null || Number(pickedOwner) === 0) {
-          await db.execute(
-            'UPDATE tags SET owner_user_id = ? WHERE id = ?',
-            [ownerId, pickedId]
-          );
-        } else if (Number(pickedOwner) !== Number(ownerId)) {
-          return reply.code(409).send({ message: `tag_name_conflict: ${nm}` });
-        }
-
-        // 🔥 CAMBIO 3: ahora sí re-buscar por owner+name
-        const find2Res: any = await db.execute(
-          'SELECT TOP 1 id FROM tags WHERE owner_user_id = ? AND name = ? ORDER BY id DESC',
-          [ownerId, nm]
-        );
-        const find2Rows = rowsOf(find2Res);
-        tagId = find2Rows.length ? Number(find2Rows[0].id) : null;
-      }
-
+      const tagId = mergeRows?.length ? Number(mergeRows[0].id) : null;
       if (!tagId || !Number.isFinite(tagId) || tagId <= 0) {
         return reply.code(500).send({ message: `no_se_pudo_obtener_id_tag: ${nm}` });
       }
-
       tagIds.push(tagId);
 
-      // D) vincular sin IF (check + insert)
-      const linkRes: any = await db.execute(
-        'SELECT TOP 1 1 AS ok FROM item_tags WHERE item_id = ? AND tag_id = ?',
-        [itemId, tagId]
+      // 2) vincular sin duplicar
+      await db.execute(
+        `
+        IF NOT EXISTS (SELECT 1 FROM item_tags WHERE item_id = ? AND tag_id = ?)
+          INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?);
+        `,
+        [itemId, tagId, itemId, tagId]
       );
-      const linkRows = rowsOf(linkRes);
-
-      if (!linkRows.length) {
-        await db.execute(
-          'INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)',
-          [itemId, tagId]
-        );
-      }
     }
 
     return reply.send({ ok: true, tagIds });
@@ -1652,32 +1654,40 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
   }
 });
 
-
-
-// ------------------- ATTRIBUTES UPSERT (SQL SERVER OK) -------------------
+// =================== ATTRIBUTES UPSERT (DEFINITIVO) ===================
 app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
+    // ownerId SIEMPRE desde JWT
     const ownerId = ensureAuth(req);
-    if (!ownerId || !Number.isFinite(Number(ownerId))) {
+    const ownerNum = Number(ownerId);
+    if (!Number.isFinite(ownerNum) || ownerNum <= 0) {
       return reply.code(401).send({ message: 'unauthorized' });
     }
 
     const itemId = Number(req.params.id);
-    if (!Number.isFinite(itemId)) return reply.code(400).send({ message: 'itemId inválido' });
+    if (!Number.isFinite(itemId) || itemId <= 0) {
+      return reply.code(400).send({ message: 'itemId inválido' });
+    }
 
+    // validar item del owner
     const itRes: any = await db.execute(
       'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
-      [itemId, ownerId]
+      [itemId, ownerNum]
     );
     if (!rowsOf(itRes).length) return reply.code(404).send({ message: 'item_not_found' });
 
+    // input
     const body = req.body || {};
     const attrs = Array.isArray(body) ? body : (Array.isArray(body?.attributes) ? body.attributes : []);
     if (!attrs.length) return reply.code(400).send({ message: 'attributes requerido (array)' });
 
+    // detectar PK real de attribute_definitions (AQUÍ te arregla el "Invalid column name 'id'")
+    const attrPk = await resolvePkColumn(db, 'attribute_definitions', ['id', 'attribute_id']);
+
     let upserted = 0;
 
     for (const a of attrs) {
+      // puede venir attributeId o name
       const reqAttrId = Number(a?.attributeId);
       const nm = String(a?.attributeName ?? a?.name ?? '').trim();
 
@@ -1688,98 +1698,45 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
 
       let attributeId: number | null = null;
 
-      // ========= A) si viene attributeId, intentar usarlo / adoptarlo =========
+      // Si viene attributeId: NO lo rechazo por "owner" (porque tú quieres poder crear/usar nuevos)
+      // pero sí verifico que exista. Si no existe, cae a resolver por name.
       if (Number.isFinite(reqAttrId) && reqAttrId > 0) {
-        // traigo también owner_user_id para decidir
-        const defRes: any = await db.execute(
-          'SELECT TOP 1 id, owner_user_id, name FROM attribute_definitions WHERE id = ?',
+        const chkRes: any = await db.execute(
+          `SELECT TOP 1 [${attrPk}] AS id FROM attribute_definitions WHERE [${attrPk}] = ?`,
           [reqAttrId]
         );
-        const defRows = rowsOf(defRes);
-
-        if (defRows.length) {
-          const row = defRows[0];
-          const defOwner = row.owner_user_id ?? null;
-          const defName = String(row.name ?? '').trim();
-
-          // 1) si es mío -> usar id
-          if (Number(defOwner) === Number(ownerId)) {
-            attributeId = Number(row.id);
-          }
-          // 2) si está NULL/0 -> adoptarlo (lo vuelvo mío) y usar id
-          else if (defOwner === null || Number(defOwner) === 0) {
-            await db.execute(
-              'UPDATE attribute_definitions SET owner_user_id = ? WHERE id = ?',
-              [ownerId, reqAttrId]
-            );
-            attributeId = reqAttrId;
-          }
-          // 3) si es de otro owner -> NO usar ese id, caer a resolver por name
-          else {
-            // si no mandaron name, uso el name de la definición que vino
-            const fallbackName = nm || defName;
-
-            // resolver por owner+name
-            const findMineRes: any = await db.execute(
-              'SELECT TOP 1 id FROM attribute_definitions WHERE owner_user_id = ? AND name = ?',
-              [ownerId, fallbackName]
-            );
-            const findMineRows = rowsOf(findMineRes);
-            attributeId = findMineRows.length ? Number(findMineRows[0].id) : null;
-
-            // si no existe, crear mi definition
-            if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
-              await db.execute(
-                'INSERT INTO attribute_definitions (owner_user_id, name, attr_type) VALUES (?, ?, ?)',
-                [ownerId, fallbackName, attrType]
-              );
-
-              const pickRes: any = await db.execute(
-                'SELECT TOP 1 id FROM attribute_definitions WHERE owner_user_id = ? AND name = ? ORDER BY id DESC',
-                [ownerId, fallbackName]
-              );
-              const pickRows = rowsOf(pickRes);
-              attributeId = pickRows.length ? Number(pickRows[0].id) : null;
-            }
-          }
-        }
+        const chkRows = rowsOf(chkRes);
+        attributeId = chkRows.length ? Number(chkRows[0].id) : null;
       }
 
-      // ========= B) si aún no tengo attributeId, resolver por name =========
+      // Resolver por name con MERGE (owner + name), y DEVOLVER ID
       if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
         if (!nm) continue;
 
-        const findRes: any = await db.execute(
-          'SELECT TOP 1 id FROM attribute_definitions WHERE owner_user_id = ? AND name = ?',
-          [ownerId, nm]
-        );
-        const findRows = rowsOf(findRes);
-        attributeId = findRows.length ? Number(findRows[0].id) : null;
+        const mergeSql = `
+          MERGE attribute_definitions WITH (HOLDLOCK) AS T
+          USING (SELECT ? AS owner_user_id, ? AS name, ? AS attr_type) AS S
+            ON T.owner_user_id = S.owner_user_id AND T.name = S.name
+          WHEN NOT MATCHED THEN
+            INSERT (owner_user_id, name, attr_type) VALUES (S.owner_user_id, S.name, S.attr_type)
+          OUTPUT INSERTED.[${attrPk}] AS id;
+        `;
 
-        if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
-          await db.execute(
-            'INSERT INTO attribute_definitions (owner_user_id, name, attr_type) VALUES (?, ?, ?)',
-            [ownerId, nm, attrType]
-          );
-
-          const pickRes: any = await db.execute(
-            'SELECT TOP 1 id FROM attribute_definitions WHERE owner_user_id = ? AND name = ? ORDER BY id DESC',
-            [ownerId, nm]
-          );
-          const pickRows = rowsOf(pickRes);
-          attributeId = pickRows.length ? Number(pickRows[0].id) : null;
-        }
-
-        if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
-          return reply.code(500).send({ message: `no_se_pudo_obtener_id_attribute: ${nm}` });
-        }
+        const mergeRes: any = await db.execute(mergeSql, [ownerNum, nm, attrType]);
+        const mergeRows = rowsOf(mergeRes);
+        attributeId = mergeRows.length ? Number(mergeRows[0].id) : null;
       }
 
-      // ========= C) valores =========
+      if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
+        return reply.code(500).send({ message: `no_se_pudo_obtener_id_attribute: ${nm || '(sin nombre)'}` });
+      }
+
+      // valores
       const vText = a?.valueText ?? (typeof a?.value === 'string' ? a.value : null);
       const vNum  = a?.valueNumber ?? (Number.isFinite(Number(a?.value)) ? Number(a.value) : null);
       const vDate = a?.valueDate ?? null;
 
+      // upsert item_attributes (delete + insert)
       await db.execute(
         'DELETE FROM item_attributes WHERE item_id = ? AND attribute_id = ?',
         [itemId, attributeId]
