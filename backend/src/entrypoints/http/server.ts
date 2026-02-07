@@ -1079,12 +1079,26 @@ app.post('/tags', { preHandler: authGuard }, async (req: any, reply: any) => {
     );
     if (dup.length) return reply.code(409).send({ message: 'tag ya existe' });
 
+    // const [r]: any = await db.execute(
+    //   haveOwner ? `INSERT INTO tags (name, owner_user_id) VALUES (?,?)`
+    //             : `INSERT INTO tags (name) VALUES (?)`,
+    //   haveOwner ? [name, ownerId] : [name]
+    // );
+    // reply.send({ id: r.insertId, name });
     const [r]: any = await db.execute(
-      haveOwner ? `INSERT INTO tags (name, owner_user_id) VALUES (?,?)`
-                : `INSERT INTO tags (name) VALUES (?)`,
+      haveOwner
+        ? `INSERT INTO tags (name, owner_user_id)
+           OUTPUT INSERTED.id AS id
+           VALUES (?,?)`
+        : `INSERT INTO tags (name)
+           OUTPUT INSERTED.id AS id
+           VALUES (?)`,
       haveOwner ? [name, ownerId] : [name]
     );
-    reply.send({ id: r.insertId, name });
+    
+    const id = r?.[0]?.id ?? r?.recordset?.[0]?.id;
+    reply.send({ id, name });
+    
   } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
@@ -1150,12 +1164,26 @@ app.post('/items/:id/tags', { preHandler: authGuard }, async (req: any, reply: a
         for (const nm of names) {
           if (foundByName.has(nm)) ids.push(foundByName.get(nm)!);
           else {
+            // const [ins]: any = await db.execute(
+            //   haveOwner ? `INSERT INTO tags (name, owner_user_id) VALUES (?,?)`
+            //             : `INSERT INTO tags (name) VALUES (?)`,
+            //   haveOwner ? [nm, ownerId] : [nm]
+            // );
+            // ids.push(ins.insertId);
             const [ins]: any = await db.execute(
-              haveOwner ? `INSERT INTO tags (name, owner_user_id) VALUES (?,?)`
-                        : `INSERT INTO tags (name) VALUES (?)`,
+              haveOwner
+                ? `INSERT INTO tags (name, owner_user_id)
+                   OUTPUT INSERTED.id AS id
+                   VALUES (?,?)`
+                : `INSERT INTO tags (name)
+                   OUTPUT INSERTED.id AS id
+                   VALUES (?)`,
               haveOwner ? [nm, ownerId] : [nm]
             );
-            ids.push(ins.insertId);
+            
+            const newId = ins?.[0]?.id ?? ins?.recordset?.[0]?.id;
+            ids.push(Number(newId));
+            
           }
         }
       }
@@ -1208,13 +1236,34 @@ app.post('/attributes', { preHandler: authGuard }, async (req: any, reply: any) 
     );
     if (dup.length) return reply.code(409).send({ message: 'attribute ya existe' });
 
+    // const [r]: any = await db.execute(
+    //   `INSERT INTO attribute_definitions (owner_user_id, name, attr_type, options_json)
+    //    VALUES (?,?,?,?)`,
+    //   [ownerId, name, ['text','number','date','list'].includes(String(attr_type)) ? attr_type : 'text',
+    //    options_json ? JSON.stringify(options_json) : null]
+    // );
+    // reply.send({ id: r.insertId, name, attr_type });
     const [r]: any = await db.execute(
-      `INSERT INTO attribute_definitions (owner_user_id, name, attr_type, options_json)
-       VALUES (?,?,?,?)`,
-      [ownerId, name, ['text','number','date','list'].includes(String(attr_type)) ? attr_type : 'text',
-       options_json ? JSON.stringify(options_json) : null]
+      `
+      INSERT INTO attribute_definitions (owner_user_id, name, attr_type, options_json)
+      OUTPUT INSERTED.id AS id
+      VALUES (?,?,?,?)
+      `,
+      [
+        ownerId,
+        name,
+        ['text','number','date','list'].includes(String(attr_type))
+          ? String(attr_type)
+          : 'text',
+        options_json ? JSON.stringify(options_json) : null
+      ]
     );
-    reply.send({ id: r.insertId, name, attr_type });
+    
+    
+    const id = r?.[0]?.id ?? r?.recordset?.[0]?.id;
+    reply.send({ id, name, attr_type });
+    
+    
   } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
@@ -1384,12 +1433,31 @@ app.post('/items/:id/attributes', { preHandler: authGuard }, async (req: any, re
         );
         if (ex.length) attributeId = Number(ex[0].id);
         else {
+          // const [ins]: any = await db.execute(
+          //   `INSERT INTO attribute_definitions (owner_user_id, name, attr_type)
+          //    VALUES (?,?,?)`,
+          //   [ownerId, nm, a?.attrType && ['text','number','date','list'].includes(String(a.attrType)) ? a.attrType : 'text']
+          // );
+          // attributeId = Number(ins.insertId);
           const [ins]: any = await db.execute(
-            `INSERT INTO attribute_definitions (owner_user_id, name, attr_type)
-             VALUES (?,?,?)`,
-            [ownerId, nm, a?.attrType && ['text','number','date','list'].includes(String(a.attrType)) ? a.attrType : 'text']
+            `
+            INSERT INTO attribute_definitions (owner_user_id, name, attr_type)
+            OUTPUT INSERTED.id AS id
+            VALUES (?,?,?)
+            `,
+            [
+              ownerId,
+              nm,
+              ['text','number','date','list'].includes(String(a?.attrType))
+                ? String(a.attrType)
+                : 'text'
+            ]
           );
-          attributeId = Number(ins.insertId);
+          
+          
+          const newId = ins?.[0]?.id ?? ins?.recordset?.[0]?.id;
+          attributeId = Number(newId);
+          
         }
       }
       if (!attributeId) continue;
