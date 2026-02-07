@@ -1529,8 +1529,6 @@ app.delete('/items/:id/attributes/:attributeId', { preHandler: authGuard }, asyn
   } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
-
-// =================== HELPERS ===================
 function rowsOf(res: any): any[] {
   if (!res) return [];
   if (Array.isArray(res)) return res;
@@ -1539,13 +1537,13 @@ function rowsOf(res: any): any[] {
   return [];
 }
 
-// cache en memoria (no toca tu pool)
+const COL_CACHE: Record<string, string> = {};
 const PK_CACHE: Record<string, string> = {};
 
-async function resolvePkColumn(db: any, tableName: string, candidates: string[]) {
-  if (PK_CACHE[tableName]) return PK_CACHE[tableName];
+async function resolveColumn(db: any, tableName: string, candidates: string[]) {
+  const cacheKey = `${tableName}::${candidates.join('|')}`;
+  if (COL_CACHE[cacheKey]) return COL_CACHE[cacheKey];
 
-  // ojo: INFORMATION_SCHEMA.COLUMNS es estándar en SQL Server
   const res: any = await db.execute(
     `
     SELECT COLUMN_NAME
@@ -1556,22 +1554,93 @@ async function resolvePkColumn(db: any, tableName: string, candidates: string[])
     [tableName, ...candidates]
   );
 
-  const rows = rowsOf(res);
-  const found = rows.map((r: any) => String(r.COLUMN_NAME ?? r.column_name ?? '').trim()).filter(Boolean);
+  const cols = rowsOf(res)
+    .map((r: any) => String(r.COLUMN_NAME ?? '').trim())
+    .filter(Boolean);
 
-  // prioridad: el primer candidato que exista
+  // toma el primer candidato existente
   for (const c of candidates) {
-    if (found.some((x) => x.toLowerCase() === c.toLowerCase())) {
-      PK_CACHE[tableName] = c;
+    if (cols.some((x) => x.toLowerCase() === c.toLowerCase())) {
+      COL_CACHE[cacheKey] = c;
       return c;
     }
   }
 
-  throw new Error(`No se pudo detectar PK para ${tableName}. Candidatos: ${candidates.join(', ')}`);
+  // para que NO sea ciego: listamos columnas reales
+  const allRes: any = await db.execute(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ? ORDER BY ORDINAL_POSITION`,
+    [tableName]
+  );
+  const allCols = rowsOf(allRes).map((r: any) => r.COLUMN_NAME).join(', ');
+
+  throw new Error(`No se pudo detectar columna en ${tableName}. Candidatos: ${candidates.join(', ')}. Columnas reales: ${allCols}`);
 }
 
-function normalizeUniqueNames(names: any[]): string[] {
-  const arr = Array.isArray(names) ? names : [];
+async function resolveSinglePk(db: any, tableName: string): Promise<string> {
+  if (PK_CACHE[tableName]) return PK_CACHE[tableName];
+
+  const pkRes: any = await db.execute(
+    `
+    SELECT kcu.COLUMN_NAME
+    FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+    JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+      ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+     AND tc.TABLE_NAME = kcu.TABLE_NAME
+    WHERE tc.TABLE_NAME = ?
+      AND tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
+    ORDER BY kcu.ORDINAL_POSITION
+    `,
+    [tableName]
+  );
+
+  const pkCols = rowsOf(pkRes)
+    .map((r: any) => String(r.COLUMN_NAME ?? '').trim())
+    .filter(Boolean);
+
+  if (pkCols.length === 1) {
+    const pk = pkCols[0]!;         // <- FIX TS (ya sabes que existe)
+    PK_CACHE[tableName] = pk;
+    return pk;
+  }
+
+  if (pkCols.length > 1) {
+    throw new Error(`PK compuesta en ${tableName}: ${pkCols.join(', ')}. Tu API necesita PK simple para devolver un solo ID.`);
+  }
+
+  // fallback: identity
+  const idRes: any = await db.execute(
+    `
+    SELECT TOP 1 c.name AS col
+    FROM sys.columns c
+    JOIN sys.objects o ON o.object_id = c.object_id
+    WHERE o.type='U' AND o.name=?
+      AND COLUMNPROPERTY(c.object_id, c.name, 'IsIdentity')=1
+    `,
+    [tableName]
+  );
+
+  const idRows = rowsOf(idRes);
+
+  if (idRows.length) {
+    const idCol = String(idRows[0]!.col ?? '').trim();  // <- FIX TS
+    if (idCol) {
+      PK_CACHE[tableName] = idCol;
+      return idCol;
+    }
+  }
+
+  const allRes: any = await db.execute(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ? ORDER BY ORDINAL_POSITION`,
+    [tableName]
+  );
+  const allCols = rowsOf(allRes).map((r: any) => r.COLUMN_NAME).join(', ');
+
+  throw new Error(`No se pudo detectar PK para ${tableName}. No hay PRIMARY KEY ni identity. Columnas reales: ${allCols}`);
+}
+
+
+function normalizeUniqueNames(list: any[]): string[] {
+  const arr = Array.isArray(list) ? list : [];
   const seen = new Set<string>();
   const out: string[] = [];
   for (const x of arr) {
@@ -1585,24 +1654,20 @@ function normalizeUniqueNames(names: any[]): string[] {
   return out;
 }
 
+
 // =================== TAGS UPSERT (DEFINITIVO) ===================
 app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
-    // ownerId SIEMPRE desde JWT
     const ownerId = ensureAuth(req);
     const ownerNum = Number(ownerId);
-    if (!Number.isFinite(ownerNum) || ownerNum <= 0) {
-      return reply.code(401).send({ message: 'unauthorized' });
-    }
+    if (!Number.isFinite(ownerNum) || ownerNum <= 0) return reply.code(401).send({ message: 'unauthorized' });
 
     const itemId = Number(req.params.id);
-    if (!Number.isFinite(itemId) || itemId <= 0) {
-      return reply.code(400).send({ message: 'itemId inválido' });
-    }
+    if (!Number.isFinite(itemId) || itemId <= 0) return reply.code(400).send({ message: 'itemId inválido' });
 
-    // validar item del owner
+    // valida item
     const itRes: any = await db.execute(
-      'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
+      'SELECT TOP 1 1 AS ok FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
       [itemId, ownerNum]
     );
     if (!rowsOf(itRes).length) return reply.code(404).send({ message: 'item_not_found' });
@@ -1612,138 +1677,124 @@ app.post('/items/:id/tags/upsert', { preHandler: authGuard }, async (req: any, r
     const names = normalizeUniqueNames(body.tagNames ?? body.tags ?? []);
     if (!names.length) return reply.code(400).send({ message: 'tagNames requerido (array)' });
 
-    // detectar PK real de tags (por seguridad)
-    const tagsPk = await resolvePkColumn(db, 'tags', ['id', 'tag_id']);
+    // PK real de tags
+    const tagsPk = await resolveSinglePk(db, 'tags');
+
+    // columnas reales en item_tags (por si no son item_id/tag_id)
+    const itemTagsItemCol = await resolveColumn(db, 'item_tags', ['item_id', 'itemId']);
+    const itemTagsTagCol  = await resolveColumn(db, 'item_tags', ['tag_id', 'tagId', tagsPk]);
 
     const tagIds: number[] = [];
 
     for (const nm of names) {
-      // 1) UPSERT (MERGE) + DEVUELVE ID (1 sola sentencia)
+      // UPSERT por (owner_user_id, name) y devuelve PK real
       const mergeSql = `
         MERGE tags WITH (HOLDLOCK) AS T
         USING (SELECT ? AS owner_user_id, ? AS name) AS S
           ON T.owner_user_id = S.owner_user_id AND T.name = S.name
         WHEN NOT MATCHED THEN
           INSERT (owner_user_id, name) VALUES (S.owner_user_id, S.name)
-        OUTPUT INSERTED.[${tagsPk}] AS id;
+        OUTPUT INSERTED.[${tagsPk}] AS tagPk;
       `;
 
-      const mergeRes: any = await db.execute(mergeSql, [ownerNum, nm]);
-      const mergeRows = rowsOf(mergeRes);
+      const mRes: any = await db.execute(mergeSql, [ownerNum, nm]);
+      const mRows = rowsOf(mRes);
 
-      const tagId = mergeRows?.length ? Number(mergeRows[0].id) : null;
+      const tagId = mRows.length ? Number(mRows[0].tagPk) : null;
       if (!tagId || !Number.isFinite(tagId) || tagId <= 0) {
         return reply.code(500).send({ message: `no_se_pudo_obtener_id_tag: ${nm}` });
       }
+
       tagIds.push(tagId);
 
-      // 2) vincular sin duplicar
-      await db.execute(
-        `
-        IF NOT EXISTS (SELECT 1 FROM item_tags WHERE item_id = ? AND tag_id = ?)
-          INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?);
-        `,
-        [itemId, tagId, itemId, tagId]
+      // vincular sin duplicar
+      const linkRes: any = await db.execute(
+        `SELECT TOP 1 1 AS ok FROM item_tags WHERE [${itemTagsItemCol}] = ? AND [${itemTagsTagCol}] = ?`,
+        [itemId, tagId]
       );
+
+      if (!rowsOf(linkRes).length) {
+        await db.execute(
+          `INSERT INTO item_tags ([${itemTagsItemCol}], [${itemTagsTagCol}]) VALUES (?, ?)`,
+          [itemId, tagId]
+        );
+      }
     }
 
     return reply.send({ ok: true, tagIds });
   } catch (e: any) {
-    const raw = String(e?.message || e || '');
-    return reply.code(500).send({ message: raw || 'Ha ocurrido un error, por favor contactar con soporte' });
+    return reply.code(500).send({ message: String(e?.message || e || '') });
   }
 });
 
 // =================== ATTRIBUTES UPSERT (DEFINITIVO) ===================
 app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
-    // ownerId SIEMPRE desde JWT
     const ownerId = ensureAuth(req);
     const ownerNum = Number(ownerId);
-    if (!Number.isFinite(ownerNum) || ownerNum <= 0) {
-      return reply.code(401).send({ message: 'unauthorized' });
-    }
+    if (!Number.isFinite(ownerNum) || ownerNum <= 0) return reply.code(401).send({ message: 'unauthorized' });
 
     const itemId = Number(req.params.id);
-    if (!Number.isFinite(itemId) || itemId <= 0) {
-      return reply.code(400).send({ message: 'itemId inválido' });
-    }
+    if (!Number.isFinite(itemId) || itemId <= 0) return reply.code(400).send({ message: 'itemId inválido' });
 
-    // validar item del owner
     const itRes: any = await db.execute(
-      'SELECT TOP 1 id FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
+      'SELECT TOP 1 1 AS ok FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
       [itemId, ownerNum]
     );
     if (!rowsOf(itRes).length) return reply.code(404).send({ message: 'item_not_found' });
 
-    // input
     const body = req.body || {};
     const attrs = Array.isArray(body) ? body : (Array.isArray(body?.attributes) ? body.attributes : []);
     if (!attrs.length) return reply.code(400).send({ message: 'attributes requerido (array)' });
 
-    // detectar PK real de attribute_definitions (AQUÍ te arregla el "Invalid column name 'id'")
-    const attrPk = await resolvePkColumn(db, 'attribute_definitions', ['id', 'attribute_id']);
+    // PK real de attribute_definitions (te arregla el "Invalid column name 'id'")
+    const attrPk = await resolveSinglePk(db, 'attribute_definitions');
+
+    // columnas reales de item_attributes
+    const iaItemCol = await resolveColumn(db, 'item_attributes', ['item_id', 'itemId']);
+    const iaAttrCol = await resolveColumn(db, 'item_attributes', ['attribute_id', 'attributeId', attrPk]);
 
     let upserted = 0;
 
     for (const a of attrs) {
-      // puede venir attributeId o name
-      const reqAttrId = Number(a?.attributeId);
       const nm = String(a?.attributeName ?? a?.name ?? '').trim();
+      if (!nm) continue;
 
       const attrType =
         a?.attrType && ['text', 'number', 'date', 'list'].includes(String(a.attrType))
           ? String(a.attrType)
           : 'text';
 
-      let attributeId: number | null = null;
+      // upsert definition por (owner_user_id, name) y devuelve PK real
+      const mergeSql = `
+        MERGE attribute_definitions WITH (HOLDLOCK) AS T
+        USING (SELECT ? AS owner_user_id, ? AS name, ? AS attr_type) AS S
+          ON T.owner_user_id = S.owner_user_id AND T.name = S.name
+        WHEN NOT MATCHED THEN
+          INSERT (owner_user_id, name, attr_type) VALUES (S.owner_user_id, S.name, S.attr_type)
+        OUTPUT INSERTED.[${attrPk}] AS attrPk;
+      `;
 
-      // Si viene attributeId: NO lo rechazo por "owner" (porque tú quieres poder crear/usar nuevos)
-      // pero sí verifico que exista. Si no existe, cae a resolver por name.
-      if (Number.isFinite(reqAttrId) && reqAttrId > 0) {
-        const chkRes: any = await db.execute(
-          `SELECT TOP 1 [${attrPk}] AS id FROM attribute_definitions WHERE [${attrPk}] = ?`,
-          [reqAttrId]
-        );
-        const chkRows = rowsOf(chkRes);
-        attributeId = chkRows.length ? Number(chkRows[0].id) : null;
-      }
+      const mRes: any = await db.execute(mergeSql, [ownerNum, nm, attrType]);
+      const mRows = rowsOf(mRes);
 
-      // Resolver por name con MERGE (owner + name), y DEVOLVER ID
+      const attributeId = mRows.length ? Number(mRows[0].attrPk) : null;
       if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
-        if (!nm) continue;
-
-        const mergeSql = `
-          MERGE attribute_definitions WITH (HOLDLOCK) AS T
-          USING (SELECT ? AS owner_user_id, ? AS name, ? AS attr_type) AS S
-            ON T.owner_user_id = S.owner_user_id AND T.name = S.name
-          WHEN NOT MATCHED THEN
-            INSERT (owner_user_id, name, attr_type) VALUES (S.owner_user_id, S.name, S.attr_type)
-          OUTPUT INSERTED.[${attrPk}] AS id;
-        `;
-
-        const mergeRes: any = await db.execute(mergeSql, [ownerNum, nm, attrType]);
-        const mergeRows = rowsOf(mergeRes);
-        attributeId = mergeRows.length ? Number(mergeRows[0].id) : null;
+        return reply.code(500).send({ message: `no_se_pudo_obtener_id_attribute: ${nm}` });
       }
 
-      if (!attributeId || !Number.isFinite(attributeId) || attributeId <= 0) {
-        return reply.code(500).send({ message: `no_se_pudo_obtener_id_attribute: ${nm || '(sin nombre)'}` });
-      }
-
-      // valores
       const vText = a?.valueText ?? (typeof a?.value === 'string' ? a.value : null);
       const vNum  = a?.valueNumber ?? (Number.isFinite(Number(a?.value)) ? Number(a.value) : null);
       const vDate = a?.valueDate ?? null;
 
-      // upsert item_attributes (delete + insert)
       await db.execute(
-        'DELETE FROM item_attributes WHERE item_id = ? AND attribute_id = ?',
+        `DELETE FROM item_attributes WHERE [${iaItemCol}] = ? AND [${iaAttrCol}] = ?`,
         [itemId, attributeId]
       );
 
       await db.execute(
-        'INSERT INTO item_attributes (item_id, attribute_id, value_text, value_number, value_date) VALUES (?, ?, ?, ?, ?)',
+        `INSERT INTO item_attributes ([${iaItemCol}], [${iaAttrCol}], value_text, value_number, value_date)
+         VALUES (?, ?, ?, ?, ?)`,
         [itemId, attributeId, vText ?? null, vNum ?? null, vDate ?? null]
       );
 
@@ -1752,8 +1803,7 @@ app.post('/items/:id/attributes/upsert', { preHandler: authGuard }, async (req: 
 
     return reply.send({ ok: true, count: upserted });
   } catch (e: any) {
-    const raw = String(e?.message || e || '');
-    return reply.code(500).send({ message: raw || 'Ha ocurrido un error, por favor contactar con soporte' });
+    return reply.code(500).send({ message: String(e?.message || e || '') });
   }
 });
 
