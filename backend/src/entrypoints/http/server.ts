@@ -1031,6 +1031,38 @@ app.put('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) =>
   } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
 });
 
+// app.delete('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
+//   try {
+//     const ownerId = ensureAuth(req);
+//     const id = Number(req.params.id);
+//     if (!Number.isFinite(id)) return reply.code(400).send({ message: 'id inválido' });
+
+//     const [imgs]: any = await db.execute(
+//       'SELECT id, file_path FROM item_images WHERE item_id = ?',
+//       [id]
+//     );
+//     await db.execute('DELETE FROM item_images WHERE item_id = ?', [id]);
+//     await db.execute('DELETE FROM item_attributes WHERE item_id = ?', [id]);
+//     await db.execute('DELETE FROM item_tags WHERE item_id = ?', [id]);
+//     const [r]: any = await db.execute(
+//       'DELETE FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
+//       [id, ownerId]
+//     );
+
+//     try {
+//       const fs = require('fs');
+//       for (const im of imgs || []) {
+//         if (im?.file_path && fs.existsSync(im.file_path)) {
+//           try { fs.unlinkSync(im.file_path); } catch {}
+//         }
+//       }
+//     } catch {}
+
+//     if (r.affectedRows === 0) return reply.code(404).send({ message: 'No encontrado' });
+//     reply.send({ ok: true });
+//   } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
+// });
+
 app.delete('/items/:id', { preHandler: authGuard }, async (req: any, reply: any) => {
   try {
     const ownerId = ensureAuth(req);
@@ -1041,9 +1073,20 @@ app.delete('/items/:id', { preHandler: authGuard }, async (req: any, reply: any)
       'SELECT id, file_path FROM item_images WHERE item_id = ?',
       [id]
     );
+
+    // 👇 IMPORTANTE: quitar el item de colecciones del dueño
+    await db.execute(
+      `DELETE ci
+       FROM collection_items ci
+       JOIN collections c ON c.id = ci.collection_id
+       WHERE ci.item_id = ? AND c.owner_user_id = ?`,
+      [id, ownerId]
+    );
+
     await db.execute('DELETE FROM item_images WHERE item_id = ?', [id]);
     await db.execute('DELETE FROM item_attributes WHERE item_id = ?', [id]);
     await db.execute('DELETE FROM item_tags WHERE item_id = ?', [id]);
+
     const [r]: any = await db.execute(
       'DELETE FROM philatelic_items WHERE id = ? AND owner_user_id = ?',
       [id, ownerId]
@@ -1060,8 +1103,11 @@ app.delete('/items/:id', { preHandler: authGuard }, async (req: any, reply: any)
 
     if (r.affectedRows === 0) return reply.code(404).send({ message: 'not_found' });
     reply.send({ ok: true });
-  } catch (e:any) { reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' }); }
+  } catch (e: any) {
+    reply.code(500).send({ message: e?.message || 'Ha ocurrido un error, por favor contactar con soporte' });
+  }
 });
+
 
 // ------------------- TAGS -------------------
 app.post('/tags', { preHandler: authGuard }, async (req: any, reply: any) => {
